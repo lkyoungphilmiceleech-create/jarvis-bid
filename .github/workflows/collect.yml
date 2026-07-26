@@ -2,8 +2,9 @@ name: JARVIS 입찰공고 수집
 
 on:
   schedule:
-    # 00:40 UTC = 09:40 KST, 평일(월~금)
-    - cron: '40 0 * * 1-5'
+    # 00:15 UTC = 09:15 KST, 평일(월~금)
+    # 소비자 트리거(09:59 KST)보다 44분 앞서 실행해 GitHub 스케줄 지연에 대비한다.
+    - cron: '15 0 * * 1-5'
   workflow_dispatch:
   push:
     paths:
