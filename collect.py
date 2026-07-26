@@ -239,12 +239,28 @@ def main():
         seen.add(e["공고번호"])
         ded.append(e)
 
+    # 실패 원인 샘플 (중복 제거, 최대 5개) — 진단용
+    err_samples, seen_err = [], set()
+    for r in results:
+        if not r["ok"]:
+            e = str(r.get("error"))[:300]
+            if e not in seen_err:
+                seen_err.add(e)
+                err_samples.append({"label": r["label"], "error": e})
+            if len(err_samples) >= 5:
+                break
+
+    ok_cnt = len(results) - len(failed)
+    status = "ok" if not failed else ("error" if ok_cnt == 0 else "partial")
+
     out = {
         "generated_at": dt.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
+        "status": status,
         "window": {"begin": bgn, "end": end, "how": how},
         "query_stats": {"total": len(results),
-                        "ok": len(results) - len(failed),
-                        "failed": failed},
+                        "ok": ok_cnt,
+                        "failed": failed,
+                        "error_samples": err_samples},
         "counts": {"수집": len(items),
                    "집중기관": sum(1 for i in items if i["수집사유"] == "집중기관"),
                    "키워드": sum(1 for i in items if i["수집사유"] == "키워드"),
@@ -255,6 +271,17 @@ def main():
 
     os.makedirs("data", exist_ok=True)
     stamp = dt.datetime.now(KST).strftime("%Y-%m-%d")
+
+    # ⚠️ 전 질의 실패(status=error)면 latest.json 을 덮어쓰지 않는다.
+    #    0건 결과로 덮어쓰면 소비자 트리거가 "신규 공고 없음"으로 잘못 보고하게 된다.
+    if status == "error":
+        with open("data/last_error.json", "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        print("::error::전체 질의 실패 — latest.json 을 갱신하지 않고 종료합니다.")
+        for s in err_samples:
+            print(f"::error::{s['label']} — {s['error']}")
+        sys.exit(1)
+
     for path in ("data/latest.json", f"data/{stamp}.json"):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(out, f, ensure_ascii=False, indent=2)
