@@ -49,25 +49,44 @@ KEYWORDS_SERVC = ["투자", "상담", "박람회", "전시", "홍보관",
 KEYWORDS_THNG = ["박람회", "전시", "홍보관", "마켓"]
 
 # ── 오탐 제거 규칙 ─────────────────────────────────────────────
-RE_FIN = re.compile(r"(증권|주식|위탁매각|펀드|자산운용|채권|여유자금|출자지분)")
+RE_FIN = re.compile(r"(증권|주식|펀드|자산운용|채권|여유자금|출자지분)")
 RE_COUNSEL = re.compile(r"(입시|진학상담|입학전형|심리상담|복지상담|정신건강|학생상담|가족상담)")
-RE_DEMOLISH = re.compile(r"(폐선|폐기물|철거|해체|불용품|매각)")
+RE_ITSYS = re.compile(r"(시스템|콜센터|챗봇|플랫폼|솔루션|정보화|ERP|앱\s*개발)")
+RE_PPP = re.compile(r"(민간투자사업|BTO|BTL|타당성|기술검토|비용산정|적격성|편익\s*추정)")
+RE_DISPOSAL = re.compile(r"(폐선|폐기물|불용품|위탁매각|매각)")
+RE_TEARDOWN = re.compile(r"(철거|해체)")
 RE_EVCHARGE = re.compile(r"(전기차|전기자동차|충전기|충전시설|충전소|분전반|급속충전|완속충전|EV\s*충전)")
+RE_ENERGY = re.compile(r"(태양광|발전설비|발전시설|열병합|생태공장|스마트공장|ESS\b)")
 RE_FACILITY = re.compile(r"(청소용역|경비용역|시설관리|방역|소독|경관조명|가로등|제설)")
+
+# 행사·전시 본업 신호. 이 신호가 있으면 '철거' 같은 부수 단어만으로는 제외하지 않는다.
+RE_EVENT_POS = re.compile(r"(전시회|박람회|홍보관|전시관|기획전|특별전|부스|엑스포|페어|상담회|로드쇼)")
 
 
 def is_false_positive(title: str, matched_kw: str):
     """오탐이면 (True, 사유), 아니면 (False, None)"""
+    positive = bool(RE_EVENT_POS.search(title))
+
     if RE_EVCHARGE.search(title):
         return True, "전기차 충전설비('전시'↔'전기' 부분일치)"
-    if RE_DEMOLISH.search(title):
-        return True, "폐기·철거·매각 건"
+    if RE_ENERGY.search(title):
+        return True, "발전설비·공장구축 건"
+    if RE_DISPOSAL.search(title):
+        return True, "폐기·매각 건"
+    if RE_TEARDOWN.search(title) and not positive:
+        return True, "철거·해체 건"
     if RE_FACILITY.search(title):
         return True, "단순 시설관리·청소·경비"
-    if matched_kw == "투자" and RE_FIN.search(title):
-        return True, "금융성 '투자'(증권·펀드 등)"
-    if matched_kw == "상담" and RE_COUNSEL.search(title):
-        return True, "입시·심리·복지 '상담'"
+    if matched_kw == "투자":
+        if RE_FIN.search(title):
+            return True, "금융성 '투자'(증권·펀드 등)"
+        if RE_PPP.search(title) and not positive:
+            return True, "민자사업 타당성·기술검토 '투자'"
+    if matched_kw == "상담":
+        if RE_COUNSEL.search(title):
+            return True, "입시·심리·복지 '상담'"
+        if RE_ITSYS.search(title) and not positive:
+            return True, "IT 상담시스템 구축 건"
     return False, None
 
 
