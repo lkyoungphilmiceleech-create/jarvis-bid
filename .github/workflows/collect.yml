@@ -1,53 +1,99 @@
 name: JARVIS 입찰공고 수집
 
 on:
+
   schedule:
-    # 00:15 UTC = 09:15 KST, 평일(월~금)
-    # 소비자 트리거(09:59 KST)보다 44분 앞서 실행해 GitHub 스케줄 지연에 대비한다.
-    - cron: '15 0 * * 1-5'
+
+    # 2026-07-27 사고 대응: 단일 '15 0 * * 1-5'(09:15 KST) 스케줄이 12시간 이상 지연돼
+
+    #   소비자 트리거(09:59 KST)가 전일 데이터를 보게 되는 장애가 발생했다.
+
+    #   GitHub Actions는 매시 정각 부근이 혼잡해 지연·유실이 잦으므로,
+
+    #   (1) 정각을 피한 분(minute)으로 옮기고 (2) 3중으로 이중화한다.
+
+    #   UTC 기준 요일이 0-4(일~목)여야 KST 기준 월~금이 된다.
+
+    - cron: '37 22 * * 0-4'
+
+    - cron: '23 23 * * 0-4'
+
+    - cron: '08 0 * * 1-5'
+
   workflow_dispatch:
+
   push:
+
     paths:
+
       - 'request.json'
+
       - 'collect.py'
+
       - '.github/workflows/collect.yml'
 
 permissions:
+
   contents: write
 
 concurrency:
+
   group: bid-collect
+
   cancel-in-progress: false
 
 jobs:
+
   collect:
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 10
+
     steps:
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+
         with:
+
           python-version: '3.11'
 
       - name: Install deps
+
         run: pip install --quiet requests
 
       - name: Collect
+
         env:
+
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+
         run: python collect.py
 
       - name: Commit results
+
         if: always()
+
         run: |
+
           git config user.name  "jarvis-bot"
+
           git config user.email "jarvis-bot@users.noreply.github.com"
+
           git add data/
+
           if git diff --staged --quiet; then
+
             echo "변경 없음"
+
           else
+
             git commit -m "chore(data): 입찰공고 수집 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
+
             git pull --rebase --autostash origin main || true
+
             git push origin HEAD:main
+
           fi
