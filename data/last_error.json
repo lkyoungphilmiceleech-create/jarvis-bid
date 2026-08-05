@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-08-04 19:21:32 KST",
+  "generated_at": "2026-08-05 17:10:02 KST",
   "status": "error",
   "window": {
-    "begin": "202608030000",
-    "end": "202608032359",
+    "begin": "202608040000",
+    "end": "202608042359",
     "how": "auto(전일)"
   },
   "query_stats": {
@@ -48,7 +48,11 @@
     "error_samples": [
       {
         "label": "용역·기관·콘텐츠진흥원",
-        "error": "ReadTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Read timed out. (read timeout=25)"
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=da0e35dfd20179e6c3129fff9dd7ddd4c421a187200114a421b7c382dd9a49a3&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202"
+      },
+      {
+        "label": "물품·기관·콘텐츠진흥원",
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch?serviceKey=da0e35dfd20179e6c3129fff9dd7ddd4c421a187200114a421b7c382dd9a49a3&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=2026"
       }
     ]
   },
