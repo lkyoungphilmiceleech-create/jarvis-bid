@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-08-12 14:52:13 KST",
+  "generated_at": "2026-08-13 14:55:47 KST",
   "status": "error",
   "window": {
-    "begin": "202608110000",
-    "end": "202608112359",
+    "begin": "202608120000",
+    "end": "202608122359",
     "how": "auto(전일)"
   },
   "query_stats": {
