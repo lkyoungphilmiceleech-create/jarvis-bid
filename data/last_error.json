@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-08-31 14:27:58 KST",
+  "generated_at": "2026-09-01 10:26:27 KST",
   "status": "error",
   "window": {
-    "begin": "202608280000",
-    "end": "202608302359",
-    "how": "auto(월요일 3일 소급)"
+    "begin": "202608310000",
+    "end": "202608312359",
+    "how": "auto(전일)"
   },
   "query_stats": {
     "total": 34,
