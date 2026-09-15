@@ -1,46 +1,69 @@
 {
-  "generated_at": "2026-09-15 09:53:06 KST",
-  "status": "partial",
+  "generated_at": "2026-09-15 10:33:41 KST",
+  "status": "ok",
   "window": {
     "begin": "202609140000",
     "end": "202609142359",
     "how": "auto(전일)"
   },
   "query_stats": {
-    "total": 42,
-    "ok": 30,
-    "failed": [
-      "용역·기관·콘텐츠진흥원",
-      "물품·기관·콘텐츠진흥원",
-      "용역·기관·국가유산진흥원",
-      "물품·기관·국가유산진흥원",
-      "용역·기관·정보통신산업진흥원",
-      "물품·기관·정보통신산업진흥원",
-      "용역·기관·연구개발특구진흥재단",
-      "물품·기관·연구개발특구진흥재단",
-      "용역·기관·광주정보문화산업진흥원",
-      "물품·기관·광주정보문화산업진흥원",
-      "용역·기관·서울경제진흥원",
-      "물품·기관·서울경제진흥원"
-    ],
-    "error_samples": [
-      {
-        "label": "용역·기관·콘텐츠진흥원",
-        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=da0e35dfd20179e6c3129fff9dd7ddd4c421a187200114a421b7c382dd9a49a3&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202"
-      },
-      {
-        "label": "물품·기관·콘텐츠진흥원",
-        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch?serviceKey=da0e35dfd20179e6c3129fff9dd7ddd4c421a187200114a421b7c382dd9a49a3&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=2026"
-      }
-    ]
+    "total": 52,
+    "ok": 52,
+    "failed": [],
+    "error_samples": []
   },
   "counts": {
-    "수집": 16,
-    "집중기관": 0,
+    "수집": 19,
+    "집중기관": 3,
     "키워드": 16,
     "오탐제외": 3
   },
   "items": [
+    {
+      "공고번호": "R26BK01727075-000",
+      "bidNtceNo": "R26BK01727075",
+      "bidNtceOrd": "000",
+      "사업명": "K-디지털그랜드챔피언십 2026 운영 용역",
+      "공고기관": "조달청 충북지방조달청",
+      "수요기관": "정보통신산업진흥원",
+      "공고일시": "2026-09-14 13:00:33",
+      "공고일자": "2026-09-14",
+      "배정예산": 151450000,
+      "입찰마감일시": "2026-09-30 10:00:00",
+      "구분": "용역",
+      "수집사유": "집중기관",
+      "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01727075&bidPbancOrd=000"
+    },
+    {
+      "공고번호": "R26BK01726775-000",
+      "bidNtceNo": "R26BK01726775",
+      "bidNtceOrd": "000",
+      "사업명": "2026년 국가유산 ODA 신규사업 개발 사전 타당성 조사",
+      "공고기관": "국가유산진흥원",
+      "수요기관": "국가유산진흥원",
+      "공고일시": "2026-09-14 09:39:55",
+      "공고일자": "2026-09-14",
+      "배정예산": 100000000,
+      "입찰마감일시": "2026-10-02 10:00:00",
+      "구분": "용역",
+      "수집사유": "집중기관",
+      "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01726775&bidPbancOrd=000"
+    },
+    {
+      "공고번호": "R26BK01726874-000",
+      "bidNtceNo": "R26BK01726874",
+      "bidNtceOrd": "000",
+      "사업명": "2026년 파키스탄 유네스코 잠정유산 현황조사",
+      "공고기관": "국가유산진흥원",
+      "수요기관": "국가유산진흥원",
+      "공고일시": "2026-09-14 10:01:28",
+      "공고일자": "2026-09-14",
+      "배정예산": 55000000,
+      "입찰마감일시": "2026-10-06 10:00:00",
+      "구분": "용역",
+      "수집사유": "집중기관",
+      "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01726874&bidPbancOrd=000"
+    },
     {
       "공고번호": "R26BK01726253-001",
       "bidNtceNo": "R26BK01726253",
