@@ -15,8 +15,12 @@ insert into projects(id, parent_id, name) values
   ('10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'VivaTech');
 insert into project_members(project_id, user_id, budget_access) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', true);
-insert into budget_lines(project_id, category, item, taxable, zero_rated, vat) values
-  ('10000000-0000-0000-0000-000000000002', '운영비', '부스', 1000000, 500000, 100000);
+update projects set contract_amount = 841000000 where id = '10000000-0000-0000-0000-000000000001';
+insert into budget_versions(id, project_id, version_no, label) values
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 1, '최초 산출');
+insert into budget_lines(project_id, version_id, category, item, taxable, zero_rated, vat) values
+  ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '운영비', '부스', 1000000, 500000, 100000);
+update budget_versions set status = 'current' where id = '20000000-0000-0000-0000-000000000001';
 
 create function pg_temp.check(cond boolean, msg text) returns void language plpgsql as $$
 begin if not cond then raise exception 'FAIL: %', msg; end if; raise notice 'PASS: %', msg; end $$;
@@ -95,3 +99,60 @@ insert into ledger_entries(project_id, paid_on, zero_rated, method, currency, fo
           1385.20, '2026-09-01', '[{"label":"송금수수료","krw":10000}]', 10000);
 select pg_temp.check(true, '외화 송금 저장');
 reset role;
+
+-- 0003: 산출내역 변경 이력
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  begin
+    update budget_lines set taxable = 1 where version_id = '20000000-0000-0000-0000-000000000001';
+    raise exception 'FAIL: 확정 산출내역이 직접 수정됨';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    raise notice 'PASS: 확정 산출내역 직접 수정 불가';
+  end;
+end $$;
+select new_budget_draft('10000000-0000-0000-0000-000000000002', '1차 변경', '부스 규모 확대') as draft \gset
+select pg_temp.check((select count(*) from budget_lines where version_id = :'draft') = 1, '변경안: 확정본 복사');
+update budget_lines set taxable = 2000000, vat = 200000 where version_id = :'draft';
+insert into ledger_entries(project_id, paid_on, category, item, taxable, vat, method)
+  values ('10000000-0000-0000-0000-000000000002', '2026-09-02', '운영비', '부스', 800000, 80000, 'domestic_transfer');
+select confirm_budget_version(:'draft');
+select pg_temp.check((select status from budget_versions where version_no = 1
+                        and project_id = '10000000-0000-0000-0000-000000000002') = 'superseded', '확정 후 이전 버전 보존');
+select pg_temp.check((select initial_supply = 1500000 and current_supply = 2500000 and spent_supply = 800000
+                        and remaining_supply = 1700000
+                      from budget_vs_actual where category = '운영비' and item = '부스'),
+                     '최초 vs 현재 vs 집행 비교');
+select pg_temp.check((select children_budget_supply = 2500000 and unallocated_supply = 838500000
+                      from budget_rollup where project_id = '10000000-0000-0000-0000-000000000001'),
+                     '상위 계약금액 대비 하위 배정·미배정 잔액');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  begin
+    perform new_budget_draft('10000000-0000-0000-0000-000000000001', '무단 변경');
+    raise exception 'FAIL: 권한 없는 변경안 생성';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    raise notice 'PASS: 권한 없으면 변경안 생성 불가';
+  end;
+end $$;
+select pg_temp.check((select count(*) from budget_rollup where project_id = '10000000-0000-0000-0000-000000000001') = 0,
+                     '권한 없으면 상위 예산 현황 비공개');
+reset role;
+insert into projects(id, name) values ('10000000-0000-0000-0000-000000000009', '삭제용');
+insert into budget_versions(id, project_id, version_no, label) values
+  ('20000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000009', 1, '최초 산출');
+insert into budget_lines(project_id, version_id, category, item, taxable) values
+  ('10000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000009', '운영비', '부스', 1);
+update budget_versions set status = 'current' where id = '20000000-0000-0000-0000-000000000009';
+delete from projects where id = '10000000-0000-0000-0000-000000000009';
+select pg_temp.check(true, '확정 예산 있는 프로젝트 삭제 시 연쇄 삭제');
+do $$ begin
+  begin
+    delete from projects where id = '10000000-0000-0000-0000-000000000002';
+    raise exception 'FAIL: 장부 있는 프로젝트가 삭제됨';
+  exception when foreign_key_violation then
+    raise notice 'PASS: 장부 있는 프로젝트는 삭제 불가(보관 원칙)';
+  end;
+end $$;
