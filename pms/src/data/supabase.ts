@@ -148,6 +148,12 @@ export const supabaseRepo: Repo = {
     }).eq("id", userId));
   },
 
+  async sendTestNotification() {
+    const sb = await supabaseServer();
+    const { error } = await sb.rpc("send_test_notification");
+    if (error) throw new Error(error.message);
+  },
+
   async dashboard(today) {
     const sb = await supabaseServer();
     const until = new Date(Date.parse(`${today}T00:00:00Z`) + 14 * 86_400_000).toISOString().slice(0, 10);

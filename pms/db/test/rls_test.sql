@@ -251,3 +251,9 @@ select pg_temp.check((select count(*) from my_pm_issues where problem = '호텔 
 update profiles set notify_kakaowork = false, kakaowork_email = 'new@x' where id = auth.uid();
 select pg_temp.check((select not notify_kakaowork from profiles where id = auth.uid()), '본인 알림 설정 변경');
 reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select send_test_notification();
+select pg_temp.check((select count(*) from notifications where kind = 'test' and user_id = auth.uid()) = 1,
+                     '테스트 알림: 본인에게만, 켜 둔 채널(이메일)만 적재');
+reset role;

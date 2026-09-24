@@ -103,5 +103,7 @@ export interface Repo {
   resolveIssue(id: string, note: string | null): Promise<void>;
   getNotifySettings(userId: string): Promise<NotifySettings>;
   updateNotifySettings(userId: string, s: NotifySettings): Promise<void>;
+  /** 본인에게 테스트 알림 적재 (10분 안에 발송) */
+  sendTestNotification(): Promise<void>;
   dashboard(today: string): Promise<DashboardData>;
 }

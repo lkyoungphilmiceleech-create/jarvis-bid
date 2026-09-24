@@ -76,3 +76,9 @@ export async function saveNotifySettings(form: FormData) {
   });
   redirect("/settings?saved=1");
 }
+
+export async function sendTestNotification() {
+  await requireProfile();
+  await repo.sendTestNotification();
+  redirect("/settings?test=1");
+}

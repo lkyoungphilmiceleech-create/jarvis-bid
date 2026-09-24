@@ -151,6 +151,9 @@ export const demoRepo: Repo = {
   async updateNotifySettings(userId, s) {
     notify.set(userId, s);
   },
+  async sendTestNotification() {
+    // 체험 모드는 실제 발송하지 않음
+  },
   async dashboard(): Promise<DashboardData> {
     const byName = (id: string | null) => projects.find((p) => p.id === id)?.name ?? null;
     return {
