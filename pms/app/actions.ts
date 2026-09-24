@@ -57,3 +57,22 @@ export async function createRequest(form: FormData) {
   revalidatePath("/me");
   redirect("/me?done=request");
 }
+
+export async function resolveIssue(form: FormData) {
+  await requireProfile();
+  const id = str(form, "id");
+  if (!id) throw new Error("잘못된 요청입니다");
+  await repo.resolveIssue(id, str(form, "note"));
+  revalidatePath("/me");
+  revalidatePath("/dashboard");
+}
+
+export async function saveNotifySettings(form: FormData) {
+  const me = await requireProfile();
+  await repo.updateNotifySettings(me.id, {
+    notifyEmail: form.get("notifyEmail") === "on",
+    notifyKakaowork: form.get("notifyKakaowork") === "on",
+    kakaoworkEmail: str(form, "kakaoworkEmail"),
+  });
+  redirect("/settings?saved=1");
+}

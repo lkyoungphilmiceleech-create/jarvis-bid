@@ -3,7 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { DueItem } from "../lib/myWork";
 import type {
-  DashboardData, DashboardProject, IssueRow, NewIssue, NewRequest, Profile, ProjectRow, Repo, RequestRow,
+  DashboardData, DashboardProject, IssueRow, NewIssue, NewRequest, NotifySettings, PmIssueRow, Profile, ProjectRow, Repo,
+  RequestRow,
 } from "./types";
 
 export async function supabaseServer() {
@@ -116,6 +117,35 @@ export const supabaseRepo: Repo = {
     check(await sb.from("issues").insert({
       project_id: input.projectId, problem: input.problem, impact: input.impact, solution: input.solution,
     }));
+  },
+
+  async myPmIssues() {
+    const sb = await supabaseServer();
+    const rows = check(await sb.from("my_pm_issues")
+      .select("id,project_name,problem,solution,status,reporter_name").order("reported_at")) as any[];
+    return rows.map((r): PmIssueRow => ({
+      id: r.id, projectName: r.project_name, problem: r.problem, solution: r.solution, status: r.status,
+      reporterName: r.reporter_name,
+    }));
+  },
+
+  async resolveIssue(id, note) {
+    const sb = await supabaseServer();
+    const res = await sb.from("issues").update({ status: "resolved", resolution_note: note }).eq("id", id).select("id");
+    if ((check(res) as any[]).length === 0) throw new Error("이슈를 찾을 수 없거나 권한이 없습니다");
+  },
+
+  async getNotifySettings(userId) {
+    const sb = await supabaseServer();
+    const r = check(await sb.from("profiles").select("notify_email,notify_kakaowork,kakaowork_email").eq("id", userId).single()) as any;
+    return { notifyEmail: r.notify_email, notifyKakaowork: r.notify_kakaowork, kakaoworkEmail: r.kakaowork_email };
+  },
+
+  async updateNotifySettings(userId, s: NotifySettings) {
+    const sb = await supabaseServer();
+    check(await sb.from("profiles").update({
+      notify_email: s.notifyEmail, notify_kakaowork: s.notifyKakaowork, kakaowork_email: s.kakaoworkEmail,
+    }).eq("id", userId));
   },
 
   async dashboard(today) {

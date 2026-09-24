@@ -4,7 +4,7 @@ import { requireProfile } from "../../src/data/session";
 import { groupDueItems, localToday } from "../../src/lib/myWork";
 import type { RequestRow } from "../../src/data/types";
 import DueList from "../_components/DueList";
-import { setRequestStatus } from "../actions";
+import { resolveIssue, setRequestStatus } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,9 @@ function RequestItem({ r, received }: { r: RequestRow; received: boolean }) {
 export default async function MyWork({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
   const me = await requireProfile();
   const today = localToday();
-  const [due, reqs, sp] = await Promise.all([repo.myDueItems(me.id), repo.myRequests(me.id), searchParams]);
+  const [due, reqs, pmIssues, sp] = await Promise.all([
+    repo.myDueItems(me.id), repo.myRequests(me.id), repo.myPmIssues(me.id), searchParams,
+  ]);
   const g = groupDueItems(due, today);
   const openReceived = reqs.received.filter((r) => r.status === "requested" || r.status === "accepted");
 
@@ -64,6 +66,26 @@ export default async function MyWork({ searchParams }: { searchParams: Promise<{
         {reqs.received.map((r) => <RequestItem key={r.id} r={r} received />)}
         {reqs.sent.map((r) => <RequestItem key={r.id} r={r} received={false} />)}
       </section>
+
+      {pmIssues.length > 0 && (
+        <section className="card">
+          <h2>내 프로젝트 이슈 (PM) <span className="pill danger">{pmIssues.length}</span></h2>
+          {pmIssues.map((i) => (
+            <div className="row" key={i.id} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div className="grow" style={{ minWidth: 200 }}>
+                <div className="title">{i.problem}</div>
+                <div className="sub">{[i.projectName, i.reporterName && `보고 ${i.reporterName}`].filter(Boolean).join(" · ")}</div>
+                {i.solution && <div className="sub">→ {i.solution}</div>}
+              </div>
+              <form action={resolveIssue} className="actions" style={{ width: "100%" }}>
+                <input type="hidden" name="id" value={i.id} />
+                <input name="note" placeholder="해결 내용 (선택)" style={{ flex: 1, minWidth: 140 }} />
+                <button className="small">해결 처리</button>
+              </form>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="card">
         <h2>이번 주</h2>

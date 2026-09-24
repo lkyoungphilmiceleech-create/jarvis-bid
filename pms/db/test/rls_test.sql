@@ -196,3 +196,58 @@ do $$ begin
     raise notice 'PASS: 과세+영세+부가세 = 계약 총액 검증';
   end;
 end $$;
+
+-- 0005: 이슈 해결은 PM만 / 알림 발송함
+update projects set pm_id = '00000000-0000-0000-0000-00000000000b' where id = '10000000-0000-0000-0000-000000000001';
+update profiles set kakaowork_email = 'b-kw@x' where id = '00000000-0000-0000-0000-00000000000b';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+insert into issues(project_id, problem, solution) values
+  ('10000000-0000-0000-0000-000000000002', '통관 서류 누락', '재발급 요청');
+select pg_temp.check((select count(*) from notifications) = 0, '알림은 본인 것만 조회(직원에게 PM 알림 안 보임)');
+do $$ begin
+  begin
+    update issues set status = 'resolved' where problem = '통관 서류 누락';
+    raise exception 'FAIL: PM 아닌 직원이 이슈 해결 처리';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    raise notice 'PASS: PM 아니면 해결 처리 불가';
+  end;
+end $$;
+update issues set status = 'in_progress' where problem = '통관 서류 누락';
+select pg_temp.check(true, '직원도 진행 상태 변경은 가능');
+do $$ begin
+  begin
+    perform enqueue_notification('00000000-0000-0000-0000-00000000000b', 'x', 'spam', 'spam', null);
+    raise exception 'FAIL: 사용자가 알림 적재 함수 직접 호출';
+  exception when insufficient_privilege then
+    raise notice 'PASS: 알림 적재 함수 직접 호출 불가';
+  end;
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.check((select count(*) from notifications where kind = 'issue_new') = 2,
+                     '이슈 보고 → 상위 PM(상속)에게 이메일·카카오워크 알림 적재');
+update issues set status = 'resolved', resolution_note = '재발급 완료' where problem = '통관 서류 누락';
+select pg_temp.check((select resolved_at is not null from issues where problem = '통관 서류 누락'), 'PM 해결 처리 + 해결 일시 기록');
+insert into requests(assignee_id, title, due_date) values ('00000000-0000-0000-0000-00000000000c', '자료 요청', current_date);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.check((select count(*) from notifications where kind = 'request_new') = 2, '새 업무요청 → 받는 사람 알림');
+update requests set status = 'accepted' where title = '자료 요청';
+reset role;
+select pg_temp.check((select count(*) from notifications where kind = 'request_status'
+                        and user_id = '00000000-0000-0000-0000-00000000000b') = 2, '요청 수락 → 요청자 알림');
+update profiles set notify_email = false where id = '00000000-0000-0000-0000-00000000000c';
+select pg_temp.check(enqueue_due_reminders(current_date) >= 1, '마감 임박 알림 적재');
+select pg_temp.check(enqueue_due_reminders(current_date) >= 1
+                     and (select count(*) from notifications where kind = 'due_soon'
+                            and user_id = '00000000-0000-0000-0000-00000000000c') = 1,
+                     '마감 알림 중복 방지 + 이메일 끔 설정 반영');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+insert into issues(project_id, problem) values ('10000000-0000-0000-0000-000000000002', '호텔 블록 부족');
+select pg_temp.check((select count(*) from my_pm_issues) = 0, 'PM 아니면 내 PM 이슈 목록 비어 있음');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.check((select count(*) from my_pm_issues where problem = '호텔 블록 부족') = 1, 'PM(상속)의 미해결 이슈 목록');
+update profiles set notify_kakaowork = false, kakaowork_email = 'new@x' where id = auth.uid();
+select pg_temp.check((select not notify_kakaowork from profiles where id = auth.uid()), '본인 알림 설정 변경');
+reset role;

@@ -28,6 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {profile.role === "admin" && <Link href="/dashboard">대시보드</Link>}
                 <Link href="/me">내 업무</Link>
                 <Link href="/projects">프로젝트</Link>
+                <Link href="/settings">알림 설정</Link>
               </nav>
               <form action={logout}><button className="small ghost">로그아웃</button></form>
             </div>

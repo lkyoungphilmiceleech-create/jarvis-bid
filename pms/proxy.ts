@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/pending"];
+const PUBLIC = ["/login", "/pending", "/api/cron"];
 
 export async function proxy(request: NextRequest) {
   const isPublic = PUBLIC.some((p) => request.nextUrl.pathname.startsWith(p));

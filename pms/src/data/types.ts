@@ -40,6 +40,21 @@ export interface IssueRow {
   reportedAt: string;
 }
 
+export interface PmIssueRow {
+  id: string;
+  projectName: string;
+  problem: string;
+  solution: string | null;
+  status: "open" | "in_progress";
+  reporterName: string | null;
+}
+
+export interface NotifySettings {
+  notifyEmail: boolean;
+  notifyKakaowork: boolean;
+  kakaoworkEmail: string | null;
+}
+
 export interface NewIssue {
   projectId: string;
   problem: string;
@@ -82,5 +97,11 @@ export interface Repo {
   updateRequestStatus(id: string, status: RequestStatus): Promise<void>;
   createRequest(input: NewRequest): Promise<void>;
   createIssue(input: NewIssue): Promise<void>;
+  /** 내가 PM(상속 포함)인 프로젝트의 미해결 이슈 */
+  myPmIssues(userId: string): Promise<PmIssueRow[]>;
+  /** PM만 가능 (DB 규칙이 강제) */
+  resolveIssue(id: string, note: string | null): Promise<void>;
+  getNotifySettings(userId: string): Promise<NotifySettings>;
+  updateNotifySettings(userId: string, s: NotifySettings): Promise<void>;
   dashboard(today: string): Promise<DashboardData>;
 }

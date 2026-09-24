@@ -2,7 +2,7 @@
 import { cookies } from "next/headers";
 import type { DueItem } from "../lib/myWork";
 import type {
-  DashboardData, IssueRow, NewIssue, NewRequest, Profile, ProjectRow, Repo, RequestRow, RequestStatus,
+  DashboardData, IssueRow, NewIssue, NewRequest, NotifySettings, Profile, ProjectRow, Repo, RequestRow, RequestStatus,
 } from "./types";
 
 const iso = (offsetDays: number) => {
@@ -63,6 +63,18 @@ let issues: (Omit<IssueRow, "projectName" | "ownerName"> & { projectId: string; 
     reportedAt: new Date(Date.now() - 86_400_000).toISOString() },
 ];
 
+const notify = new Map<string, NotifySettings>();
+
+/** 상위로 올라가며 PM 찾기 (DB effective_pm 과 동일 규칙) */
+function effectivePm(projectId: string): string | null {
+  let p = projects.find((x) => x.id === projectId);
+  while (p) {
+    if (p.pm_id) return p.pm_id;
+    p = projects.find((x) => x.id === p!.parent_id);
+  }
+  return null;
+}
+
 const nameOf = (id: string | null) => people.find((p) => p.id === id)?.name ?? null;
 const projectName = (id: string | null) => projects.find((p) => p.id === id)?.name ?? null;
 
@@ -120,6 +132,24 @@ export const demoRepo: Repo = {
       id: `i${Date.now()}`, projectId: input.projectId, problem: input.problem, solution: input.solution,
       ownerId: await demoUserId(), status: "open", reportedAt: new Date().toISOString(),
     }];
+  },
+  async myPmIssues(userId) {
+    return issues.filter((i) => i.status !== "resolved" && effectivePm(i.projectId) === userId).map((i) => ({
+      id: i.id, projectName: projectName(i.projectId) ?? "", problem: i.problem, solution: i.solution,
+      status: i.status as "open" | "in_progress", reporterName: nameOf(i.ownerId),
+    }));
+  },
+  async resolveIssue(id, note) {
+    const me = await demoUserId();
+    const target = issues.find((i) => i.id === id);
+    if (!target || effectivePm(target.projectId) !== me) throw new Error("이슈 해결 처리는 프로젝트 PM만 할 수 있습니다");
+    issues = issues.map((i) => (i.id === id ? { ...i, status: "resolved", solution: note ?? i.solution } : i));
+  },
+  async getNotifySettings(userId) {
+    return notify.get(userId) ?? { notifyEmail: true, notifyKakaowork: true, kakaoworkEmail: null };
+  },
+  async updateNotifySettings(userId, s) {
+    notify.set(userId, s);
   },
   async dashboard(): Promise<DashboardData> {
     const byName = (id: string | null) => projects.find((p) => p.id === id)?.name ?? null;
