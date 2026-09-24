@@ -4,6 +4,7 @@
 - 금액은 원 단위 정수(bigint). 과세는 공급가액으로 저장하고 부가세는 별도 칸. 계산 규칙(과세 분리·외화 환산·원 미만 반올림)은 `src/lib/money.ts` 한 곳에만 둔다.
 - 권한: 공정·프로젝트·바이어/파트너 정보는 사내 전원 열람. 산출내역서·장부·수익은 `has_budget_access()`(상위 프로젝트 상속) 또는 관리자만. 직원은 본인 지출만 입력·조회.
 - DB 스키마 변경은 `db/migrations/NNNN_*.sql` 새 파일로만. 기존 파일 수정 금지(운영 반영 후).
-- 푸시 전: `npm run typecheck && npm test && db/test/run.sh` 통과 필수.
+- 푸시 전: `npm run typecheck && npm test && npm run build && db/test/run.sh` 통과 필수. 화면 변경은 체험 모드에서 브라우저로 확인.
+- 데이터 접근은 `src/data/types.ts` 의 `Repo` 인터페이스로만. 체험(demo)·운영(supabase) 구현을 함께 수정.
 - AI 기능은 선택형 부가기능으로만 둔다. 앱은 AI 없이 완전히 동작해야 한다.
 - 파일은 구글 드라이브, 데이터는 표준 PostgreSQL. 특정 업체 전용 기능 금지(이관 보장).

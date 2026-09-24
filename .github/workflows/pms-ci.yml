@@ -31,6 +31,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run build
       - name: DB 마이그레이션·권한 테스트
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/pms_test
