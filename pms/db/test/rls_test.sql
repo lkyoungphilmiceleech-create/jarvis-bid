@@ -15,7 +15,8 @@ insert into projects(id, parent_id, name) values
   ('10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'VivaTech');
 insert into project_members(project_id, user_id, budget_access) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', true);
-update projects set contract_amount = 841000000 where id = '10000000-0000-0000-0000-000000000001';
+update projects set contract_amount = 841000000, contract_taxable = 700000000, contract_zero_rated = 71000000,
+                    contract_vat = 70000000 where id = '10000000-0000-0000-0000-000000000001';
 insert into budget_versions(id, project_id, version_no, label) values
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 1, '최초 산출');
 insert into budget_lines(project_id, version_id, category, item, taxable, zero_rated, vat) values
@@ -117,16 +118,46 @@ select pg_temp.check((select count(*) from budget_lines where version_id = :'dra
 update budget_lines set taxable = 2000000, vat = 200000 where version_id = :'draft';
 insert into ledger_entries(project_id, paid_on, category, item, taxable, vat, method)
   values ('10000000-0000-0000-0000-000000000002', '2026-09-02', '운영비', '부스', 800000, 80000, 'domestic_transfer');
+select submit_budget_version(:'draft');
+do $$ begin
+  begin
+    update budget_lines set taxable = 1 where version_id = (select id from budget_versions where submitted_at is not null);
+    raise exception 'FAIL: 승인 요청 중 변경안이 수정됨';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    raise notice 'PASS: 승인 요청 중에는 수정 잠금';
+  end;
+end $$;
+do $$ begin
+  begin
+    perform confirm_budget_version((select id from budget_versions where submitted_at is not null));
+    raise exception 'FAIL: 비관리자가 산출 변경 확정';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+    raise notice 'PASS: 비관리자는 확정 불가';
+  end;
+end $$;
+update budget_versions set status = 'current' where id = :'draft';  -- RLS로 0건
+select pg_temp.check((select status from budget_versions where id = :'draft') = 'draft', '비관리자 상태 직접 변경 불가');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select reject_budget_version(:'draft', '근거 자료 첨부 필요');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+update budget_lines set item = '부스' where version_id = :'draft';
+select pg_temp.check(true, '반려 후 다시 수정 가능');
+select submit_budget_version(:'draft');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
 select confirm_budget_version(:'draft');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 select pg_temp.check((select status from budget_versions where version_no = 1
                         and project_id = '10000000-0000-0000-0000-000000000002') = 'superseded', '확정 후 이전 버전 보존');
 select pg_temp.check((select initial_supply = 1500000 and current_supply = 2500000 and spent_supply = 800000
                         and remaining_supply = 1700000
                       from budget_vs_actual where category = '운영비' and item = '부스'),
                      '최초 vs 현재 vs 집행 비교');
-select pg_temp.check((select children_budget_supply = 2500000 and unallocated_supply = 838500000
+select pg_temp.check((select contract_supply = 771000000 and children_budget_supply = 2500000
+                        and unallocated_supply = 768500000
                       from budget_rollup where project_id = '10000000-0000-0000-0000-000000000001'),
-                     '상위 계약금액 대비 하위 배정·미배정 잔액');
+                     '계약 공급가(수기 분리) 대비 하위 배정·미배정 잔액');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
 do $$ begin
   begin
@@ -154,5 +185,14 @@ do $$ begin
     raise exception 'FAIL: 장부 있는 프로젝트가 삭제됨';
   exception when foreign_key_violation then
     raise notice 'PASS: 장부 있는 프로젝트는 삭제 불가(보관 원칙)';
+  end;
+end $$;
+
+do $$ begin
+  begin
+    update projects set contract_vat = 1 where id = '10000000-0000-0000-0000-000000000001';
+    raise exception 'FAIL: 계약 분리 합계 불일치 허용';
+  exception when check_violation then
+    raise notice 'PASS: 과세+영세+부가세 = 계약 총액 검증';
   end;
 end $$;
