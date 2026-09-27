@@ -71,6 +71,17 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .ask input{flex:1;min-width:0;font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .ask input:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
 .chatnote{font-size:11px;color:var(--muted)}
+dialog.pop{border:1px solid var(--holo);border-radius:14px;background:var(--bg2);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px));box-shadow:0 0 40px var(--holo-soft)}
+dialog.pop::backdrop{background:rgba(2,8,14,.55);backdrop-filter:blur(3px)}
+dialog.pop[open]{animation:popin .25s ease-out}
+@keyframes popin{from{transform:translateY(12px) scale(.97);opacity:0}}
+.pophead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+.pophead h3{margin:0;font-size:17px;line-height:1.45;text-wrap:balance}
+.popbody{padding:14px 18px;display:grid;grid-template-columns:88px 1fr;gap:8px 12px;font-size:14px}
+.popbody dt{color:var(--muted)}
+.popbody dd{margin:0}
+.popfoot{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;padding:12px 18px 16px;border-top:1px solid var(--line)}
+.popfoot .acts{justify-content:flex-start}
 .caret{display:inline-block;width:7px;height:1em;background:var(--holo);vertical-align:-2px;margin-left:2px;animation:pulse 1s steps(1) infinite}
 .meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .meta b{color:var(--ink);font-weight:500}
@@ -229,6 +240,12 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
   </details>
 </div>
 
+<dialog class="pop" id="pop" aria-labelledby="popTitle">
+  <div class="pophead"><h3 id="popTitle"></h3><button class="btn x" type="button" id="popClose" aria-label="닫기">✕</button></div>
+  <dl class="popbody" id="popBody"></dl>
+  <div class="popfoot"><span class="acts" id="popActs"></span><span class="acts"><a class="btn" id="popLink" target="_blank" rel="noopener">나라장터 원문 ↗</a><button class="btn" type="button" id="popFeed">피드에서 보기</button></span></div>
+</dialog>
+
 <script>
 const D = __DATA__;
 const $ = id => document.getElementById(id);
@@ -359,7 +376,7 @@ async function decide(id, status) {
     }
     $("dbStatus").textContent = "";
   } catch (e) { $("dbStatus").textContent = "저장하지 못했습니다. 잠시 후 다시 눌러 주세요."; }
-  busy.delete(id); render();
+  busy.delete(id); render(); if ($("pop").open) fillPop();
 }
 async function saveCfg(next) {
   const prev = cfg; cfg = {...next, synced: false}; render();
@@ -370,7 +387,7 @@ document.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.act) decide(t.dataset.id, t.dataset.act);
   if (t.dataset.more) { limits[t.dataset.more] += 30; render(); }
-  if (t.dataset.jump) { const c = $("c-" + t.dataset.jump); if (c) { c.scrollIntoView({behavior: calm ? "auto" : "smooth", block: "center"}); c.animate?.([{boxShadow: "0 0 0 2px var(--holo)"}, {boxShadow: "none"}], 1600); } }
+  if (t.dataset.jump) openPop(t.dataset.jump);
   if (t.dataset.del) { const k = t.dataset.del; saveCfg({...cfg, [k]: cfg[k].filter((_, n) => n !== +t.dataset.n)}); }
   if (t.dataset.add) { const k = t.dataset.add, v = $("add-" + k).value.trim(); if (v && !cfg[k].includes(v)) saveCfg({...cfg, [k]: [...cfg[k], v]}); }
   if (t.id === "honorSave" && db) { const v = $("honor").value.trim(); if (v) { honor = v; lastLine = ""; render(); db.doc("config/profile").set({honorific: v, updatedAt: new Date().toISOString()}).catch(() => $("dbStatus").textContent = "호칭을 저장하지 못했습니다."); } }
@@ -389,6 +406,35 @@ document.body.classList.add("intro");
 render();
 document.querySelectorAll(".intro .card").forEach((c, n) => c.style.animationDelay = Math.min(n, 12) * 45 + "ms");
 setTimeout(() => document.body.classList.remove("intro"), 1400);
+
+// ── 공고 팝업 ──
+let popId = null;
+function jumpTo(id) {
+  const i = D.items.find(x => x.bidNtceNo === id);
+  if (i && stateOf(i) && !$("showHidden").checked) { $("showHidden").checked = true; render(); }
+  if (i) { folds[i.RADAR] = true; render(); }
+  const c = $("c-" + id); if (!c) return;
+  c.scrollIntoView({behavior: calm ? "auto" : "smooth", block: "center"});
+  c.animate?.([{boxShadow: "0 0 0 2px var(--holo)"}, {boxShadow: "none"}], 1600);
+}
+function fillPop() {
+  const i = D.items.find(x => x.bidNtceNo === popId); if (!i) return;
+  const d = daysLeft(i.입찰마감일시), s = stateOf(i) || "검토 대기";
+  $("popTitle").textContent = i.사업명;
+  const rows = [["발주기관", i.공고기관], ["수요기관", i.수요기관 || "-"], ["배정예산", won(i.배정예산) + (i.배정예산 ? ` (${i.배정예산.toLocaleString("ko-KR")}원)` : "")],
+    ["입찰 마감", (i.입찰마감일시 || "미정") + (d === null ? "" : d < 0 ? " · 마감" : ` · D-${d || "DAY"}`)], ["공고일", i.공고일자], ["공고번호", i.공고번호],
+    ["구분", `${i.구분} · ${i.수집사유}`], ["RADAR 판단", i.RADAR === "추천" ? "추천 (1억 원 이상 또는 금액 미상)" : "참고 (1억 원 미만)"], ["현재 상태", s]];
+  $("popBody").innerHTML = ""; rows.forEach(([k, v]) => { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; $("popBody").append(dt, dd); });
+  $("popLink").href = i.공고URL;
+  const st = stateOf(i), id = esc(i.bidNtceNo);
+  $("popActs").innerHTML = !db ? "" : !st ? `<button class="btn x" data-act="제외" data-id="${id}">제외</button><button class="btn go" data-act="선택" data-id="${id}">선택</button>`
+    : st === "선택" ? `<button class="btn primary" data-act="이관" data-id="${id}">DECODER로 전송</button><button class="btn" data-act="복원" data-id="${id}">복원</button>`
+    : st === "제외" ? `<button class="btn" data-act="복원" data-id="${id}">복원</button>` : "";
+}
+function openPop(id) { popId = id; fillPop(); if (!$("pop").open) $("pop").showModal(); }
+$("popClose").onclick = () => $("pop").close();
+$("pop").addEventListener("click", e => { if (e.target === $("pop")) $("pop").close(); });
+$("popFeed").onclick = () => { const id = popId; $("pop").close(); jumpTo(id); };
 
 // ── RADAR 대화 ──
 let sample = null, chatRef = null, turns = [], ctl = null, pending = {};
