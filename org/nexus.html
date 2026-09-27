@@ -173,6 +173,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" data-tab="proj" aria-selected="true">프로젝트 매칭</button>
     <button type="button" role="tab" data-tab="db" aria-selected="false">네트워크 DB</button>
+    <button type="button" role="tab" data-tab="pipe" aria-selected="false">발굴 DB</button>
     <button type="button" role="tab" data-tab="up" aria-selected="false">자료 올리기</button>
   </nav>
 
@@ -207,6 +208,17 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       <button class="btn" type="button" id="dbCsv">CSV 저장</button></div>
     <div class="tw" style="max-height:560px;overflow-y:auto"><table id="dbTable"></table></div>
     <p class="note" id="dbNote"></p>
+  </section>
+
+  <!-- 발굴 DB -->
+  <section class="glass panel" id="tab-pipe" hidden>
+    <div class="row"><h2>발굴 DB</h2><span class="note">매일 자동 발굴(한국 기업과 거래 실적이 있는 해외 바이어·투자자)과 프로젝트 웹 발굴 결과가 쌓입니다. 네트워크 DB와 따로 관리하고, 확인이 끝나면 내려받아 '자료 올리기'로 옮깁니다.</span></div>
+    <p class="bubble" id="pDaily" hidden></p>
+    <div class="fields" id="pKpis" role="group" aria-label="상태"></div>
+    <div class="row"><input id="pq" type="search" placeholder="이름·회사·국가·메모 검색" style="flex:1;min-width:200px"><select id="pInd"></select><select id="pProj"></select><select id="pReach"></select></div>
+    <div class="row"><span class="note" id="pCount"></span><span style="flex:1"></span><button class="btn" type="button" id="pSheet">구글 시트로 저장</button><button class="btn primary" type="button" id="pXlsx">네트워크 DB 업로드용 엑셀</button></div>
+    <p class="note" id="pNote">행을 누르면 프로필·근거·매칭 이유를 보고 상태와 메모를 적을 수 있습니다. 발굴 세션은 상태·메모를 건드리지 않습니다.</p>
+    <div class="tw" style="max-height:640px;overflow-y:auto"><table id="pTable"></table></div>
   </section>
 
   <!-- 업로드 -->
@@ -299,8 +311,8 @@ function drawHero() {
 // ── 탭
 function showTab(t) { tab = t; try { localStorage.setItem("nexus-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  ["proj", "db", "up"].forEach(k => $("tab-" + k).hidden = k !== t);
-  if (t === "db") drawDb(); if (t === "up") drawUpload(); if (t === "proj") drawProj(); }
+  ["proj", "db", "pipe", "up"].forEach(k => $("tab-" + k).hidden = k !== t);
+  if (t === "db") drawDb(); if (t === "pipe") drawPipe(); if (t === "up") drawUpload(); if (t === "proj") drawProj(); }
 
 // ── 프로젝트
 const P = () => projects.find(p => p.id === cur);
@@ -351,7 +363,7 @@ function drawProj() {
       <div class="m"><div><div class="score">${+b.적합도 || 0}</div><span class="sbar"><i style="width:${Math.max(0, Math.min(100, +b.적합도 || 0))}%"></i></span></div>
         <div><b>${esc(b.이름)}</b> · ${esc(b.직책)} · ${esc(b.회사)} <span class="tag">${esc(b.유형)}</span> <span class="tag">${esc([b.국가, b.도시].filter(Boolean).join(" "))}</span>${b.dbId ? ` <span class="tag go">DB ${esc(b.dbId)}</span>` : ""}
           <div class="why">${esc(b.프로필)}</div><div class="why"><b>적합 이유</b> ${esc(b.적합이유)}</div>
-          <div class="note">${b.이메일 ? `✉ <a href="mailto:${esc(b.이메일)}">${esc(b.이메일)}</a>${link(b.이메일출처, "출처")} · ` : "이메일 미공개 · "}${link(b.링크드인, "LinkedIn")}${link(b.웹, "웹")}${(b.근거 || []).slice(0, 3).map((u, i) => link(u, `근거${i + 1}`)).join("")} · 추천 접근: ${esc(b.추천접근)}</div></div>
+          <div class="note">${contactLine(b)}${(b.근거 || []).slice(0, 3).map((u, i) => link(u, `근거${i + 1}`)).join("")} · 추천 접근: ${esc(b.추천접근)}</div></div>
         <span class="note">${esc(b.확인일)}</span></div>`).join("")}</div>`).join("")}` : ""}
   </div>
 
@@ -617,6 +629,60 @@ function initGeo() {
   svg.on("keydown", e => { if (e.key === "Enter") e.target.closest?.("[data-a2]")?.dispatchEvent(new MouseEvent("click", {bubbles: true})); });
 }
 
+// ── 발굴 DB: 발굴 세션이 쌓는 pipeline 문서(사람 1명 = 문서 1개). 상태·메모는 본부장님이 관리
+const PSTAT = ["발굴", "검토", "컨택", "수락", "미팅", "보류", "제외"];
+const P2STAGE = {"발굴": "미접촉", "검토": "미접촉", "컨택": "연결요청", "수락": "수락", "미팅": "미팅완료", "보류": "보류"};
+let pipe = [], daily = [], pf = {q: "", 상태: "", 프로젝트: "", 연락: "", 산업군: ""};
+const reach = b => b.이메일 ? "개인 이메일" : b.회사연락처 ? "회사 연락처" : b.행사경로 ? "행사 경로" : b.링크드인 ? "링크드인만" : "없음";
+const pipeRows = () => { const q = pf.q.toLowerCase();
+  return pipe.filter(b => (!pf.상태 || (b.상태 || "발굴") === pf.상태) && (!pf.프로젝트 || (pf.프로젝트 === "__daily" ? b.발굴경로 === "매일 발굴" : (b.매칭 || []).some(m => m.pid === pf.프로젝트))) && (!pf.연락 || reach(b) === pf.연락) && (!pf.산업군 || (b.산업군 || "기타") === pf.산업군)
+    && (!q || [b.이름, b.회사, b.직책, b.국가, b.분야, b.메모, b.거래실적].some(v => String(v || "").toLowerCase().includes(q))))
+    .sort((a, b) => (+b.최고적합도 || 0) - (+a.최고적합도 || 0)); };
+function drawPipe() {
+  const d = daily[0]; $("pDaily").hidden = !d;
+  if (d) $("pDaily").textContent = `매일 발굴 ${d.날짜} · ${d.산업군} · 새로 ${+d.추가 || 0}곳${+d.갱신 ? `, 거래 실적 보강 ${d.갱신}곳` : ""} — ${d.요약 || ""}`;
+  const cnt = s => pipe.filter(b => (b.상태 || "발굴") === s).length;
+  $("pKpis").innerHTML = `<button type="button" data-pst="" aria-pressed="${!pf.상태}">전체<small>${pipe.length}</small></button>` + PSTAT.map(s => `<button type="button" data-pst="${s}" aria-pressed="${pf.상태 === s}">${s}<small>${cnt(s)}</small></button>`).join("");
+  const pids = [...new Map(pipe.flatMap(b => (b.매칭 || []).map(m => [m.pid, m.프로젝트 || m.pid]))).entries()];
+  $("pInd").innerHTML = opt(INDS, pf.산업군, "산업군 전체");
+  $("pProj").innerHTML = `<option value="">프로젝트 전체</option><option value="__daily"${pf.프로젝트 === "__daily" ? " selected" : ""}>매일 발굴</option>` + pids.map(([id, n]) => `<option value="${esc(id)}"${pf.프로젝트 === id ? " selected" : ""}>${esc(n)}</option>`).join("");
+  $("pReach").innerHTML = opt(["개인 이메일", "회사 연락처", "행사 경로", "링크드인만", "없음"], pf.연락, "연락처 전체");
+  const rows = pipeRows();
+  $("pCount").textContent = `${rows.length}명`;
+  $("pTable").innerHTML = `<thead><tr><th>적합도</th><th>구분</th><th>이름·직책</th><th>회사</th><th>국가</th><th>비고 (한국 기업 거래 실적 · 매칭)</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
+    <td class="num"><b>${b.최고적합도 ? +b.최고적합도 : "–"}</b></td><td><span class="tag">${esc(b.산업군 || "기타")}</span>${b.발굴경로 === "매일 발굴" ? '<div class="note">매일 발굴</div>' : ""}</td><td><b>${esc(b.이름 || "(담당자 미확인)")}</b><div class="note">${esc(b.직책)}</div></td><td>${esc(b.회사)}<div class="note">${esc(b.분야)}</div></td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
+    <td class="note">${b.거래실적 ? `<span style="color:var(--ink)">${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}<br>` : ""}${(b.매칭 || []).map(m => `${esc(m.프로젝트 || m.pid)} · ${esc(m.기업명)} (${+m.적합도 || 0})`).join("<br>")}</td>
+    <td><span class="tag${b.이메일 ? " go" : b.회사연락처 || b.행사경로 ? " amber" : ""}">${reach(b)}</span>${b.dbId ? ` <span class="tag">DB ${esc(b.dbId)}</span>` : ""}</td>
+    <td><select data-pstat="${esc(b.id)}" aria-label="상태">${opt(PSTAT, b.상태 || "발굴")}</select></td></tr>`).join("") || '<tr><td colspan="8" class="empty">아직 발굴된 바이어가 없습니다. 매일 자동 발굴과 프로젝트 매칭 탭의 [발굴 시작]으로 쌓입니다.</td></tr>'}</tbody>`;
+}
+const contactLine = b => `${b.이메일 ? `✉ <a href="mailto:${esc(b.이메일)}">${esc(b.이메일)}</a>${link(b.이메일출처, "출처")}` : "개인 이메일 미공개"}
+  · 🏢 ${/^https?:\/\//i.test(b.회사연락처 || "") ? link(b.회사연락처, "회사 문의 페이지") : b.회사연락처 ? `<a href="mailto:${esc(b.회사연락처)}">${esc(b.회사연락처)}</a>` : "회사 연락처 없음"}${link(b.회사연락처출처, "출처")}
+  ${b.행사경로 ? `· 🎪 ${esc(b.행사경로)}${link(b.행사경로출처, "확인")}` : ""}${link(b.링크드인, "LinkedIn")}${link(b.웹, "웹")}`;
+function editPipe(b) {
+  $("dlgForm").innerHTML = `<h2 style="margin:0 0 6px">${esc(b.이름)} <span class="note">${esc(b.직책)} · ${esc(b.회사)}</span></h2>
+    <p class="why">${esc(b.프로필)}</p>${b.거래실적 ? `<p class="why"><b>한국 기업 거래 실적</b> ${esc(b.거래실적)}${link(b.거래출처, "출처")}</p>` : ""}<p class="note">${contactLine(b)}</p>
+    <p class="note">근거:${(b.근거 || []).slice(0, 5).map((u, i) => link(u, String(i + 1))).join("")} · 최초 발굴 ${esc(b.최초발굴일)} · 최근 확인 ${esc(b.최근확인일)}</p>
+    ${(b.매칭 || []).map(m => `<div class="co" style="margin:6px 0"><div><b>${esc(m.프로젝트 || m.pid)} · ${esc(m.기업명)}</b> <span class="tag go">적합도 ${+m.적합도 || 0}</span></div><div class="why">${esc(m.적합이유)}</div><div class="note">추천 접근: ${esc(m.추천접근)}</div></div>`).join("")}
+    <div class="form"><label>상태<select data-pe="상태">${opt(PSTAT, b.상태 || "발굴")}</select></label><label class="wide">메모 (진행 상황·통화 내용 등)<textarea data-pe="메모">${esc(b.메모)}</textarea></label></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button><button class="btn" value="cancel">닫기</button></div>`;
+  $("dlg").onclose = async () => { if ($("dlg").returnValue !== "save" || !db) return;
+    const u = {}; $("dlgForm").querySelectorAll("[data-pe]").forEach(el => u[el.dataset.pe] = el.value.trim());
+    try { await db.doc(`pipeline/${b.id}`).update(u); } catch { alert("저장하지 못했습니다."); } };
+  $("dlg").returnValue = ""; $("dlg").showModal();
+}
+async function exportPipe(kind) { // 네트워크 DB '자료 올리기'에 그대로 올릴 수 있는 열 구성
+  const note = $("pNote"), rows = pipeRows().filter(b => (b.상태 || "발굴") !== "제외");
+  const out = rows.map(b => ({유형: b.유형 || "바이어", 이름: b.이름, 직책: b.직책, 회사: b.회사, 국가: b.국가, 도시: b.도시, 산업대: INDS.includes(b.산업군) ? b.산업군 : "", 산업세부: b.분야, 관심키워드: "", 투자단계규모: "", 이메일: b.이메일,
+    웹: b.링크드인 || b.웹, 출처: "NEXUS 발굴 · " + ([...new Set((b.매칭 || []).map(m => m.프로젝트 || m.pid))].join(", ") || b.발굴경로 || ""), 취합연도: String(b.최초발굴일 || "").slice(0, 4), 관계단계: P2STAGE[b.상태 || "발굴"] || "미접촉",
+    메모: [b.거래실적 && `거래실적 ${b.거래실적}`, b.회사연락처 && `회사연락처 ${b.회사연락처}`, b.행사경로 && `행사경로 ${b.행사경로}`, b.메모].filter(Boolean).join("; "), 원본파일: "NEXUS 발굴 DB"}));
+  if (!out.length) { note.textContent = "내보낼 바이어가 없습니다."; return; }
+  if (kind === "sheet") return toSheet(`NEXUS 발굴 DB_${today()}`, F, out.map(o => F.map(k => o[k])), note);
+  if (!window.XLSX || !downloads) { note.textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out, {header: F}), "발굴 DB");
+  try { await downloads.save({filename: `NEXUS_발굴DB_${today()}.xlsx`, data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); note.textContent = `${out.length}명을 저장했습니다. 확인 후 '자료 올리기'에서 네트워크 DB로 올리시면 됩니다('제외' 상태는 빠짐).`; }
+  catch (e) { note.textContent = e?.code === "declined" ? "" : "저장하지 못했습니다."; }
+}
+
 // ── 업로드
 let up = null; // {name, sheets:{name:rows[][]}, sheet, map, headerRow, defaults, preview}
 const SYN = {이름: /^(name|full ?name|contact|이름|성명|담당자)$/i, 직책: /(title|position|role|직책|직위|직함)/i, 회사: /(company|organi[sz]ation|firm|회사|기관|소속|기업)/i, 국가: /(country|국가|나라)/i, 도시: /(city|도시|지역)/i,
@@ -738,7 +804,7 @@ async function commit() {
 
 // ── 이벤트
 document.addEventListener("click", async e => {
-  const t = e.target.closest("button, tr.click"); if (!t) return;
+  const t = e.target.closest("button, tr.click"); if (!t || (t.tagName === "TR" && e.target.closest("select, a, input"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.dataset.proj) { cur = t.dataset.proj; try { localStorage.setItem("nexus-proj", cur); } catch {} drawProj(); }
@@ -765,6 +831,10 @@ document.addEventListener("click", async e => {
   if (t.id === "gClose") { G.sel = null; drawGeo(); }
   if (t.id === "gTable") { filt.국가 = koName(G.sel); drawDb(); $("dbCount").scrollIntoView({behavior: "smooth"}); }
   if (t.closest(".rank") && t.dataset.a2) focusA2(t.dataset.a2);
+  if (t.dataset.pst !== undefined) { pf.상태 = t.dataset.pst; drawPipe(); }
+  if (t.dataset.pb) editPipe(pipe.find(b => b.id === t.dataset.pb));
+  if (t.id === "pXlsx") exportPipe("xlsx");
+  if (t.id === "pSheet") exportPipe("sheet");
   if (t.dataset.mx) { const [i, ty] = t.dataset.mx.split("|"); Object.assign(filt, {산업대: i, 유형: ty}); drawDb(); }
   if (t.id === "fReset") { filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: "", 분야: ""}; drawDb(); }
   if (t.dataset.ct) editContact(contacts.find(r => r.id === t.dataset.ct));
@@ -782,6 +852,10 @@ document.addEventListener("change", e => {
   if (t.dataset.mst) { const [cid, i] = t.dataset.mst.split("|"), p = P(); p.matches[cid][+i].status = t.value; saveProj(p); }
   if (["fType", "fInd", "fCountry", "fYear", "fStage"].includes(t.id)) { filt[{fType: "유형", fInd: "산업대", fCountry: "국가", fYear: "취합연도", fStage: "관계단계"}[t.id]] = t.value; drawDb(); }
   if (t.dataset.pnone) { const inp = t.closest("span").querySelector("input[data-pf]"); inp.disabled = t.checked; if (t.checked) inp.value = ""; }
+  if (t.dataset.pstat) { db?.doc(`pipeline/${t.dataset.pstat}`).update({상태: t.value}).catch(() => { $("pNote").textContent = "상태를 저장하지 못했습니다."; }); }
+  if (t.id === "pProj") { pf.프로젝트 = t.value; drawPipe(); }
+  if (t.id === "pInd") { pf.산업군 = t.value; drawPipe(); }
+  if (t.id === "pReach") { pf.연락 = t.value; drawPipe(); }
   if (t.id === "gProj") { G.proj = t.value; G.sel = null; drawGeo(); }
   if (t.id === "file" && t.files[0]) readFile(t.files[0]).catch(() => stage('<p class="err">파일을 읽지 못했습니다. 엑셀·CSV 파일인지 확인해 주세요.</p>'));
   if (t.id === "uKind") { $("uProjWrap").hidden = t.value !== "companies"; if (up) { guessMap(); drawStage(); } }
@@ -793,6 +867,7 @@ document.addEventListener("change", e => {
   if (t.id === "uYear" || t.id === "uSrc") drawStage();
 });
 $("q").addEventListener("input", e => { filt.q = e.target.value; drawDb(); });
+$("pq").addEventListener("input", e => { pf.q = e.target.value; drawPipe(); });
 const drop = $("drop");
 ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("on"); }));
 ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("on"); }));
@@ -805,6 +880,8 @@ initGeo(); showTab(tab); drawHero();
   db.collection("contacts").onSnapshot(s => { chunks = {}; s.docs.forEach(d => chunks[d.id] = d.data().rows || []); flatten(); drawHero(); if (tab === "db") drawDb(); if (tab === "proj") drawProj(); }, () => { $("say").textContent = "본부장님, 네트워크 DB를 불러오지 못했습니다. 새로고침해 주세요."; });
   db.collection("projects").onSnapshot(s => { const local = projects.filter(p => !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...d.data()})), ...local.filter(l => !s.docs.some(d => d.id === l.id))]; drawHero(); if (tab === "proj") drawProj(); if (tab === "up") drawUpload(); });
   db.collection("jobs").onSnapshot(s => { jobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "proj") drawProj(); });
+  db.collection("daily").orderBy("날짜", "desc").limit(7).onSnapshot(s => { daily = s.docs.map(d => d.data()); if (tab === "pipe") drawPipe(); });
+  db.collection("pipeline").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "pipe") drawPipe(); });
   db.collection("discover").onSnapshot(s => { disc = {}; s.docs.forEach(d => disc[d.id] = d.data()); if (tab === "proj") drawProj(); });
   db.collection("uploads").orderBy("at", "desc").limit(50).onSnapshot(s => { uploads = s.docs.map(d => d.data()); if (tab === "up") drawUpload(); });
 })();
