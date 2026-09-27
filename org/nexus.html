@@ -149,6 +149,9 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .rank button:hover{color:var(--holo)}
 .ppl button{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 8px;margin-bottom:5px;cursor:pointer;font:13px var(--sans)}
 .ppl button:hover{border-color:var(--holo)}
+.chk{flex-direction:row!important;align-items:center;gap:3px;white-space:nowrap;color:var(--ink)!important}
+.co.disc{border-color:var(--holo);box-shadow:0 0 18px var(--holo-soft)}
+.co.disc .co{background:var(--glass)}
 .empty{font-size:13px;color:var(--muted);padding:6px 0}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
 </style>
@@ -248,7 +251,7 @@ let th = "system"; try { th = localStorage.getItem("nexus-theme") || "system"; }
 const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}); tick(); setInterval(tick, 1000);
 
 let db = null, sample = null, mcp = null, downloads = null;
-let chunks = {}, contacts = [], projects = [], uploads = [], cur = null, tab = "proj";
+let chunks = {}, contacts = [], projects = [], uploads = [], jobs = [], disc = {}, cur = null, tab = "proj";
 let filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: "", 분야: ""};
 try { cur = localStorage.getItem("nexus-proj"); tab = localStorage.getItem("nexus-tab") || "proj"; } catch {}
 
@@ -264,7 +267,7 @@ async function saveCsv(name, head, rows, note) {
 }
 const MCP_COPY = {needs_reauth: "구글 드라이브 연결이 만료되었습니다. claude.ai 설정 → 커넥터에서 다시 연결해 주세요.", server_not_connected: "구글 드라이브 커넥터가 없습니다. claude.ai 설정 → 커넥터에서 추가해 주세요.",
   not_in_manifest: "이 페이지에 구글 드라이브 사용이 허용되지 않았습니다.", selection_required: "구글 드라이브 연결을 하나 골라 주세요.", tool_error: "구글 드라이브가 요청을 거절했습니다.", server_unavailable: "구글 드라이브가 잠시 응답하지 않습니다. 잠시 후 다시 눌러 주세요."};
-const mcpMsg = e => MCP_COPY[e?.code] || "구글 드라이브 작업에 실패했습니다" + (e?.message ? `: ${e.message}` : ".");
+const mcpMsg = (e, s) => { const m = MCP_COPY[e?.code] || "구글 드라이브 작업에 실패했습니다" + (e?.message ? `: ${e.message}` : "."); return s ? m.replaceAll("구글 드라이브", s) : m; };
 async function toSheet(title, head, rows, note) {
   if (!mcp) { note.textContent = "이 화면에서는 구글 드라이브를 쓸 수 없습니다. CSV 저장을 이용해 주세요."; return; }
   const csv = csvOf(head, rows).slice(1);
@@ -302,43 +305,98 @@ function showTab(t) { tab = t; try { localStorage.setItem("nexus-tab", t); } cat
 // ── 프로젝트
 const P = () => projects.find(p => p.id === cur);
 function drawProj() {
-  $("plist").innerHTML = projects.length ? projects.map(p => `<button type="button" data-proj="${esc(p.id)}" aria-pressed="${p.id === cur}">${esc(p.이름 || "(이름 없음)")}<small>${esc(p.목적 || "")} · ${esc(p.지역 || "")} · ${esc(p.상태 || "준비")}</small></button>`).join("") : '<p class="empty">프로젝트가 없습니다.</p>';
+  $("plist").innerHTML = projects.length ? projects.map(p => `<button type="button" data-proj="${esc(p.id)}" aria-pressed="${p.id === cur}">${esc(p.이름 || "(이름 없음)")}<small>${esc([p.마켓, p.목적, [p.국가, p.도시].filter(Boolean).join(" "), p.상태 || "준비"].filter(Boolean).join(" · "))}</small></button>`).join("") : '<p class="empty">프로젝트가 없습니다.</p>';
   const p = P();
-  if (!p) { $("pview").innerHTML = '<p class="empty">왼쪽에서 프로젝트를 고르거나 새로 만들어 주세요. 프로젝트마다 지역·목적(바이어/투자/혼합)·타깃 산업을 정하면, 참가기업에 맞춰 네트워크 DB에서 상대를 찾습니다.</p>'; return; }
+  if (!p) { $("pview").innerHTML = '<p class="empty">왼쪽에서 프로젝트를 고르거나 새로 만들어 주세요. 프로젝트마다 지역·목적(바이어/투자/혼합)·타깃 산업을 정하고 참가기업 엑셀을 올리면, 네트워크 DB 매칭과 웹 발굴로 기업별 상대를 찾습니다.</p>'; return; }
+  if (!p.국가 && p.지역) { const [n, ...c] = p.지역.split(/\s+/); p.국가 = n; p.도시 = c.join(" "); }
+  if (!p.발주처 && p.주관) p.발주처 = p.주관;
   const cos = p.companies || [], ms = p.matches || {};
+  const none = (k, flag, ph) => `<span class="row" style="gap:6px;flex-wrap:nowrap"><input data-pf="${k}" value="${esc(p[flag] ? "" : p[k])}" placeholder="${ph}" ${p[flag] ? "disabled" : ""} style="flex:1"><label class="chk"><input type="checkbox" data-pnone="${flag}" data-for="${k}" ${p[flag] ? "checked" : ""}>없음</label></span>`;
+  const myJobs = jobs.filter(j => j.pid === p.id).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const live = myJobs.find(j => j.status === "진행" || (j.status === "요청" && Date.now() - new Date(j.at) < 15 * 60e3)); // 15분 넘게 시작 안 된 요청은 다시 누를 수 있게
+  const found = cos.map(c => [c, disc[`${p.id}__${c.id}`]]).filter(([, d]) => d?.buyers?.length);
   $("pview").innerHTML = `
-  <details class="fold" ${p.이름 ? "" : "open"}><summary>프로젝트 설정 — ${esc(p.이름 || "새 프로젝트")}</summary>
+  <details class="fold" ${p.이름 ? "" : "open"}><summary>프로젝트 설정 — ${esc(p.이름 || "새 프로젝트")}${p.하위사업 ? ` · ${esc(p.하위사업)}` : ""}</summary>
     <div class="form" style="margin-top:10px" id="pform">
-      <label>프로젝트명<input data-pf="이름" value="${esc(p.이름)}" placeholder="예) U-KNOCK 2026 in USA"></label>
-      <label>발주·주관<input data-pf="주관" value="${esc(p.주관)}" placeholder="예) KOCCA"></label>
-      <label>지역 (국가·도시)<input data-pf="지역" value="${esc(p.지역)}" placeholder="예) 미국 LA"></label>
+      <label>프로젝트명<input data-pf="이름" value="${esc(p.이름)}" placeholder="예) 2026 해외 콘텐츠 마켓 참가 지원"></label>
+      <label>하위 사업명${none("하위사업", "하위없음", "예) U-KNOCK 2026 in USA")}</label>
+      <label>발주처<input data-pf="발주처" value="${esc(p.발주처)}" placeholder="예) 한국콘텐츠진흥원"></label>
+      <label>국가<input data-pf="국가" value="${esc(p.국가)}" placeholder="예) 미국"></label>
+      <label>도시<input data-pf="도시" value="${esc(p.도시)}" placeholder="예) LA"></label>
+      <label>마켓명${none("마켓", "마켓없음", "예) AFM 2026")}</label>
       <label>목적<select data-pf="목적">${opt(["바이어", "투자", "혼합"], p.목적 || "바이어")}</select></label>
-      <label>기간<input data-pf="기간" value="${esc(p.기간)}" placeholder="예) 2026-11-05~07"></label>
+      <label>기간<span class="row" style="gap:4px;flex-wrap:nowrap"><input type="date" data-pf="시작" value="${esc(p.시작)}" style="flex:1">~<input type="date" data-pf="종료" value="${esc(p.종료)}" style="flex:1"></span></label>
       <label>상태<select data-pf="상태">${opt(["준비", "진행", "종료"], p.상태 || "준비")}</select></label>
-      <label>목표 KPI<input data-pf="KPI" value="${esc(p.KPI)}" placeholder="예) 상담 50건"></label>
+      <label>목표 KPI<input data-pf="KPI" value="${esc(p.KPI)}" placeholder="예) 상담 50건, 계약 추진 5건"></label>
       <label class="wide">타깃 산업<span class="chips">${INDS.map(i => `<label><input type="checkbox" data-pind="${i}" ${(p.산업 || []).includes(i) ? "checked" : ""}>${i}</label>`).join("")}</span></label>
       <label class="wide">메모 (원하는 바이어 유형, 특별 조건 등)<textarea data-pf="메모">${esc(p.메모)}</textarea></label>
     </div>
     <div class="row" style="margin-top:8px"><button class="btn primary" type="button" id="pSave">설정 저장</button><button class="btn x" type="button" id="pDel">프로젝트 삭제</button><span class="note" id="pNote"></span></div>
   </details>
 
-  <div><div class="row"><h2>참가기업 ${cos.length}곳</h2><span style="flex:1"></span><button class="btn" type="button" id="coAdd">+ 기업 추가</button><button class="btn" type="button" id="coUp">파일로 올리기</button></div>
-  ${cos.length ? `<div class="tw" style="margin-top:8px"><table><thead><tr><th>기업명</th><th>분야</th><th>제품·IP·서비스</th><th>희망 협업</th><th>타깃</th><th></th></tr></thead><tbody>${cos.map(c => `<tr class="click" data-co="${esc(c.id)}"><td>${esc(c.기업명)}</td><td>${esc(c.분야대)} ${esc(c.분야세부)}</td><td>${esc((c.제품 || "").slice(0, 60))}</td><td>${esc(c.희망협업)}</td><td>${esc(c.타깃국가)} ${esc(c.타깃바이어)}</td><td>${ms[c.id] ? `<span class="tag go">매칭 ${ms[c.id].length}</span>` : ""}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">참가기업을 추가해 주세요. 기업 정보가 자세할수록 매칭이 정확해집니다.</p>'}</div>
+  <div><div class="row"><h2>참가기업 ${cos.length}곳</h2><span style="flex:1"></span><button class="btn" type="button" id="coTpl">엑셀 양식 내려받기</button><button class="btn primary" type="button" id="coUp">엑셀 올리기</button><button class="btn" type="button" id="coAdd">+ 직접 추가</button></div>
+  <p class="note" id="coNote">양식에 기업 정보를 채워 올려 주세요. 다른 양식도 NEXUS가 열을 맞춰 받습니다. 기업을 누르면 수정할 수 있습니다.</p>
+  ${cos.length ? `<div class="tw" style="margin-top:8px"><table><thead><tr><th>기업명</th><th>분야</th><th>제품·IP·서비스</th><th>희망 협업</th><th>타깃</th><th></th></tr></thead><tbody>${cos.map(c => `<tr class="click" data-co="${esc(c.id)}"><td>${esc(c.기업명)}</td><td>${esc(c.분야대)} ${esc(c.분야세부)}</td><td>${esc((c.제품 || "").slice(0, 60))}</td><td>${esc(c.희망협업)}</td><td>${esc(c.타깃국가)} ${esc(c.타깃바이어)}</td><td>${ms[c.id] ? `<span class="tag">DB 매칭 ${ms[c.id].length}</span> ` : ""}${disc[`${p.id}__${c.id}`]?.buyers?.length ? `<span class="tag go">발굴 ${disc[`${p.id}__${c.id}`].buyers.length}</span>` : ""}</td></tr>`).join("")}</tbody></table></div>` : ""}</div>
 
-  <div><div class="row"><h2>매칭 결과</h2><span style="flex:1"></span>
+  <div class="co disc"><div class="row"><h2>투자자·바이어 발굴 <span class="note">웹 조사</span></h2></div>
+    <div class="row">
+      <label class="note">대상 <select id="dTarget">${opt(["바이어", "투자자", "혼합"], {"투자": "투자자"}[p.목적] || p.목적 || "바이어")}</select></label>
+      <label class="note">기업당 <select id="dN">${opt(["3", "5", "10"], "5")}</select> 명</label>
+      <span class="chips">${cos.map(c => `<label><input type="checkbox" data-dco="${esc(c.id)}" checked>${esc(c.기업명)}</label>`).join("") || '<span class="note">참가기업을 먼저 올려 주세요.</span>'}</span>
+    </div>
+    <div class="row"><button class="btn primary" type="button" id="runDisc" ${cos.length && !live ? "" : "disabled"}>${live ? "발굴 진행 중…" : "발굴 시작"}</button><span class="note" id="dNote">웹 검색이 되는 NEXUS 작업 세션이 기업마다 적합한 상대를 조사해 프로필·적합도·연락처를 채웁니다. 연락처는 공개된 것만(기존 DB, 회사 홈페이지, 링크드인 공개 프로필, 보도자료·행사 명단). 기업당 10~20분, 끝나면 휴대폰으로 알려 드립니다.</span></div>
+    ${myJobs.slice(0, 3).map(j => `<p class="note"><span class="tag${j.status === "완료" ? " go" : j.status === "오류" ? "" : " amber"}">${esc(j.status)}</span> ${esc(j.at ? new Date(j.at).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}) : "")} · 기업 ${j.companies?.length || 0}곳 × ${esc(j.perCompany)}명 · ${esc(j.대상)}${j.진행 ? ` · 진행 ${esc(j.진행)}` : ""}${j.요약 ? ` — ${esc(j.요약)}` : ""}${j.오류 ? ` — ${esc(j.오류)}` : ""}</p>`).join("")}
+    ${found.length ? `<div class="row"><span class="hudlabel">발굴 결과</span><span style="flex:1"></span><button class="btn" type="button" id="fSheet">구글 시트로 저장</button><button class="btn" type="button" id="fCsv">CSV 저장</button></div>
+    ${found.map(([c, d]) => `<div class="co"><h3>${esc(c.기업명)} <span class="note">${esc(c.분야대)} ${esc(c.분야세부)} · ${esc(String(d.updatedAt || "").slice(0, 10))}</span></h3>${d.buyers.map(b => `
+      <div class="m"><div><div class="score">${+b.적합도 || 0}</div><span class="sbar"><i style="width:${Math.max(0, Math.min(100, +b.적합도 || 0))}%"></i></span></div>
+        <div><b>${esc(b.이름)}</b> · ${esc(b.직책)} · ${esc(b.회사)} <span class="tag">${esc(b.유형)}</span> <span class="tag">${esc([b.국가, b.도시].filter(Boolean).join(" "))}</span>${b.dbId ? ` <span class="tag go">DB ${esc(b.dbId)}</span>` : ""}
+          <div class="why">${esc(b.프로필)}</div><div class="why"><b>적합 이유</b> ${esc(b.적합이유)}</div>
+          <div class="note">${b.이메일 ? `✉ <a href="mailto:${esc(b.이메일)}">${esc(b.이메일)}</a>${link(b.이메일출처, "출처")} · ` : "이메일 미공개 · "}${link(b.링크드인, "LinkedIn")}${link(b.웹, "웹")}${(b.근거 || []).slice(0, 3).map((u, i) => link(u, `근거${i + 1}`)).join("")} · 추천 접근: ${esc(b.추천접근)}</div></div>
+        <span class="note">${esc(b.확인일)}</span></div>`).join("")}</div>`).join("")}` : ""}
+  </div>
+
+  <div><div class="row"><h2>네트워크 DB에서 매칭</h2><span style="flex:1"></span>
     <button class="btn primary" type="button" id="runMatch" ${cos.length && contacts.length ? "" : "disabled"}>매칭 실행</button>
     <button class="btn" type="button" id="mSheet" ${Object.keys(ms).length ? "" : "disabled"}>구글 시트로 저장</button>
     <button class="btn" type="button" id="mCsv" ${Object.keys(ms).length ? "" : "disabled"}>CSV 저장</button></div>
-    <p class="note" id="mNote">목적·지역·산업으로 후보를 먼저 거른 뒤, NEXUS가 기업마다 적합도(0~100)와 이유를 붙여 상위 5명을 고릅니다. 이미 결과가 있는 기업은 다시 매칭하면 새 결과로 바뀝니다.</p>
+    <p class="note" id="mNote">이미 가진 네트워크에서 목적·지역·산업으로 후보를 거른 뒤, NEXUS가 기업마다 적합도(0~100)와 이유를 붙여 상위 5명을 고릅니다. 다시 매칭하면 새 결과로 바뀝니다.</p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">${cos.filter(c => ms[c.id]).map(c => `<div class="co"><h3>${esc(c.기업명)} <span class="note">${esc(c.분야대)} ${esc(c.분야세부)}</span></h3>${ms[c.id].map((m, i) => { const r = contacts.find(x => x.id === m.id) || {}; return `
       <div class="m"><div><div class="score">${m.score}</div><span class="sbar"><i style="width:${Math.max(0, Math.min(100, m.score))}%"></i></span></div>
         <div><b>${esc(r.이름 || "(삭제된 연락처)")}</b> · ${esc(r.직책)} · ${esc(r.회사)} <span class="tag">${esc(r.유형)}</span> <span class="tag">${esc(r.국가)}</span> <span class="tag">${esc(r.관계단계)}</span><div class="why">${esc(m.reason)}</div><div class="note">추천 메시지: ${esc(m.msg)} · ${esc(r.이메일 || "이메일 없음")}</div></div>
         <select data-mst="${esc(c.id)}|${i}" aria-label="진행 상태">${opt(MSTAT, m.status || "추천")}</select></div>`; }).join("")}</div>`).join("")}</div>
     <p class="note">메시지 작성은 <a href="https://claude.ai/artifact/JmQ3biw4gWxzSct65eCjBF" target="_blank" rel="noopener">업무 데스크 → NEXUS</a>에서 '추천 메시지' 유형을 골라 쓰시면 됩니다.</p></div>
 
-  <div><div class="row"><h2>발굴이 필요한 분야</h2><span style="flex:1"></span><button class="btn" type="button" id="runGap" ${cos.length ? "" : "disabled"}>발굴 분석</button></div>
-    <p class="note">참가기업에 비해 네트워크 DB에 부족한 상대(국가·산업·유형)를 짚고, 새로 모집할 대상의 조건과 찾을 곳을 제안합니다. 실제 기관·인물 조사는 JARVIS 채팅에 요청해 주세요(웹 검색 필요).</p>
+  <div><div class="row"><h2>부족한 분야 분석</h2><span style="flex:1"></span><button class="btn" type="button" id="runGap" ${cos.length ? "" : "disabled"}>분석</button></div>
+    <p class="note">참가기업에 비해 네트워크 DB에 부족한 상대(국가·산업·유형)와 새로 모집할 대상의 조건을 짚습니다. 실제 인물은 위 [발굴]로 찾습니다.</p>
     ${p.gap ? `<div class="out" style="margin-top:8px">${esc(p.gap)}</div><p class="note">${esc(p.gapAt || "")}</p>` : ""}</div>`;
+}
+const link = (u, label) => /^https?:\/\//i.test(u || "") ? ` <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>` : "";
+const TRIG = "trig_01TVfvJ4yxB4uGDnYBCjzTx4";
+async function runDisc() {
+  const p = P(), note = $("dNote"), ids = [...document.querySelectorAll("[data-dco]:checked")].map(e => e.dataset.dco), n = +$("dN").value, target = $("dTarget").value;
+  if (!ids.length) { note.textContent = "발굴할 기업을 골라 주세요."; return; }
+  if (!db || !mcp) { note.textContent = "이 화면에서는 발굴 작업을 시작할 수 없습니다. claude.ai에서 열어 주세요."; return; }
+  if (!p.이름) { note.textContent = "프로젝트 설정을 먼저 저장해 주세요."; return; }
+  if (!confirm(`참가기업 ${ids.length}곳 × ${n}명 ${target} 발굴을 시작할까요?\n약 ${ids.length * 15}분 걸리고, 본부장님 Claude 사용량이 쓰입니다.`)) return;
+  const jobId = "J" + Date.now().toString(36);
+  $("runDisc").disabled = true; note.textContent = "작업 세션을 부르는 중…";
+  try { await db.doc(`jobs/${jobId}`).set({pid: p.id, 프로젝트: p.이름, companies: ids, perCompany: n, 대상: target, status: "요청", at: new Date().toISOString()}); }
+  catch { note.textContent = "작업을 저장하지 못했습니다. 다시 눌러 주세요."; $("runDisc").disabled = false; return; }
+  try { await mcp.callTool("Claude Code Remote", "fire_trigger", {trigger_id: TRIG, text: `jobId: ${jobId}`}); note.textContent = "발굴을 시작했습니다. 기업이 끝날 때마다 결과가 여기에 나타납니다."; }
+  catch (e) {
+    if (e?.retryable || e?.code === "server_unavailable") { note.textContent = "작업 세션이 시작됐는지 확인이 안 됩니다. 몇 분 뒤 상태가 '진행'으로 바뀌지 않으면 다시 시도해 주세요."; return; }
+    note.textContent = mcpMsg(e, "Claude Code Remote"); db.doc(`jobs/${jobId}`).update({status: "오류", 오류: "작업 세션을 시작하지 못함"}).catch(() => {});
+  }
+}
+async function coTemplate() {
+  const note = $("coNote");
+  if (!window.XLSX || !downloads) { note.textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
+  const guide = [["항목", "설명", "예시"], ["기업명", "필수", "㈜케이웹툰"], ["분야대", INDS.join(" / ") + " 중 하나", "콘텐츠"], ["분야세부", "세부 분야", "웹툰"], ["제품", "제품·IP·서비스 설명", "로맨스 웹툰 IP 30편, 영상화 판권 보유"],
+    ["강점", "한 줄 강점", "북미 누적 조회 1억 회"], ["투자단계", "투자 유치 시 단계·희망 금액", "Series A, 30억"], ["희망협업", "수출/라이선스/공동제작/투자/유통 등", "영상화 라이선스, 공동제작"], ["타깃국가", "희망 국가", "미국, 캐나다"],
+    ["타깃바이어", "원하는 상대 유형", "스튜디오 개발 담당, OTT 콘텐츠 구매"], ["링크", "홈페이지·소개서 링크", "https://…"], ["메모", "기타", ""]];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CF]), "참가기업"); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guide), "작성 안내");
+  try { await downloads.save({filename: "NEXUS_참가기업_양식.xlsx", data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); note.textContent = "양식을 저장했습니다. '참가기업' 시트에 한 줄에 한 기업씩 채워 주세요."; }
+  catch (e) { note.textContent = e?.code === "declined" ? "" : "저장하지 못했습니다."; }
 }
 async function saveProj(p, note) {
   if (!db) return; p.updatedAt = new Date().toISOString();
@@ -368,7 +426,7 @@ async function runMatch() {
     const cands = candidates(p, co);
     if (!cands.length) { p.matches[co.id] = []; continue; }
     const prompt = `너는 JARVIS 사업 수행 본부 네트워크 발굴·매칭팀 NEXUS다. 해외 비즈니스 매칭 전문가로서, 한국 참가기업 1곳에 가장 적합한 상대 5명을 후보 목록에서만 고른다.
-[프로젝트] ${p.이름} / 주관 ${p.주관 || "-"} / 지역 ${p.지역 || "-"} / 목적 ${p.목적} / 타깃 산업 ${(p.산업 || []).join(",") || "-"} / 메모 ${p.메모 || "-"}
+[프로젝트] ${p.이름}${p.하위사업 ? ` (${p.하위사업})` : ""} / 발주처 ${p.발주처 || p.주관 || "-"} / 마켓 ${p.마켓 || "-"} / 지역 ${p.지역 || "-"} / 목적 ${p.목적} / 타깃 산업 ${(p.산업 || []).join(",") || "-"} / 메모 ${p.메모 || "-"}
 [참가기업] ${CF.map(k => `${k}: ${co[k] || "-"}`).join(" / ")}
 [후보] 형식: ID|유형|이름|직책|회사|지역|산업|관심키워드|투자단계·규모|관계단계|취합연도
 ${cands.map(cline).join("\n")}
@@ -469,7 +527,7 @@ const world = topojson.feature(GEO.world, GEO.world.objects.countries).features.
 const mainPart = f => { if (f.geometry.type !== "MultiPolygon") return f; // 해외 영토 때문에 중심이 틀어지지 않게 가장 큰 덩어리 기준
   const polys = f.geometry.coordinates.map(c => ({type: "Polygon", coordinates: c})); return polys.sort((a, b) => d3.geoArea(b) - d3.geoArea(a))[0]; };
 const CENT = {}; world.forEach(f => { if (f.a2) CENT[f.a2] = d3.geoCentroid(mainPart(f)); }); Object.assign(CENT, EXTRA);
-const FIELDS = [["AI·데이터", /\bAI\b|Big Data|데이터|Cloud|Software|Hardware|Telecom|클라우드|소프트웨어/i], ["게임", /게임|Gaming|E-?Sport/i], ["미디어·엔터", /미디어|엔터|Media|Entertain|Creative|콘텐츠|영화|방송|음악|웹툰/i],
+const FIELDS = [["AI·데이터", /\bAI\b|Big Data|데이터|Cloud|Software|Hardware|Telecom|클라우드|소프트웨어/i], ["게임", /게임|Gaming|E-?Sport/i], ["미디어·엔터", /미디어|엔터|Media|Entertain|Creative|콘텐츠|영화|방송|음악|웹툰|OTT|배급|애니|포맷|통신|드라마|Broadcast|Film/i],
   ["리테일·커머스", /리테일|Retail|Commerce|CPG|유통|커머스/i], ["교육", /교육|Education|EdTech/i], ["금융·핀테크", /Fin|Bank|Insurance|Asset|금융|보험/i], ["마케팅·광고", /Marketing|Advertis|AdTech|광고|마케팅/i],
   ["헬스케어", /Health|Bio|의료|헬스|바이오/i], ["딥테크·제조", /DeepTech|R&D|Manufactur|Industry|Supply|Logistic|제조|딥테크/i], ["에너지·그린", /Energy|Green|Sustain|Oil|에너지/i],
   ["모빌리티·도시", /Mobility|Transport|Smart City|PropTech|모빌리티/i], ["컨설팅·서비스", /Consult|Legal|\bHR|Cyber|Defense|Government|Nonprofit|컨설팅/i]];
@@ -577,7 +635,7 @@ function loadBook(name, wb) {
   if (!Object.keys(sheets).length) { stage('<p class="err">읽을 수 있는 표가 없습니다.</p>'); return; }
   const y = (name.match(/20\d{2}/) || [])[0]; if (y && !$("uYear").value) $("uYear").value = y;
   if (!$("uSrc").value) $("uSrc").value = name.replace(/\.[^.]+$/, "");
-  up = {name, sheets, sheet: Object.keys(sheets).sort((a, b) => sheets[b].length - sheets[a].length)[0]};
+  up = {name, sheets, sheet: sheets["참가기업"] ? "참가기업" : Object.keys(sheets).sort((a, b) => sheets[b].length - sheets[a].length)[0]};
   guessMap(); drawStage(); steps(1);
 }
 async function readFile(f) {
@@ -685,12 +743,18 @@ document.addEventListener("click", async e => {
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.dataset.proj) { cur = t.dataset.proj; try { localStorage.setItem("nexus-proj", cur); } catch {} drawProj(); }
   if (t.id === "newProj") { if (!db) return; const id = "P" + Date.now().toString(36); projects.push({id, 이름: "", 목적: "바이어", 상태: "준비", 산업: [], companies: [], matches: {}}); cur = id; drawProj(); }
-  if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.산업 = [...document.querySelectorAll("[data-pind]:checked")].map(el => el.dataset.pind);
+  if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); document.querySelectorAll("[data-pnone]").forEach(el => { p[el.dataset.pnone] = el.checked; if (el.checked) p[el.dataset.for] = ""; });
+    p.지역 = [p.국가, p.도시].filter(Boolean).join(" "); p.기간 = [p.시작, p.종료].filter(Boolean).join("~"); delete p.주관; p.산업 = [...document.querySelectorAll("[data-pind]:checked")].map(el => el.dataset.pind);
     if (!p.이름) { $("pNote").textContent = "프로젝트명을 넣어 주세요."; return; } await saveProj(p, $("pNote")); }
   if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름 || "새 프로젝트"}'를 삭제할까요? 참가기업과 매칭 결과도 함께 지워집니다.`)) return; projects = projects.filter(x => x.id !== p.id); cur = null; db?.doc(`projects/${p.id}`).delete().catch(() => {}); drawProj(); }
   if (t.id === "coAdd") editCompany(null);
   if (t.dataset.co) editCompany(P().companies.find(c => c.id === t.dataset.co));
-  if (t.id === "coUp") { $("uKind").value = "companies"; showTab("up"); }
+  if (t.id === "coUp") { $("uKind").value = "companies"; showTab("up"); $("uProj").value = cur; $("file").click(); }
+  if (t.id === "coTpl") coTemplate();
+  if (t.id === "runDisc") runDisc();
+  if (t.id === "fSheet" || t.id === "fCsv") { const p = P(), head = ["프로젝트", "참가기업", "적합도", "이름", "직책", "회사", "유형", "국가", "도시", "분야", "프로필", "적합 이유", "추천 접근", "이메일", "이메일 출처", "LinkedIn", "웹", "근거", "기존 DB", "확인일"], rows = [];
+    p.companies.forEach(c => (disc[`${p.id}__${c.id}`]?.buyers || []).forEach(b => rows.push([p.이름, c.기업명, b.적합도, b.이름, b.직책, b.회사, b.유형, b.국가, b.도시, b.분야, b.프로필, b.적합이유, b.추천접근, b.이메일, b.이메일출처, b.링크드인, b.웹, (b.근거 || []).join(" "), b.dbId, b.확인일])));
+    if (t.id === "fSheet") toSheet(`NEXUS 발굴결과_${p.이름}_${today()}`, head, rows, $("dNote")); else saveCsv(`NEXUS_발굴결과_${p.이름}_${today()}.csv`, head, rows, $("dNote")); }
   if (t.id === "runMatch") runMatch();
   if (t.id === "runGap") runGap();
   if (t.id === "mSheet" || t.id === "mCsv") { const p = P(), head = ["프로젝트", "기업명", "연락처ID", "이름", "직책", "회사", "유형", "국가", "이메일", "적합도", "적합 이유", "추천 메시지", "진행 상태", "관계단계"], rows = [];
@@ -717,6 +781,7 @@ document.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.mst) { const [cid, i] = t.dataset.mst.split("|"), p = P(); p.matches[cid][+i].status = t.value; saveProj(p); }
   if (["fType", "fInd", "fCountry", "fYear", "fStage"].includes(t.id)) { filt[{fType: "유형", fInd: "산업대", fCountry: "국가", fYear: "취합연도", fStage: "관계단계"}[t.id]] = t.value; drawDb(); }
+  if (t.dataset.pnone) { const inp = t.closest("span").querySelector("input[data-pf]"); inp.disabled = t.checked; if (t.checked) inp.value = ""; }
   if (t.id === "gProj") { G.proj = t.value; G.sel = null; drawGeo(); }
   if (t.id === "file" && t.files[0]) readFile(t.files[0]).catch(() => stage('<p class="err">파일을 읽지 못했습니다. 엑셀·CSV 파일인지 확인해 주세요.</p>'));
   if (t.id === "uKind") { $("uProjWrap").hidden = t.value !== "companies"; if (up) { guessMap(); drawStage(); } }
@@ -739,6 +804,8 @@ initGeo(); showTab(tab); drawHero();
   if (!db) { drawHero(); return; }
   db.collection("contacts").onSnapshot(s => { chunks = {}; s.docs.forEach(d => chunks[d.id] = d.data().rows || []); flatten(); drawHero(); if (tab === "db") drawDb(); if (tab === "proj") drawProj(); }, () => { $("say").textContent = "본부장님, 네트워크 DB를 불러오지 못했습니다. 새로고침해 주세요."; });
   db.collection("projects").onSnapshot(s => { const local = projects.filter(p => !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...d.data()})), ...local.filter(l => !s.docs.some(d => d.id === l.id))]; drawHero(); if (tab === "proj") drawProj(); if (tab === "up") drawUpload(); });
+  db.collection("jobs").onSnapshot(s => { jobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "proj") drawProj(); });
+  db.collection("discover").onSnapshot(s => { disc = {}; s.docs.forEach(d => disc[d.id] = d.data()); if (tab === "proj") drawProj(); });
   db.collection("uploads").orderBy("at", "desc").limit(50).onSnapshot(s => { uploads = s.docs.map(d => d.data()); if (tab === "up") drawUpload(); });
 })();
 </script>
