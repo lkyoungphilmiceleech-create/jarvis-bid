@@ -1,0 +1,133 @@
+<title>RADAR 입찰 분석관</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#EEF2F1;--panel:#FFFFFF;--ink:#17222B;--muted:#5B6B74;--line:#D5DEDC;
+  --accent:#12708A;--accent-soft:#DCEEF2;--warn:#9A6212;--warn-soft:#F6EBD8;--ok:#1F7A4D;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;--bg:#0F171C;--panel:#16222A;--ink:#E3ECEE;--muted:#93A5AD;--line:#26363F;
+  --accent:#4FB6D0;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;--bg:#0F171C;--panel:#16222A;--ink:#E3ECEE;--muted:#93A5AD;--line:#26363F;
+  --accent:#4FB6D0;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.crumb{font:500 12px var(--sans);letter-spacing:.02em;color:var(--muted);text-transform:uppercase}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+.hero{display:grid;grid-template-columns:120px 1fr;gap:20px;align-items:center}
+@media (max-width:560px){.hero{grid-template-columns:1fr}}
+.avatar{width:120px;height:120px}
+.sweep{transform-origin:60px 60px;animation:spin 4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.sweep{animation:none}}
+h1{font:700 34px/1 var(--mono);letter-spacing:.08em;margin:0}
+.role{color:var(--accent);font-weight:700;margin-top:6px}
+.persona{margin:10px 0 0;max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+h2{font-size:17px;margin:0 0 12px;text-wrap:balance}
+.rule{display:grid;grid-template-columns:88px 1fr;gap:10px 14px;align-items:start}
+.rule dt{font:500 13px var(--sans);color:var(--muted);padding-top:4px}
+.rule dd{margin:0;display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink)}
+.chip.plain{background:transparent;border:1px solid var(--line)}
+.stats{display:flex;flex-wrap:wrap;gap:24px;margin-bottom:6px}
+.stat b{display:block;font:700 28px var(--mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted)}
+.stat.rec b{color:var(--accent)} .stat.ref b{color:var(--warn)}
+.note{font-size:13px;color:var(--muted);margin:0 0 14px}
+.tablebox{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px}
+th{font:500 12px var(--sans);color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+th.num{text-align:right}
+a{color:var(--ink);text-decoration-color:var(--line);text-underline-offset:3px}
+a:hover,a:focus-visible{color:var(--accent);text-decoration-color:currentColor}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.org{font-size:12px;color:var(--muted);display:block}
+.tag{font-size:12px;padding:1px 8px;border-radius:4px;white-space:nowrap}
+.tag.focus{background:var(--accent);color:var(--panel)}
+.tag.kw{border:1px solid var(--line);color:var(--muted)}
+.dday{font:500 12px var(--mono);white-space:nowrap}
+.dday.soon{color:var(--warn)} .dday.gone{color:var(--muted);text-decoration:line-through}
+tr.refrow{background:var(--warn-soft)}
+.divider td{background:var(--warn-soft);font:500 13px var(--sans);color:var(--warn)}
+</style>
+
+<div class="wrap">
+  <div class="crumb">JARVIS · 제안서 준비 본부 › 입찰 공고 조사팀</div>
+
+  <section class="card hero">
+    <svg class="avatar" viewBox="0 0 120 120" role="img" aria-label="RADAR 아바타: 레이더 화면">
+      <circle cx="60" cy="60" r="56" fill="var(--accent-soft)"/>
+      <circle cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".35"/>
+      <circle cx="60" cy="60" r="22" fill="none" stroke="var(--accent)" stroke-opacity=".35"/>
+      <path d="M60 4V116M4 60H116" stroke="var(--accent)" stroke-opacity=".2"/>
+      <g class="sweep"><path d="M60 60L60 4A56 56 0 0 1 108 32Z" fill="var(--accent)" fill-opacity=".35"/></g>
+      <circle cx="84" cy="40" r="4" fill="var(--accent)"/>
+      <circle cx="38" cy="78" r="3" fill="var(--warn)"/>
+      <circle cx="60" cy="60" r="4" fill="var(--ink)"/>
+    </svg>
+    <div>
+      <h1>RADAR</h1>
+      <div class="role">입찰 분석관 · 입찰 공고 조사팀</div>
+      <p class="persona">새벽같이 나라장터를 훑고, 우리 회사가 이길 수 있는 판만 골라 올리는 꼼꼼한 정찰병. 1억 원이 넘는 공고는 맨 위에, 작은 건은 “참고”로 조용히 아래에 둡니다.</p>
+      <div class="meta">
+        <span>출근 <b>평일 09:40 자동</b></span>
+        <span>월요일 <b>금~일 3일치 소급</b></span>
+        <span>보고서 <b>data/latest.json</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>판단 기준</h2>
+    <dl class="rule">
+      <dt>집중 기관</dt><dd id="inst"></dd>
+      <dt>과업 키워드</dt><dd id="kw"></dd>
+      <dt>금액</dt><dd><span class="chip">1억 원 이상 → 추천</span><span class="chip plain">1억 원 미만 → 참고</span><span class="chip plain">금액 미상 → 추천</span></dd>
+      <dt>자동 제외</dt><dd><span class="chip plain">전기차 충전설비</span><span class="chip plain">폐기·철거</span><span class="chip plain">금융성 투자</span><span class="chip plain">입시·심리 상담</span><span class="chip plain">단순 시설관리</span></dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>RADAR 보고서</h2>
+    <div class="stats">
+      <div class="stat rec"><b id="nRec"></b><span>추천</span></div>
+      <div class="stat ref"><b id="nRef"></b><span>참고 (1억 미만)</span></div>
+      <div class="stat"><b id="nEx"></b><span>오탐 제외</span></div>
+    </div>
+    <p class="note" id="src"></p>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>사업명 · 발주기관</th><th class="num">배정예산</th><th>마감</th><th>수집 사유</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+const D = {"institutions": ["콘텐츠진흥원", "국가유산진흥원", "정보통신산업진흥원", "연구개발특구진흥재단", "광주정보문화산업진흥원", "서울경제진흥원", "한국출판문화산업진흥원", "창업진흥원", "중소벤처기업진흥공단", "경기콘텐츠진흥원", "디자인진흥원", "경북창조경제혁신센터"], "keywords": ["투자", "상담", "박람회", "전시", "홍보관", "로드쇼", "비즈매칭", "비즈니스매칭", "마켓", "컨퍼런스", "공동관", "바이어", "B2B", "B2C", "IR", "데모데이", "포럼", "작가"], "excluded": 1, "items": [{"공고번호": "R26BK01742818-000", "bidNtceNo": "R26BK01742818", "bidNtceOrd": "000", "사업명": "2027 UAE 두바이 의료기기전시회 한국관 전시디자인설치공사 입찰", "공고기관": "한국의료기기협동조합", "수요기관": "한국의료기기협동조합", "공고일시": "2026-09-23 09:18:14", "공고일자": "2026-09-23", "배정예산": 678557642, "입찰마감일시": "", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01742818&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743221-000", "bidNtceNo": "R26BK01743221", "bidNtceOrd": "000", "사업명": "K-DEX 2026 통합홍보관 설치 용역", "공고기관": "조달청 서울지방조달청", "수요기관": "방위사업청", "공고일시": "2026-09-23 15:46:12", "공고일자": "2026-09-23", "배정예산": 541088920, "입찰마감일시": "2026-10-14 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743221&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743430-000", "bidNtceNo": "R26BK01743430", "bidNtceOrd": "000", "사업명": "2026 미래혁신기술박람회(FIX 2026) 및 ICT융합엑스포 경북대학교 단독관 설치 용역", "공고기관": "조달청", "수요기관": "경북대학교 산학협력단", "공고일시": "2026-09-23 14:01:56", "공고일자": "2026-09-23", "배정예산": 403350000, "입찰마감일시": "2026-09-28 11:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743430&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743375-000", "bidNtceNo": "R26BK01743375", "bidNtceOrd": "000", "사업명": "2026년 국립울진해양과학관 전시물 개선 및 확충", "공고기관": "조달청", "수요기관": "국립해양과학관", "공고일시": "2026-09-23 11:28:12", "공고일자": "2026-09-23", "배정예산": 237599800, "입찰마감일시": "2026-10-07 10:00:00", "구분": "물품", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743375&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743119-000", "bidNtceNo": "R26BK01743119", "bidNtceOrd": "000", "사업명": "2026년 재외한국문화원 문화홍보관 행정직원 역량강화 교육 사업", "공고기관": "조달청 대전지방조달청", "수요기관": "문화체육관광부", "공고일시": "2026-09-23 10:25:07", "공고일자": "2026-09-23", "배정예산": 181678000, "입찰마감일시": "2026-10-07 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743119&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743917-000", "bidNtceNo": "R26BK01743917", "bidNtceOrd": "000", "사업명": "주필리핀한국문화원 협력 전시 제작 및 운영 용역", "공고기관": "전남대학교", "수요기관": "전남대학교", "공고일시": "2026-09-23 16:12:29", "공고일자": "2026-09-23", "배정예산": 170000000, "입찰마감일시": "2026-10-07 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743917&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01744110-001", "bidNtceNo": "R26BK01744110", "bidNtceOrd": "001", "사업명": "제주목 관아 역사관 리모델링 전시물 구축 용역 (협상 - 사업소)", "공고기관": "제주특별자치도", "수요기관": "제주특별자치도", "공고일시": "2026-09-23 15:48:00", "공고일자": "2026-09-23", "배정예산": 165596000, "입찰마감일시": "", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01744110&bidPbancOrd=001", "RADAR": "추천"}, {"공고번호": "R26BK01744162-000", "bidNtceNo": "R26BK01744162", "bidNtceOrd": "000", "사업명": "2026년 충청남도 일자리 박람회 운영 용역", "공고기관": "재단법인충남경제진흥원", "수요기관": "재단법인충남경제진흥원", "공고일시": "2026-09-23 17:48:32", "공고일자": "2026-09-23", "배정예산": 152800000, "입찰마감일시": "2026-10-07 11:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01744162&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01744062-000", "bidNtceNo": "R26BK01744062", "bidNtceOrd": "000", "사업명": "B-LiFE_성과공유박람회 및 시민체험주간 통합운영", "공고기관": "부산과학기술대학교 산학협력단", "수요기관": "부산과학기술대학교 산학협력단", "공고일시": "2026-09-23 15:14:37", "공고일자": "2026-09-23", "배정예산": 148000000, "입찰마감일시": "2026-10-06 12:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01744062&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743411-000", "bidNtceNo": "R26BK01743411", "bidNtceOrd": "000", "사업명": "국립농업박물관 상설전시 부분 개선 연출 설계 및 제작·설치 용역", "공고기관": "조달청 인천지방조달청", "수요기관": "국립농업박물관", "공고일시": "2026-09-23 13:08:54", "공고일자": "2026-09-23", "배정예산": 141374000, "입찰마감일시": "2026-10-08 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743411&bidPbancOrd=000", "RADAR": "추천"}, {"공고번호": "R26BK01743062-001", "bidNtceNo": "R26BK01743062", "bidNtceOrd": "001", "사업명": "2026 경기미디저트페스타 전시 및 경연시설 사인 설치 용역", "공고기관": "사단법인 도농문화콘텐츠연구회", "수요기관": "사단법인 도농문화콘텐츠연구회", "공고일시": "2026-09-23 11:14:12", "공고일자": "2026-09-23", "배정예산": 120000000, "입찰마감일시": "", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743062&bidPbancOrd=001", "RADAR": "추천"}, {"공고번호": "R26BK01738132-000", "bidNtceNo": "R26BK01738132", "bidNtceOrd": "000", "사업명": "2026 튀르키예 이스탄불 식품 박람회 장치 시공 용역", "공고기관": "(재)서울경제진흥원", "수요기관": "(재)서울경제진흥원", "공고일시": "2026-09-23 08:21:08", "공고일자": "2026-09-23", "배정예산": 90915000, "입찰마감일시": "2026-10-07 10:00:00", "구분": "용역", "수집사유": "집중기관", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01738132&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743134-000", "bidNtceNo": "R26BK01743134", "bidNtceOrd": "000", "사업명": "2026 독일 뒤셀도르프 의료기기 전시회 단체관 전시디자인 및 설치 용역", "공고기관": "(재)경기도경제과학진흥원", "수요기관": "(재)경기도경제과학진흥원", "공고일시": "2026-09-23 10:21:59", "공고일자": "2026-09-23", "배정예산": 93024000, "입찰마감일시": "2026-10-06 11:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743134&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743805-000", "bidNtceNo": "R26BK01743805", "bidNtceOrd": "000", "사업명": "2026년 광주시 가구박람회 행사 용역", "공고기관": "경기도 광주시", "수요기관": "경기도 광주시", "공고일시": "2026-09-23 17:59:26", "공고일자": "2026-09-23", "배정예산": 92000000, "입찰마감일시": "2026-10-01 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743805&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743550-000", "bidNtceNo": "R26BK01743550", "bidNtceOrd": "000", "사업명": "2026학년도 DU-앵커 취업박람회 행사 용역", "공고기관": "대구대학교 산학협력단", "수요기관": "대구대학교 산학협력단", "공고일시": "2026-09-23 12:05:25", "공고일자": "2026-09-23", "배정예산": 80000000, "입찰마감일시": "", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743550&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01742689-000", "bidNtceNo": "R26BK01742689", "bidNtceOrd": "000", "사업명": "제7회 세종시 주민자치박람회 개최 행사대행 용역", "공고기관": "세종특별자치시", "수요기관": "세종특별자치시", "공고일시": "2026-09-23 09:40:44", "공고일자": "2026-09-23", "배정예산": 62700000, "입찰마감일시": "2026-10-01 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01742689&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743487-000", "bidNtceNo": "R26BK01743487", "bidNtceOrd": "000", "사업명": "2026 부천대학교 AI·DX취업박람회 시행 용역", "공고기관": "부천대학교 산학협력단", "수요기관": "부천대학교 산학협력단", "공고일시": "2026-09-23 13:20:44", "공고일자": "2026-09-23", "배정예산": 50000000, "입찰마감일시": "2026-10-06 11:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743487&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743061-000", "bidNtceNo": "R26BK01743061", "bidNtceOrd": "000", "사업명": "AI 사회정책 포럼 컨퍼런스 대행", "공고기관": "정보통신정책연구원", "수요기관": "정보통신정책연구원", "공고일시": "2026-09-23 10:04:35", "공고일자": "2026-09-23", "배정예산": 50000000, "입찰마감일시": "2026-10-06 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743061&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743214-000", "bidNtceNo": "R26BK01743214", "bidNtceOrd": "000", "사업명": "한-아세안 싱크탱크 다이얼로그 컨퍼런스 용역", "공고기관": "산업통상부", "수요기관": "산업통상부", "공고일시": "2026-09-23 10:35:18", "공고일자": "2026-09-23", "배정예산": 40000000, "입찰마감일시": "2026-10-06 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743214&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743826-000", "bidNtceNo": "R26BK01743826", "bidNtceOrd": "000", "사업명": "중국 전시회(EP Shanghai 2026) 전시회 부스 설치 및 운영 용역", "공고기관": "한국전기연구원", "수요기관": "한국전기연구원", "공고일시": "2026-09-23 14:06:07", "공고일자": "2026-09-23", "배정예산": 39355250, "입찰마감일시": "2026-10-07 11:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743826&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743280-000", "bidNtceNo": "R26BK01743280", "bidNtceOrd": "000", "사업명": "충남권 정보보호 컨퍼런스 운영 용역", "공고기관": "충남테크노파크", "수요기관": "충남테크노파크", "공고일시": "2026-09-23 13:24:13", "공고일자": "2026-09-23", "배정예산": 37000000, "입찰마감일시": "2026-10-07 10:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743280&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743773-000", "bidNtceNo": "R26BK01743773", "bidNtceOrd": "000", "사업명": "[2026 미래모빌리티엑스포] 전시부스 설치용역 (재공고, 긴급)", "공고기관": "(주)엑스코", "수요기관": "(주)엑스코", "공고일시": "2026-09-23 14:00:23", "공고일자": "2026-09-23", "배정예산": 35167743, "입찰마감일시": "2026-09-29 16:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743773&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01739685-001", "bidNtceNo": "R26BK01739685", "bidNtceOrd": "001", "사업명": "2026 의약품 조제·판매 및 상담 정보 데이터 분석 연구용역", "공고기관": "(사)대한약사회", "수요기관": "(사)대한약사회", "공고일시": "2026-09-23 11:22:07", "공고일자": "2026-09-23", "배정예산": 32000000, "입찰마감일시": "", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01739685&bidPbancOrd=001", "RADAR": "참고"}, {"공고번호": "R26BK01742842-000", "bidNtceNo": "R26BK01742842", "bidNtceOrd": "000", "사업명": "2026년 명지대학교 경기앵커사업 글로벌정주지원센터 취업박람회 및 인턴십 용역", "공고기관": "명지대학교", "수요기관": "명지대학교", "공고일시": "2026-09-23 09:24:39", "공고일자": "2026-09-23", "배정예산": 30000000, "입찰마감일시": "2026-09-23 15:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01742842&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01744562-000", "bidNtceNo": "R26BK01744562", "bidNtceOrd": "000", "사업명": "양방향 무선충전 시스템 제작", "공고기관": "한국전기연구원", "수요기관": "한국전기연구원", "공고일시": "2026-09-23 19:35:44", "공고일자": "2026-09-23", "배정예산": 29700000, "입찰마감일시": "2026-09-30 11:00:00", "구분": "물품", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01744562&bidPbancOrd=000", "RADAR": "참고"}, {"공고번호": "R26BK01743405-000", "bidNtceNo": "R26BK01743405", "bidNtceOrd": "000", "사업명": "산업융합 신제품 적합성 인증 수요 발굴을 위한 홍보 및 상담회 운영 지원", "공고기관": "한국생산기술연구원", "수요기관": "한국생산기술연구원", "공고일시": "2026-09-23 11:16:44", "공고일자": "2026-09-23", "배정예산": 25000000, "입찰마감일시": "2026-09-23 18:00:00", "구분": "용역", "수집사유": "키워드", "공고URL": "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01743405&bidPbancOrd=000", "RADAR": "참고"}], "note": "공고 게시일 2026.09.23 기준 · 2026-09-24 13:37:48 KST 수집 · 사업명을 누르면 나라장터 공고로 이동합니다."};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const won = n => n == null ? "미상" : n >= 1e8 ? (n/1e8).toFixed(1) + "억" : Math.round(n/1e4).toLocaleString("ko-KR") + "만";
+const dday = s => {
+  if (!s) return '<span class="dday">미정</span>';
+  const d = Math.ceil((new Date(s.replace(" ", "T") + "+09:00") - Date.now()) / 864e5);
+  if (d < 0) return '<span class="dday gone">마감</span>';
+  return `<span class="dday${d <= 3 ? " soon" : ""}">D-${d || "DAY"}</span>`;
+};
+$("inst").innerHTML = D.institutions.map(x => `<span class="chip">${esc(x)}</span>`).join("");
+$("kw").innerHTML = D.keywords.map(x => `<span class="chip plain">${esc(x)}</span>`).join("");
+const rec = D.items.filter(i => i.RADAR === "추천"), ref = D.items.filter(i => i.RADAR === "참고");
+$("nRec").textContent = rec.length; $("nRef").textContent = ref.length; $("nEx").textContent = D.excluded;
+$("src").textContent = D.note;
+const row = (i, cls) => `<tr class="${cls}"><td><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><span class="org">${esc(i.공고기관)}</span></td><td class="num">${won(i.배정예산)}</td><td>${dday(i.입찰마감일시)}</td><td><span class="tag ${i.수집사유 === "집중기관" ? "focus" : "kw"}">${esc(i.수집사유)}</span></td></tr>`;
+$("rows").innerHTML = rec.map(i => row(i, "")).join("")
+  + (ref.length ? `<tr class="divider"><td colspan="4">참고 · 1억 원 미만 ${ref.length}건</td></tr>` + ref.map(i => row(i, "refrow")).join("") : "");
+</script>
