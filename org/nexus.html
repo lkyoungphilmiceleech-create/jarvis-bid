@@ -214,7 +214,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <section class="glass panel" id="tab-pipe" hidden>
     <div class="row"><h2>발굴 DB</h2><span class="note">매일 자동 발굴(한국 기업과 거래 실적이 있는 해외 바이어·투자자)과 프로젝트 웹 발굴 결과가 쌓입니다. 네트워크 DB와 따로 관리하고, 확인이 끝나면 내려받아 '자료 올리기'로 옮깁니다.</span></div>
     <div class="seg" id="pView" role="group" aria-label="발굴 구분"></div>
-    <div class="co" id="pFocus" hidden><div class="row"><b>이번 주 발굴 대상</b><span class="note">매일 밤 00~02시에 대상 분야 바이어·투자자를 숫자 제한 없이 넓게 모으고(1차 후보), 03~04시에 한국 기업 거래 이력을 검증합니다(2차). 대상을 적으면 번갈아 찾고, 비우거나 기간이 지나면 산업군을 돌아가며 찾습니다.</span></div>
+    <div class="co" id="pFocus" hidden><div class="row"><b>이번 주 발굴 대상</b><span class="note">매일 밤 00~02시에 대상 분야 바이어·투자자를 숫자 제한 없이 넓게 모으고(1차 후보), 03~04시에 한국·아시아 거래 이력과 거래 가능성을 검증합니다(2차). 대상을 적으면 번갈아 찾고, 비우거나 기간이 지나면 산업군을 돌아가며 찾습니다.</span></div>
       <div class="form"><label class="wide">대상 (한 줄에 하나)<textarea id="fT" placeholder="예) 미국 투자자 — FI(VC·PE)와 SI(전략적 투자자·CVC)"></textarea></label><label>적용 마지막 날<input type="date" id="fE"></label></div>
       <div class="row"><button class="btn primary" type="button" id="fSave">저장</button><span class="note" id="fNote"></span></div></div>
     <p class="bubble" id="pDaily" hidden></p>
@@ -646,22 +646,23 @@ const pipeRows = () => { const q = pf.q.toLowerCase();
     && (!q || [b.이름, b.회사, b.직책, b.국가, b.분야, b.메모, b.거래실적].some(v => String(v || "").toLowerCase().includes(q))))
     .sort((a, b) => pv === "auto" ? String(b.최초발굴일).localeCompare(String(a.최초발굴일)) : (+b.최고적합도 || 0) - (+a.최고적합도 || 0)); };
 // ── 1차 후보(candidates): 밤 00~02시 넓게 수집 → 03~04시 한국 거래 이력 2차 검증
-const CST = ["대기", "거래 확인", "거래 미확인"];
+const CST = ["대기", "한국 거래", "아시아 거래", "가능성 높음", "미확인"];
+const CGO = new Set(["한국 거래", "아시아 거래", "가능성 높음", "거래 확인"]);
 const tok = n => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n || 0);
 function dailyLine(d) {
   if (!d.회차기록) return `${d.날짜} · ${d.산업군} · 새로 ${+d.추가 || 0}곳${+d.갱신 ? `, 거래 실적 보강 ${d.갱신}곳` : ""} — ${d.요약 || ""}`;
   const r = d.회차기록, sum = k => r.reduce((m, x) => m + (+x[k] || 0), 0), t = k => r.reduce((m, x) => m + (+x.토큰?.[k] || 0), 0);
-  return `${d.날짜} 밤 ${r.length}회차 · 1차 후보 +${sum("후보추가")} · 2차 검증 ${sum("검증")}곳 중 거래 확인 ${sum("거래확인")}곳 · 토큰 ${tok(t("합계"))} (출력 ${tok(t("출력"))}) — ${r.map(x => `${x.시}시 ${x.요약 || ""}`).join(" / ")}`;
+  return `${d.날짜} 밤 ${r.length}회차 · 1차 후보 +${sum("후보추가")} · 2차 검증 ${sum("검증")}곳 중 유망 ${sum("거래확인")}곳 · 토큰 ${tok(t("합계"))} (출력 ${tok(t("출력"))}) — ${r.map(x => `${x.시}시 ${x.요약 || ""}`).join(" / ")}`;
 }
 function drawCand() {
   const q = pf.q.toLowerCase(), cnt = s => cands.filter(c => (c.검증 || "대기") === s).length;
   $("pKpis").innerHTML = `<button type="button" data-cst="" aria-pressed="${!pf.검증}">전체<small>${cands.length}</small></button>` + CST.map(s => `<button type="button" data-cst="${s}" aria-pressed="${pf.검증 === s}">${s}<small>${cnt(s)}</small></button>`).join("");
   const rows = cands.filter(c => (!pf.검증 || (c.검증 || "대기") === pf.검증) && (!q || [c.회사, c.국가, c.분야, c.발굴대상, c.검증메모].some(v => String(v || "").toLowerCase().includes(q))))
     .sort((a, b) => String(b.수집일).localeCompare(String(a.수집일)) || String(a.회사).localeCompare(String(b.회사)));
-  $("pCount").textContent = `1차 후보 ${rows.length}건 — 거래가 확인된 곳은 '매일 자동 발굴'에 프로필·연락처와 함께 올라갑니다.`;
+  $("pCount").textContent = `1차 후보 ${rows.length}건 — 한국 거래·아시아 거래·가능성 높음으로 판정된 곳은 결정권자·실무자 프로필과 연락처를 붙여 '매일 자동 발굴'에 올라갑니다.`;
   $("pTable").innerHTML = `<thead><tr><th>대상</th><th>회사</th><th>국가</th><th>구분·분야</th><th>2차 검증</th><th>수집일</th></tr></thead><tbody>${rows.slice(0, 500).map(c => `<tr>
     <td class="note">${esc(c.발굴대상)}</td><td><b>${esc(c.회사)}</b>${link(c.웹, "웹")}${link(c.발견출처, "출처")}</td><td>${esc([c.국가, c.도시].filter(Boolean).join(" "))}</td><td>${esc([c.유형, c.분야].filter(Boolean).join(" · "))}</td>
-    <td><span class="tag${c.검증 === "거래 확인" ? " go" : c.검증 === "거래 미확인" ? "" : " amber"}">${esc(c.검증 || "대기")}</span>${c.검증메모 ? `<div class="note">${esc(c.검증메모)}</div>` : ""}${link(c.검증출처, "근거")}</td><td class="note">${esc(c.수집일)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty">아직 1차 후보가 없습니다. 매일 밤 00~02시에 쌓이고 03~04시에 검증합니다.</td></tr>'}</tbody>`;
+    <td><span class="tag${CGO.has(c.검증) ? " go" : !c.검증 || c.검증 === "대기" ? " amber" : ""}">${esc(c.검증 || "대기")}</span>${c.검증메모 ? `<div class="note">${esc(c.검증메모)}</div>` : ""}${link(c.검증출처, "근거")}</td><td class="note">${esc(c.수집일)}</td></tr>`).join("") || '<tr><td colspan="6" class="empty">아직 1차 후보가 없습니다. 매일 밤 00~02시에 쌓이고 03~04시에 검증합니다.</td></tr>'}</tbody>`;
 }
 function drawPipe() {
   const inView = pipe.filter(b => viewOf(b) === pv), n = v => pipe.filter(b => viewOf(b) === v).length;
@@ -682,14 +683,14 @@ function drawPipe() {
   $("pXlsx").disabled = $("pSheet").disabled = pv === "test";
   const rows = pipeRows();
   $("pCount").textContent = `${PVIEW[pv]} ${rows.length}건${pv === "test" ? " — 시험 운행 기록이라 내보내기에서 빠집니다" : ""}`;
-  const who = b => `<b>${esc(b.이름 || "(담당자 미확인)")}</b><div class="note">${esc(b.직책)}</div>`;
+  const who = b => `<b>${esc(b.이름 || "(담당자 미확인)")}</b>${b.역할구분 ? ` <span class="tag">${esc(b.역할구분)}</span>` : ""}<div class="note">${esc(b.직책)}</div>`;
   const tail = b => `<td><span class="tag${b.이메일 ? " go" : b.회사연락처 || b.행사경로 ? " amber" : ""}">${reach(b)}</span>${b.dbId ? ` <span class="tag">DB ${esc(b.dbId)}</span>` : ""}</td>
     <td><select data-pstat="${esc(b.id)}" aria-label="상태">${opt(PSTAT, b.상태 || "발굴")}</select></td></tr>`;
-  const empty = {auto: "아직 거래가 확인된 곳이 없습니다. 매일 밤 03~04시 2차 검증에서 쌓입니다.", proj: "아직 프로젝트 발굴 기록이 없습니다. 프로젝트 매칭 탭의 [발굴 시작]으로 쌓입니다.", test: "시험 기록이 없습니다."}[pv];
+  const empty = {auto: "아직 유망 판정된 곳이 없습니다. 매일 밤 03~04시 2차 검증에서 쌓입니다.", proj: "아직 프로젝트 발굴 기록이 없습니다. 프로젝트 매칭 탭의 [발굴 시작]으로 쌓입니다.", test: "시험 기록이 없습니다."}[pv];
   $("pTable").innerHTML = pv === "auto"
-    ? `<thead><tr><th>구분</th><th>회사</th><th>담당자</th><th>국가</th><th>비고 (한국 기업 거래 실적)</th><th>발굴일</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
+    ? `<thead><tr><th>구분</th><th>회사</th><th>담당자</th><th>국가</th><th>비고 (거래 실적·가능성)</th><th>발굴일</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
       <td><span class="tag">${esc(b.산업군 || "기타")}</span></td><td><b>${esc(b.회사)}</b><div class="note">${esc(b.분야)}</div></td><td>${who(b)}</td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
-      <td class="note"><span style="color:var(--ink)">${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}</td><td class="note">${esc(b.최초발굴일)}</td>${tail(b)}`).join("") || `<tr><td colspan="8" class="empty">${empty}</td></tr>`}</tbody>`
+      <td class="note">${b.거래근거 ? `<span class="tag${b.거래근거 === "가능성 높음" ? " amber" : " go"}">${esc(b.거래근거)}</span> ` : ""}<span style="color:var(--ink)">${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}</td><td class="note">${esc(b.최초발굴일)}</td>${tail(b)}`).join("") || `<tr><td colspan="8" class="empty">${empty}</td></tr>`}</tbody>`
     : `<thead><tr><th>적합도</th><th>구분</th><th>이름·직책</th><th>회사</th><th>국가</th><th>매칭 (프로젝트 · 기업)</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
       <td class="num"><b>${+b.최고적합도 || 0}</b></td><td><span class="tag">${esc(b.산업군 || "기타")}</span></td><td>${who(b)}</td><td>${esc(b.회사)}<div class="note">${esc(b.분야)}</div></td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
       <td class="note">${(b.매칭 || []).map(m => `${esc(m.프로젝트 || m.pid)} · ${esc(m.기업명)} (${+m.적합도 || 0})`).join("<br>")}${b.거래실적 ? `<br><span style="color:var(--ink)">거래 실적: ${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}` : ""}</td>${tail(b)}`).join("") || `<tr><td colspan="8" class="empty">${empty}</td></tr>`}</tbody>`;
