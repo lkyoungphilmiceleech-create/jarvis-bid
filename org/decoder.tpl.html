@@ -117,6 +117,18 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .lv{font:700 11px var(--hud);text-align:center;border-radius:4px;padding:1px 0}
 .lv.상{background:var(--stop);color:#fff}.lv.중{background:var(--amber-soft);color:var(--amber)}
 .hint{margin:10px 0 0;padding-left:18px;font-size:14px}
+.dl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.docs{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.docs th,.docs td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:top}
+.docs th{font:500 12px var(--sans);color:var(--muted);white-space:nowrap}
+.docs td.c{text-align:center;white-space:nowrap}
+.docs tr.done td{color:var(--muted);text-decoration:line-through}
+.docs tr.done td:first-child{text-decoration:none}
+.tbx{overflow-x:auto}
+.pg{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:14px}
+.pg div{display:grid;grid-template-columns:1fr 70px;gap:10px;align-items:center}
+.pgbar{display:block;height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:4px}
+.pgbar b{display:block;height:100%;background:var(--amber)}
 .row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
@@ -178,8 +190,13 @@ function say(text) {
   let n = 0; sayTimer = setInterval(() => { $("say").textContent = text.slice(0, ++n); if (n >= text.length) clearInterval(sayTimer); }, 26);
 }
 
-let cur = D.cases[0]?.bidNtceNo, honor = "본부장님", checked = {};
-try { checked = JSON.parse(localStorage.getItem("decoder-q") || "{}"); } catch {}
+let cur = D.cases[0]?.bidNtceNo, honor = "본부장님", marks = {q: {}, docs: {}}, unsubMarks = null, downloads = null;
+const markRef = () => db && cur ? db.doc("cases/" + cur) : null;
+function watchMarks() {
+  unsubMarks?.(); marks = {q: {}, docs: {}};
+  const r = markRef(); if (!r) { try { marks = JSON.parse(localStorage.getItem("decoder-marks-" + cur) || "") || marks; } catch {} return; }
+  unsubMarks = r.onSnapshot(s => { const d = s.exists ? s.data() : {}; marks = {q: {...(d.q || {})}, docs: {...(d.docs || {})}}; render(); });
+}
 
 function pillFor(e) {
   const d = dleft(e.날짜), end = e.끝 ? dleft(e.끝) : d;
@@ -197,17 +214,19 @@ function render() {
   const urgent = c.일정.filter(e => { const d = dleft(e.날짜), end = e.끝 ? dleft(e.끝) : d; return end !== null && end >= 0 && (e.구분 === "긴급" || d <= 3); });
   say(urgent.length ? `${honor}, 가장 급한 건 "${urgent[0].항목.split(" — ")[0]}"입니다. 아래 일정과 질문 목록부터 확인해 주세요.`
     : `${honor}, "${c.사업명.slice(0, 24)}…" 해독을 마쳤습니다. 배점 25점짜리 '사업 수행능력'이 승부처입니다.`);
-  const sec = (key, title, n, body, open) => `<details class="sec fold" data-sec="${key}"${open ? " open" : ""}><summary>${title}<span class="n">${n}</span></summary>${body}</details>`;
-  const qs = c.질문.map((q, i) => { const k = c.bidNtceNo + ":" + i;
-    return `<li><input type="checkbox" data-q="${esc(k)}" id="q${i}"${checked[k] ? " checked" : ""}><label for="q${i}">${esc(q.질문)}<small>${esc(q.근거)} · ${esc(q.채널)}</small></label></li>`; }).join("");
+  const sec = (key, title, n, body, open) => `<details class="sec fold" data-sec="${key}"${(folds[key] ?? open) ? " open" : ""}><summary>${title}<span class="n">${n}</span></summary>${body}</details>`;
+  const qs = c.질문.map((q, i) => `<li><input type="checkbox" data-mark="q" data-i="${i}" id="q${i}"${marks.q[i] ? " checked" : ""}><label for="q${i}">${esc(q.질문)}<small>${esc(q.근거)} · ${esc(q.채널)}</small></label></li>`).join("");
   $("report").innerHTML = `
     <div class="hudlabel">CASE FILE · ${esc(c.bidNtceNo)} · ${esc(c.발주기관)}</div>
     <h2>${esc(c.사업명)}</h2>
     <p class="lead">${esc(c.한줄요약)}</p>
+    <div class="dl"><span class="hudlabel">보고서</span>${c.hwpx ? `<a class="btn" href="${esc(c.hwpx)}" target="_blank" rel="noopener">HWPX 받기 ↗</a>` : ""}${c.pdf ? `<button class="btn" type="button" id="pdfBtn">PDF 받기</button>` : ""}<span class="chatnote" id="dlNote"></span></div>
     ${sec("info", "사업 개요", "", `<dl class="kv">${c.개요.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`, true)}
     ${sec("tl", "공정 일정", c.일정.length + "건", `<ol class="tl">${c.일정.map(e => `<li><span class="d">${esc(e.날짜.slice(5))}${e.끝 ? "~" + esc(e.끝.slice(5)) : ""}</span>${pillFor(e)}<span>${esc(e.항목)}${e.비고 ? `<span class="note">${esc(e.비고)}</span>` : ""}</span></li>`).join("")}</ol>`, true)}
     ${sec("score", "평가 배점 · 듣고 싶은 내용", c.평가.방식, `<div class="score">${c.평가.항목.map(s => `<div class="srow"><span><b>${esc(s.항목)}</b><small>${s.배점}점</small></span><span><span class="sbar"><b data-w="${s.배점 / 25 * 100}"></b></span><small>${esc(s.평가요소)}</small>${s.듣고싶은내용 && s.듣고싶은내용 !== "-" ? `<span class="want">${esc(s.듣고싶은내용)}</span>` : ""}</span></div>`).join("")}</div><ul class="ins">${c.평가.인사이트.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`, true)}
     ${sec("scope", "과업 범위", c.과업범위.length + "개 영역", `<div class="scope">${c.과업범위.map(s => `<div><span><b>${esc(s.영역)}</b><br><span class="w ${esc(s.무게)}">난이도 ${esc(s.무게)}</span></span><span>${esc(s.내용)}</span></div>`).join("")}</div>`, false)}
+    ${c.제출서류 ? sec("docs", "제출 서류 체크리스트", `${c.제출서류.filter((_, i) => marks.docs[i]).length}/${c.제출서류.length} 준비 · 팀이 함께 체크`, `<div class="tbx"><table class="docs"><tr><th>준비</th><th>구분</th><th>서류</th><th>대표</th><th>분담</th><th>형식</th></tr>${c.제출서류.map((d, i) => `<tr class="${marks.docs[i] ? "done" : ""}"><td class="c"><input type="checkbox" data-mark="docs" data-i="${i}" aria-label="${esc(d.서류)} 준비 완료"${marks.docs[i] ? " checked" : ""}></td><td>${esc(d.구분)}</td><td>${esc(d.서류)}</td><td class="c">${esc(d.대표)}</td><td class="c">${esc(d.분담)}</td><td>${esc(d.형식)}</td></tr>`).join("")}</table></div>`, true) : ""}
+    ${c.목차배분 ? sec("pages", "제안서 목차별 분량 배분", `${c.목차배분.총쪽수}쪽 이내`, `<div class="pg">${c.목차배분.항목.map(m => `<div><span>${esc(m.목차)} <small class="chatnote">· ${esc(m.평가)} ${m.배점}점</small><span class="pgbar"><b style="width:${m.쪽 / 22 * 100}%"></b></span></span><b>${m.쪽}쪽</b></div>`).join("")}</div><p class="chatnote">${esc(c.목차배분.설명)}</p>`, false) : ""}
     ${sec("q", "주요 질문사항", c.질문.length + "건 · 확인한 질문은 체크", `<ul class="qs">${qs}</ul><div class="row2"><button class="btn" type="button" id="copyQ">질문 목록 복사</button><span class="chatnote" id="copyNote"></span></div>`, true)}
     ${sec("risk", "리스크", c.리스크.length + "건", `<ul class="risk">${c.리스크.map(r => `<li><span class="lv ${esc(r.수준)}">${esc(r.수준)}</span><span>${esc(r.내용)}</span></li>`).join("")}</ul>`, true)}
     ${sec("hint", "ORACLE(전략팀)에게 넘길 힌트", c.전략힌트.length + "건", `<ul class="hint">${c.전략힌트.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`, false)}
@@ -217,16 +236,30 @@ function render() {
 
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
-  if (t.dataset.case) { cur = t.dataset.case; turns = []; lastLine = ""; render(); drawChat(); loadChat(); }
+  if (t.dataset.case) { cur = t.dataset.case; turns = []; lastLine = ""; watchMarks(); render(); drawChat(); loadChat(); }
+  if (t.id === "pdfBtn") {
+    const c = D.cases.find(x => x.bidNtceNo === cur);
+    if (!downloads) { $("dlNote").textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
+    const bytes = Uint8Array.from(atob(c.pdf), ch => ch.charCodeAt(0));
+    try { await downloads.save({filename: `DECODER_분석보고_${c.bidNtceNo}.pdf`, data: new Blob([bytes])}); $("dlNote").textContent = "저장했습니다."; }
+    catch (err) { $("dlNote").textContent = err?.code === "declined" ? "" : "저장하지 못했습니다. 잠시 후 다시 눌러 주세요."; }
+  }
   if (t.id === "copyQ") {
     const c = D.cases.find(x => x.bidNtceNo === cur);
     const txt = `[${c.사업명}] 질의 사항\n` + c.질문.map((q, i) => `${i + 1}. ${q.질문}`).join("\n");
     try { await navigator.clipboard.writeText(txt); $("copyNote").textContent = "복사했습니다."; } catch { $("copyNote").textContent = "복사가 막혀 있습니다. 목록을 직접 선택해 복사해 주세요."; }
   }
 });
+let markBusy = Promise.resolve();
+const folds = {};
+document.addEventListener("toggle", e => { const k = e.target.dataset?.sec; if (k) folds[k] = e.target.open; }, true);
 document.addEventListener("change", e => {
-  const k = e.target.dataset?.q; if (!k) return;
-  checked[k] = e.target.checked; try { localStorage.setItem("decoder-q", JSON.stringify(checked)); } catch {}
+  const kind = e.target.dataset?.mark; if (!kind) return;
+  marks[kind][e.target.dataset.i] = e.target.checked; render();
+  const r = markRef();
+  if (!r) { try { localStorage.setItem("decoder-marks-" + cur, JSON.stringify(marks)); } catch {} return; }
+  const body = {q: marks.q, docs: marks.docs, updatedAt: new Date().toISOString()};
+  markBusy = markBusy.then(() => r.set(body)).catch(() => {});
 });
 
 // ── DECODER 대화 ──
@@ -268,9 +301,11 @@ $("askForm").addEventListener("submit", e => { e.preventDefault(); const v = $("
 $("stopBtn").onclick = () => ctl?.abort();
 $("clearChat").onclick = () => { if (ctl) return; turns = []; drawChat(); saveChat(); };
 
+watchMarks();
 render();
 (async () => {
-  [db, sample] = await Promise.all([window.claude?.use?.("db") ?? null, window.claude?.use?.("sample") ?? null]);
+  [db, sample, downloads] = await Promise.all(["db", "sample", "downloads"].map(n => window.claude?.use?.(n) ?? null));
+  watchMarks(); render();
   if (sample) { $("chat").hidden = false; const user = await window.claude.use("user"); uid = await user?.id?.(); loadChat(); }
   db?.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; lastLine = ""; render(); } });
 })();
