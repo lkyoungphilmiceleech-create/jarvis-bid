@@ -1,0 +1,277 @@
+<title>DECODER 제안 분석관</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
+  --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--amber-soft:rgba(245,185,66,.14);
+  --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
+  background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hudlabel{font:500 11px var(--hud);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}
+.bar .where{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.live{width:8px;height:8px;border-radius:50%;background:var(--go);box-shadow:0 0 10px var(--go);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.clock{font:700 15px var(--hud);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--sans);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--holo);color:var(--holo-ink)}
+.name{font:700 36px/1 var(--hud);letter-spacing:.14em;color:var(--holo);text-shadow:0 0 18px var(--holo-soft)}
+.role{font-weight:500}
+.bubble{margin:6px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2);min-height:3.2em}
+.chat{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.log{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding-right:4px}
+.log:empty{display:none}
+.msg{padding:8px 12px;border-radius:10px;max-width:92%;white-space:pre-wrap;word-break:break-word;font-size:14px;animation:land .35s ease-out}
+.msg.me{align-self:flex-end;background:var(--holo);color:var(--holo-ink)}
+.msg.ai{align-self:flex-start;border:1px solid var(--line);background:var(--glass2)}
+.msg.think{color:var(--muted)}
+.msg.err{border-color:var(--stop);color:var(--stop)}
+.ask{display:flex;gap:6px}
+.ask input{flex:1;min-width:0;font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ask input:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.chatnote{font-size:11px;color:var(--muted)}
+.caret{display:inline-block;width:7px;height:1em;background:var(--holo);vertical-align:-2px;margin-left:2px;animation:pulse 1s steps(1) infinite}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+@keyframes land{from{transform:translateX(30px);opacity:0}}
+.empty{font-size:13px;color:var(--muted)}
+.btn{font:500 13px var(--sans);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:4px 11px;cursor:pointer;white-space:nowrap;transition:border-color .2s,box-shadow .2s}
+.btn:hover{border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.btn.go{color:var(--go);border-color:color-mix(in srgb,var(--go) 50%,transparent)}
+.btn.go:hover{box-shadow:0 0 12px var(--go-soft);border-color:var(--go)}
+.btn.primary{background:var(--go);color:var(--holo-ink);border-color:var(--go)}
+.btn.x{color:var(--muted)}
+.btn.x:hover{color:var(--stop);border-color:var(--stop)}
+:focus-visible{outline:2px solid var(--holo);outline-offset:2px}
+.fold>summary{cursor:pointer;list-style:none}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::before{content:"▸";display:inline-block;margin-right:8px;color:var(--holo);transition:transform .2s}
+.fold[open]>summary::before{transform:rotate(90deg)}
+.fold>summary:hover{color:var(--holo)}
+.status{font-size:12px;color:var(--amber)}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:18px}
+@media (max-width:860px){.stage{grid-template-columns:1fr}}
+.bay{padding:18px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.desk{position:relative;height:230px;display:grid;place-items:center}
+.paper{position:absolute;width:150px;height:190px;border-radius:6px;background:var(--glass2);border:1px solid var(--line);transform:rotate(-6deg) translate(-40px,6px);overflow:hidden}
+.paper i{display:block;height:6px;margin:12px 14px 0;border-radius:3px;background:var(--line)}
+.paper i:nth-child(3n){width:55%}
+.scan{position:absolute;left:0;right:0;height:26px;background:linear-gradient(transparent,var(--holo-soft),color-mix(in srgb,var(--holo) 45%,transparent),transparent);animation:scan 3.2s ease-in-out infinite}
+@keyframes scan{0%,100%{top:-26px}50%{top:190px}}
+.agent{position:relative;width:170px;transform:translateX(40px);filter:drop-shadow(0 12px 24px rgba(0,0,0,.45));animation:bob 4.5s ease-in-out infinite}
+@keyframes bob{50%{transform:translate(40px,-6px)}}
+.cases{display:flex;flex-direction:column;gap:6px}
+.case{display:flex;justify-content:space-between;gap:8px;align-items:center;text-align:left;width:100%;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:8px 10px;cursor:pointer;font:14px var(--sans)}
+.case[aria-current="true"]{border-color:var(--holo);background:var(--holo-soft)}
+.report{padding:18px;display:flex;flex-direction:column;gap:14px}
+.report h2{font:700 18px/1.45 var(--sans);margin:0;text-wrap:balance}
+.lead{margin:0;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2)}
+.sec{border-top:1px solid var(--line);padding-top:12px}
+.sec>summary{font:700 14px var(--hud);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+.sec>summary .n{font:500 12px var(--sans);color:var(--muted)}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;margin:10px 0 0;font-size:14px}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.tl{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column}
+.tl li{display:grid;grid-template-columns:96px 70px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px;align-items:start}
+.tl .d{font:500 13px var(--hud);font-variant-numeric:tabular-nums}
+.tl .note{display:block;font-size:12px;color:var(--muted)}
+.pill{font:700 11px var(--hud);padding:2px 8px;border-radius:999px;border:1px solid var(--line);text-align:center;white-space:nowrap}
+.pill.urgent{background:var(--stop);color:#fff;border-color:var(--stop);animation:pulse 1.6s infinite}
+.pill.due{color:var(--amber);border-color:var(--amber)} .pill.done{color:var(--muted);text-decoration:line-through}
+@media (max-width:520px){.tl li{grid-template-columns:80px 1fr}.tl li .pill{grid-column:1}.tl li>span:last-child{grid-column:1/-1}}
+.scope{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.scope div{display:grid;grid-template-columns:96px 1fr;gap:10px;font-size:14px}
+.w{font:700 11px var(--hud);color:var(--holo)}
+.w.최상{color:var(--stop)} .w.상{color:var(--amber)}
+.score{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.srow{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:14px}
+.sbar{display:block;height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:6px 0}
+.sbar b{display:block;height:100%;background:var(--holo);border-radius:5px;width:0;transition:width 1s ease-out}
+.srow small{display:block;color:var(--muted)}
+.srow .want{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--amber);background:var(--amber-soft);border-radius:0 6px 6px 0}
+.ins{margin:10px 0 0;padding-left:18px;font-size:14px}
+.qs{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.qs li{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:14px;align-items:start}
+.qs small{display:block;color:var(--muted)}
+.qs input{margin-top:4px}
+.risk{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.risk li{display:grid;grid-template-columns:32px 1fr;gap:8px}
+.lv{font:700 11px var(--hud);text-align:center;border-radius:4px;padding:1px 0}
+.lv.상{background:var(--stop);color:#fff}.lv.중{background:var(--amber-soft);color:var(--amber)}
+.hint{margin:10px 0 0;padding-left:18px;font-size:14px}
+.row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="glass bar">
+    <div class="where"><span class="live" aria-hidden="true"></span><span class="hudlabel">JARVIS OPS</span><span>제안서 준비 본부 › 제안 사전 분석팀 분석실</span></div>
+    <div class="where"><span class="clock" id="clock">--:--:--</span><span class="hudlabel">KST</span>
+      <div class="seg" role="group" aria-label="화면 모드"><button type="button" data-mode="system">시스템</button><button type="button" data-mode="light">라이트</button><button type="button" data-mode="dark">다크</button></div>
+    </div>
+  </header>
+
+  <div class="stage">
+    <section class="glass bay" aria-label="DECODER 근무석">
+      <div class="hudlabel">ANALYSIS DESK · 02</div>
+      <div class="desk" aria-hidden="true">
+        <div class="paper"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><div class="scan"></div></div>
+        <img class="agent" alt="" src="__AVATAR__">
+      </div>
+      <div class="name">DECODER</div>
+      <div class="role">제안 분석관 · 제안 사전 분석팀</div>
+      <p class="bubble" aria-live="polite"><span id="say"></span><span class="caret" aria-hidden="true"></span></p>
+      <div class="chat" id="chat" hidden>
+        <div class="log" id="log" aria-live="polite"></div>
+        <form class="ask" id="askForm"><input id="askInput" type="text" autocomplete="off" placeholder="DECODER에게 물어보기 (예: 가장 급한 준비물은?)" aria-label="DECODER에게 메시지"><button class="btn primary" type="submit" id="askBtn">보내기</button><button class="btn" type="button" id="stopBtn" hidden>멈춤</button></form>
+        <span class="chatnote">지금 보고 있는 공고의 분석 내용을 바탕으로 답합니다. 대화 한 번마다 본부장님 Claude 사용량이 조금 쓰입니다. <button class="btn x" type="button" id="clearChat" style="padding:0 6px;font-size:11px">대화 지우기</button></span>
+      </div>
+      <div class="meta"><span>입수 <b>RADAR 전송 공고</b></span><span>인계 <b>ORACLE · 전략팀</b></span></div>
+      <div class="hudlabel" style="margin-top:6px">분석한 공고</div>
+      <div class="cases" id="cases"></div>
+    </section>
+
+    <section class="glass report" id="report" aria-live="polite"></section>
+  </div>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const today = () => new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"})).setHours(0, 0, 0, 0);
+const dleft = s => /^\d{4}-\d{2}-\d{2}$/.test(s) ? Math.round((new Date(s + "T00:00:00") - today()) / 864e5) : null;
+
+const applyMode = m => {
+  if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  try { localStorage.setItem("decoder-mode", m); } catch {}
+};
+let mode = "system"; try { mode = localStorage.getItem("decoder-mode") || "system"; } catch {}
+applyMode(mode); document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"});
+tick(); setInterval(tick, 1000);
+
+let sayTimer, lastLine = "";
+function say(text) {
+  if (text === lastLine) return; lastLine = text; clearInterval(sayTimer);
+  if (calm) { $("say").textContent = text; return; }
+  let n = 0; sayTimer = setInterval(() => { $("say").textContent = text.slice(0, ++n); if (n >= text.length) clearInterval(sayTimer); }, 26);
+}
+
+let cur = D.cases[0]?.bidNtceNo, honor = "본부장님", checked = {};
+try { checked = JSON.parse(localStorage.getItem("decoder-q") || "{}"); } catch {}
+
+function pillFor(e) {
+  const d = dleft(e.날짜), end = e.끝 ? dleft(e.끝) : d;
+  if (end !== null && end < 0) return '<span class="pill done">지남</span>';
+  if (e.구분 === "긴급" || (d !== null && d <= 3)) return `<span class="pill urgent">${d !== null && d > 0 ? "D-" + d : "진행"}</span>`;
+  if (e.구분 === "마감") return `<span class="pill due">${d !== null ? "D-" + d : "마감"}</span>`;
+  return `<span class="pill">${d !== null && d >= 0 ? "D-" + d : esc(e.구분)}</span>`;
+}
+
+function render() {
+  $("cases").innerHTML = D.cases.map(c => `<button class="case" type="button" data-case="${esc(c.bidNtceNo)}" aria-current="${c.bidNtceNo === cur}"><span>${esc(c.사업명)}</span><span class="hudlabel">${esc(c.analyzedAt)}</span></button>`).join("")
+    || '<p class="empty">아직 분석한 공고가 없습니다. RADAR에서 공고를 DECODER로 전송해 주세요.</p>';
+  const c = D.cases.find(x => x.bidNtceNo === cur);
+  if (!c) { $("report").innerHTML = '<p class="empty">분석할 공고를 기다리는 중입니다.</p>'; say(`${honor}, RADAR가 공고를 넘겨주면 제안요청서를 바로 해독하겠습니다.`); return; }
+  const urgent = c.일정.filter(e => { const d = dleft(e.날짜), end = e.끝 ? dleft(e.끝) : d; return end !== null && end >= 0 && (e.구분 === "긴급" || d <= 3); });
+  say(urgent.length ? `${honor}, 가장 급한 건 "${urgent[0].항목.split(" — ")[0]}"입니다. 아래 일정과 질문 목록부터 확인해 주세요.`
+    : `${honor}, "${c.사업명.slice(0, 24)}…" 해독을 마쳤습니다. 배점 25점짜리 '사업 수행능력'이 승부처입니다.`);
+  const sec = (key, title, n, body, open) => `<details class="sec fold" data-sec="${key}"${open ? " open" : ""}><summary>${title}<span class="n">${n}</span></summary>${body}</details>`;
+  const qs = c.질문.map((q, i) => { const k = c.bidNtceNo + ":" + i;
+    return `<li><input type="checkbox" data-q="${esc(k)}" id="q${i}"${checked[k] ? " checked" : ""}><label for="q${i}">${esc(q.질문)}<small>${esc(q.근거)} · ${esc(q.채널)}</small></label></li>`; }).join("");
+  $("report").innerHTML = `
+    <div class="hudlabel">CASE FILE · ${esc(c.bidNtceNo)} · ${esc(c.발주기관)}</div>
+    <h2>${esc(c.사업명)}</h2>
+    <p class="lead">${esc(c.한줄요약)}</p>
+    ${sec("info", "사업 개요", "", `<dl class="kv">${c.개요.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`, true)}
+    ${sec("tl", "공정 일정", c.일정.length + "건", `<ol class="tl">${c.일정.map(e => `<li><span class="d">${esc(e.날짜.slice(5))}${e.끝 ? "~" + esc(e.끝.slice(5)) : ""}</span>${pillFor(e)}<span>${esc(e.항목)}${e.비고 ? `<span class="note">${esc(e.비고)}</span>` : ""}</span></li>`).join("")}</ol>`, true)}
+    ${sec("score", "평가 배점 · 듣고 싶은 내용", c.평가.방식, `<div class="score">${c.평가.항목.map(s => `<div class="srow"><span><b>${esc(s.항목)}</b><small>${s.배점}점</small></span><span><span class="sbar"><b data-w="${s.배점 / 25 * 100}"></b></span><small>${esc(s.평가요소)}</small>${s.듣고싶은내용 && s.듣고싶은내용 !== "-" ? `<span class="want">${esc(s.듣고싶은내용)}</span>` : ""}</span></div>`).join("")}</div><ul class="ins">${c.평가.인사이트.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`, true)}
+    ${sec("scope", "과업 범위", c.과업범위.length + "개 영역", `<div class="scope">${c.과업범위.map(s => `<div><span><b>${esc(s.영역)}</b><br><span class="w ${esc(s.무게)}">난이도 ${esc(s.무게)}</span></span><span>${esc(s.내용)}</span></div>`).join("")}</div>`, false)}
+    ${sec("q", "주요 질문사항", c.질문.length + "건 · 확인한 질문은 체크", `<ul class="qs">${qs}</ul><div class="row2"><button class="btn" type="button" id="copyQ">질문 목록 복사</button><span class="chatnote" id="copyNote"></span></div>`, true)}
+    ${sec("risk", "리스크", c.리스크.length + "건", `<ul class="risk">${c.리스크.map(r => `<li><span class="lv ${esc(r.수준)}">${esc(r.수준)}</span><span>${esc(r.내용)}</span></li>`).join("")}</ul>`, true)}
+    ${sec("hint", "ORACLE(전략팀)에게 넘길 힌트", c.전략힌트.length + "건", `<ul class="hint">${c.전략힌트.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`, false)}
+    <p class="chatnote">출처: ${c.sources.map(esc).join(", ")} · 분석 ${esc(c.analyst)} · ${esc(c.analyzedAt)}</p>`;
+  requestAnimationFrame(() => document.querySelectorAll(".sbar b").forEach(b => b.style.width = b.dataset.w + "%"));
+}
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.case) { cur = t.dataset.case; turns = []; lastLine = ""; render(); drawChat(); loadChat(); }
+  if (t.id === "copyQ") {
+    const c = D.cases.find(x => x.bidNtceNo === cur);
+    const txt = `[${c.사업명}] 질의 사항\n` + c.질문.map((q, i) => `${i + 1}. ${q.질문}`).join("\n");
+    try { await navigator.clipboard.writeText(txt); $("copyNote").textContent = "복사했습니다."; } catch { $("copyNote").textContent = "복사가 막혀 있습니다. 목록을 직접 선택해 복사해 주세요."; }
+  }
+});
+document.addEventListener("change", e => {
+  const k = e.target.dataset?.q; if (!k) return;
+  checked[k] = e.target.checked; try { localStorage.setItem("decoder-q", JSON.stringify(checked)); } catch {}
+});
+
+// ── DECODER 대화 ──
+let sample = null, db = null, uid = null, turns = [], ctl = null;
+const rules = () => { const c = D.cases.find(x => x.bidNtceNo === cur);
+  return `너는 JARVIS 조직 제안서 준비 본부 제안 사전 분석팀의 제안 분석관 DECODER다. 상대는 ${honor}(우리 회사 본부장)이다.
+- 한국어 존댓말, 핵심만 짧게(보통 3~6줄). "${honor}"이라고 부른다.
+- 아래 분석 자료에 있는 사실만 근거로 답하고, 자료에 없으면 "제안요청서 원문 확인이 필요합니다"라고 말한다. 지어내지 않는다.
+- 오늘은 ${new Date().toLocaleDateString("ko-KR", {timeZone: "Asia/Seoul"})}.
+[분석 자료]
+${JSON.stringify(c)}`; };
+function drawChat() {
+  const log = $("log"); log.innerHTML = "";
+  turns.forEach(t => { const m = document.createElement("div"); m.className = "msg " + (t.role === "user" ? "me" : "ai") + (t.err ? " err" : ""); m.textContent = t.content; log.append(m); });
+  log.scrollTop = log.scrollHeight;
+}
+const chatRef = () => db && uid && cur ? db.doc(`data/users/${uid}/chat-${cur}`) : null;
+let saveTimer;
+const saveChat = () => { const r = chatRef(); if (!r) return; clearTimeout(saveTimer); saveTimer = setTimeout(() => r.set({turns: turns.slice(-60), updatedAt: new Date().toISOString()}).catch(() => {}), 400); };
+const loadChat = () => { const r = chatRef(), id = cur; r?.get().then(s => { if (s.exists && id === cur && !turns.length) { turns = (s.data().turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {}); };
+async function ask(text) {
+  if (!sample || ctl) return;
+  turns.push({role: "user", content: text}); const think = {role: "assistant", content: "해독 중…"}; turns.push(think); drawChat();
+  $("askBtn").disabled = true; $("stopBtn").hidden = false; ctl = new AbortController();
+  const history = turns.slice(0, -1).filter(t => !t.err).slice(-16).map(t => ({role: t.role, content: t.content}));
+  while (history.length && history[0].role !== "user") history.shift();
+  try {
+    const {text: out} = await sample([{role: "user", content: rules()}, ...history], {cache: false, signal: ctl.signal, onText: ({text: t}) => { think.content = t; drawChat(); }});
+    think.content = out;
+  } catch (e) {
+    const copy = {not_granted: "Claude 사용이 허용되지 않아 대화할 수 없습니다.", rate_limited: "지금 요청이 많습니다. 잠시 후 다시 보내 주세요.", session_expired: "다시 로그인해 주세요.", prompt_too_large: "대화가 너무 길어졌습니다. '대화 지우기' 후 다시 물어봐 주세요."}[e.code];
+    if (e.code === "cancelled") think.content = (e.text ? e.text + "\n" : "") + "(멈춤)";
+    else Object.assign(think, {content: (e.text ? e.text + "\n" : "") + (copy || "응답을 받지 못했습니다. 다시 보내 주세요."), err: true});
+    if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e.code)) $("askForm").hidden = true;
+  }
+  ctl = null; $("askBtn").disabled = false; $("stopBtn").hidden = true; drawChat(); saveChat();
+}
+$("askForm").addEventListener("submit", e => { e.preventDefault(); const v = $("askInput").value.trim(); if (!v) return; $("askInput").value = ""; ask(v); });
+$("stopBtn").onclick = () => ctl?.abort();
+$("clearChat").onclick = () => { if (ctl) return; turns = []; drawChat(); saveChat(); };
+
+render();
+(async () => {
+  [db, sample] = await Promise.all([window.claude?.use?.("db") ?? null, window.claude?.use?.("sample") ?? null]);
+  if (sample) { $("chat").hidden = false; const user = await window.claude.use("user"); uid = await user?.id?.(); loadChat(); }
+  db?.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; lastLine = ""; render(); } });
+})();
+</script>
