@@ -116,7 +116,6 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .stage{display:flex;flex-direction:column;gap:8px;min-width:0}
 .gbar{gap:8px}
 #globe{width:100%;aspect-ratio:1/1;max-height:620px;touch-action:pan-y;cursor:grab;display:block}
-#globe.us{aspect-ratio:975/610;cursor:default}
 #globe:active{cursor:grabbing}
 .sphere{fill:url(#ocean);stroke:var(--holo);stroke-opacity:.5}
 .halo{fill:none;stroke:var(--holo);stroke-opacity:.12;stroke-width:14;filter:blur(6px)}
@@ -125,8 +124,11 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .land.has{fill:var(--landhas)}
 .land.sel,.land:hover{fill:var(--holo-soft);stroke:var(--holo);stroke-width:1}
 .land.target{stroke:var(--amber);stroke-width:1.6}
-.arc{fill:none;stroke:var(--holo);stroke-linecap:round;stroke-dasharray:4 7;animation:flow 1.6s linear infinite;pointer-events:none}
-@keyframes flow{to{stroke-dashoffset:-22}}
+.fields{display:flex;flex-wrap:wrap;gap:6px}
+.fields button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:3px 11px;cursor:pointer;font:13px var(--sans)}
+.fields button small{color:var(--muted);margin-left:4px}
+.fields button[aria-pressed="true"]{background:var(--t1);border-color:var(--t1);color:var(--holo-ink)}
+.fields button[aria-pressed="true"] small{color:inherit}
 .bub{cursor:pointer}
 .bub .core{fill:var(--bg);fill-opacity:.75}
 .bub text{font:700 10px var(--hud);fill:var(--ink);text-anchor:middle;dominant-baseline:central;pointer-events:none}
@@ -188,8 +190,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     </div>
     <div class="geo">
       <div class="stage">
-        <div class="row gbar"><div class="seg" role="group" aria-label="지도"><button type="button" data-view="globe">지구본</button><button type="button" data-view="us">미국 주별</button></div>
-          <select id="gProj" aria-label="프로젝트 보기"></select><button class="btn" type="button" id="gSpin"></button><span class="note" id="gHint"></span></div>
+        <div class="row gbar"><select id="gProj" aria-label="프로젝트 보기"></select><button class="btn" type="button" id="gSpin"></button><span class="note" id="gHint"></span></div>
+        <div class="fields" id="gField" role="group" aria-label="바이어 분야"></div>
         <svg id="globe" role="img" aria-label="네트워크 지구본"></svg>
         <div class="legend" id="legend"></div>
       </div>
@@ -247,7 +249,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 
 let db = null, sample = null, mcp = null, downloads = null;
 let chunks = {}, contacts = [], projects = [], uploads = [], cur = null, tab = "proj";
-let filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: ""};
+let filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: "", 분야: ""};
 try { cur = localStorage.getItem("nexus-proj"); tab = localStorage.getItem("nexus-tab") || "proj"; } catch {}
 
 // ── 공통
@@ -410,7 +412,7 @@ function editCompany(c) {
 
 // ── 네트워크 DB
 const filtered = () => { const q = filt.q.toLowerCase();
-  return contacts.filter(r => ["유형", "산업대", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && (!filt.국가 || r.국가 === filt.국가 || (a2Of(filt.국가) && a2Of(r.국가) === a2Of(filt.국가))) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q)))); };
+  return contacts.filter(r => ["유형", "산업대", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && inField(r) && (!filt.국가 || r.국가 === filt.국가 || (a2Of(filt.국가) && a2Of(r.국가) === a2Of(filt.국가))) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q)))); };
 function drawDb() {
   const uniq = k => [...new Set(contacts.map(r => r[k]).filter(Boolean))].sort();
   $("fType").innerHTML = opt(TYPES, filt.유형, "유형 전체"); $("fInd").innerHTML = opt(INDS, filt.산업대, "산업 전체");
@@ -462,27 +464,26 @@ const KO = (() => { const m = {}; let dn = null; try { dn = new Intl.DisplayName
 const koName = a => { if (a === "KR") return "한국"; try { return new Intl.DisplayNames(["ko"], {type: "region"}).of(a).replace(/\(.*?\)/, "").trim(); } catch { return a; } };
 const a2Of = name => KO[nk(name)] || "";
 const flag = a => a && a.length === 2 ? String.fromCodePoint(...[...a].map(c => 0x1F1A5 + c.charCodeAt(0))) : "🌐";
-const US_ST = "AL Alabama|AK Alaska|AZ Arizona|AR Arkansas|CA California|CO Colorado|CT Connecticut|DE Delaware|DC District of Columbia|FL Florida|GA Georgia|HI Hawaii|ID Idaho|IL Illinois|IN Indiana|IA Iowa|KS Kansas|KY Kentucky|LA Louisiana|ME Maine|MD Maryland|MA Massachusetts|MI Michigan|MN Minnesota|MS Mississippi|MO Missouri|MT Montana|NE Nebraska|NV Nevada|NH New Hampshire|NJ New Jersey|NM New Mexico|NY New York|NC North Carolina|ND North Dakota|OH Ohio|OK Oklahoma|OR Oregon|PA Pennsylvania|RI Rhode Island|SC South Carolina|SD South Dakota|TN Tennessee|TX Texas|UT Utah|VT Vermont|VA Virginia|WA Washington|WV West Virginia|WI Wisconsin|WY Wyoming|PR Puerto Rico".split("|").map(x => [x.slice(0, 2), x.slice(3)]);
-const STATE = (() => { const m = {}; US_ST.forEach(([c, n]) => { m[nk(n)] = n; m[c.toLowerCase()] = n; });
-  // LA는 루이지애나 약어와 겹치지만 명단에서는 로스앤젤레스로 쓰인다
-  const city = {California: "LA 로스앤젤레스 LosAngeles 캘리포니아 SF SF베이 샌프란시스코 SanFrancisco 베이에어리어 실리콘밸리 팰로앨토 PaloAlto 멘로파크 MenloPark 산호세 SanJose 새너제이 샌디에이고 SanDiego 어바인 Irvine 마운틴뷰 오클랜드 버클리 산타모니카 쿠퍼티노",
-    "New York": "뉴욕 NYC 브루클린 맨해튼", Massachusetts: "보스턴 Boston 케임브리지 매사추세츠", Washington: "시애틀 Seattle 레드먼드 워싱턴주", "District of Columbia": "DC 워싱턴DC WashingtonDC", Illinois: "시카고 Chicago 일리노이",
-    Texas: "텍사스 오스틴 Austin 댈러스 Dallas 휴스턴 Houston", Florida: "플로리다 마이애미 Miami 올랜도", Nevada: "네바다 라스베이거스 LasVegas", Georgia: "애틀랜타 Atlanta 조지아주", Colorado: "덴버 Denver 콜로라도", Utah: "유타 솔트레이크", "New Jersey": "뉴저지", Pennsylvania: "필라델피아 피츠버그", Arizona: "피닉스 애리조나", Oregon: "포틀랜드 오리건", Michigan: "디트로이트 미시간", Minnesota: "미니애폴리스", Tennessee: "내슈빌 테네시", "North Carolina": "샬럿 롤리"};
-  Object.entries(city).forEach(([st, ws]) => ws.split(" ").forEach(w => m[nk(w)] = st)); return m; })();
-const stateOf = r => STATE[nk(r.도시)] || STATE[nk((r.도시 || "").split(/[,/]/)[0])] || "";
 
 const world = topojson.feature(GEO.world, GEO.world.objects.countries).features.map(f => ({...f, a2: GEO.num2a2[f.id] || ""}));
-const usStates = topojson.feature(GEO.us, GEO.us.objects.states).features;
 const mainPart = f => { if (f.geometry.type !== "MultiPolygon") return f; // 해외 영토 때문에 중심이 틀어지지 않게 가장 큰 덩어리 기준
   const polys = f.geometry.coordinates.map(c => ({type: "Polygon", coordinates: c})); return polys.sort((a, b) => d3.geoArea(b) - d3.geoArea(a))[0]; };
 const CENT = {}; world.forEach(f => { if (f.a2) CENT[f.a2] = d3.geoCentroid(mainPart(f)); }); Object.assign(CENT, EXTRA);
+const FIELDS = [["AI·데이터", /\bAI\b|Big Data|데이터|Cloud|Software|Hardware|Telecom|클라우드|소프트웨어/i], ["게임", /게임|Gaming|E-?Sport/i], ["미디어·엔터", /미디어|엔터|Media|Entertain|Creative|콘텐츠|영화|방송|음악|웹툰/i],
+  ["리테일·커머스", /리테일|Retail|Commerce|CPG|유통|커머스/i], ["교육", /교육|Education|EdTech/i], ["금융·핀테크", /Fin|Bank|Insurance|Asset|금융|보험/i], ["마케팅·광고", /Marketing|Advertis|AdTech|광고|마케팅/i],
+  ["헬스케어", /Health|Bio|의료|헬스|바이오/i], ["딥테크·제조", /DeepTech|R&D|Manufactur|Industry|Supply|Logistic|제조|딥테크/i], ["에너지·그린", /Energy|Green|Sustain|Oil|에너지/i],
+  ["모빌리티·도시", /Mobility|Transport|Smart City|PropTech|모빌리티/i], ["컨설팅·서비스", /Consult|Legal|\bHR|Cyber|Defense|Government|Nonprofit|컨설팅/i]];
+const fieldOf = r => { const t = r.산업세부 || ""; if (!t.trim()) return "미분류"; return (FIELDS.find(([, re]) => re.test(t)) || ["기타"])[0]; };
+const FIELD_KEYS = [...FIELDS.map(f => f[0]), "기타", "미분류"];
+const inField = r => !filt.분야 || (r.유형 === "바이어" && fieldOf(r) === filt.분야);
 const ADV = ["수락", "미팅확정", "미팅완료", "후속중", "계약/투자"];
-let G = {view: "globe", rot: [-150, -28], spin: !matchMedia("(prefers-reduced-motion: reduce)").matches, sel: null, proj: "", size: 560, hover: false, drag: false};
-try { const g = JSON.parse(localStorage.getItem("nexus-geo") || "{}"); if (g.view) G.view = g.view; if ("spin" in g) G.spin = g.spin; } catch {}
-const saveG = () => { try { localStorage.setItem("nexus-geo", JSON.stringify({view: G.view, spin: G.spin})); } catch {} };
+let G = {rot: [-150, -28], spin: !matchMedia("(prefers-reduced-motion: reduce)").matches, sel: null, proj: "", size: 560, hover: false, drag: false};
+try { const g = JSON.parse(localStorage.getItem("nexus-geo") || "{}"); if ("spin" in g) G.spin = g.spin; } catch {}
+const saveG = () => { try { localStorage.setItem("nexus-geo", JSON.stringify({spin: G.spin})); } catch {} };
 
-function geoRows() { // 국가 필터를 뺀 나머지 필터 + 프로젝트 보기
+function geoRows(noField) { // 국가 필터를 뺀 나머지 필터 + 프로젝트 보기
   const q = filt.q.toLowerCase(); let rows = contacts.filter(r => ["유형", "산업대", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q))));
+  if (!noField) rows = rows.filter(inField);
   const p = projects.find(x => x.id === G.proj);
   if (p) { const ids = new Set(Object.values(p.matches || {}).flat().map(m => m.id)); rows = rows.filter(r => ids.has(r.id)); }
   return rows;
@@ -495,12 +496,11 @@ let proj3 = null, tmr = null, last = 0, ctry = {}, maxN = 1;
 function drawGeo() {
   const svg = d3.select("#globe"); if (svg.empty()) return;
   $("gProj").innerHTML = `<option value="">전체 네트워크</option>` + projects.filter(p => p.이름).map(p => `<option value="${esc(p.id)}"${p.id === G.proj ? " selected" : ""}>프로젝트: ${esc(p.이름)}</option>`).join("");
-  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === G.view));
-  $("gSpin").hidden = G.view !== "globe"; $("gSpin").textContent = G.spin ? "회전 멈춤" : "자동 회전";
+  $("gSpin").textContent = G.spin ? "회전 멈춤" : "자동 회전";
   $("legend").innerHTML = TYPES.map(t => `<span><i style="background:${TCOL[t]}"></i>${t}</span>`).join("") + `<span><i style="background:var(--amber)"></i>서울 본부</span>` + (G.proj ? `<span>주황 테두리 = 프로젝트 지역</span>` : "");
+  const fc = count(geoRows(true).filter(r => r.유형 === "바이어").map(r => ({f: fieldOf(r)})), "f");
+  $("gField").innerHTML = `<span class="hudlabel" style="align-self:center">바이어 분야</span><button type="button" data-field="" aria-pressed="${!filt.분야}">전체<small>${Object.values(fc).reduce((x, y) => x + y, 0)}</small></button>` + FIELD_KEYS.filter(k => fc[k]).map(k => `<button type="button" data-field="${k}" aria-pressed="${filt.분야 === k}">${k}<small>${fc[k]}</small></button>`).join("");
   const rows = geoRows();
-  if (G.view === "us") return drawUS(svg, rows);
-  svg.attr("class", null);
   ctry = agg(rows, r => a2Of(r.국가)); maxN = Math.max(1, ...Object.values(ctry).map(a => a.n));
   const W = 600; svg.attr("viewBox", `0 0 ${W} ${W}`);
   proj3 = d3.geoOrthographic().scale(W / 2 - 18).translate([W / 2, W / 2]).clipAngle(90).rotate(G.rot);
@@ -508,44 +508,31 @@ function drawGeo() {
   svg.html(`<defs><radialGradient id="ocean" cx="40%" cy="35%"><stop offset="0" stop-color="var(--oc1)"/><stop offset="1" stop-color="var(--oc2)"/></radialGradient></defs>
     <circle class="halo" cx="${W / 2}" cy="${W / 2}" r="${W / 2 - 16}"/><path class="sphere"/><path class="grat"/>
     <g id="lands">${world.map(f => `<path class="land${ctry[f.a2] ? " has" : ""}${f.a2 === G.sel ? " sel" : ""}${targets.has(f.a2) ? " target" : ""}" data-a2="${f.a2}"><title>${esc(koName(f.a2) || f.properties.name)}${ctry[f.a2] ? ` · ${ctry[f.a2].n}명` : ""}</title></path>`).join("")}</g>
-    <g id="arcs">${Object.values(ctry).filter(a => a.k !== "KR" && CENT[a.k]).map(a => `<path class="arc" data-a2="${a.k}" style="stroke-width:${(0.6 + Math.log2(1 + a.adv) * .45).toFixed(2)};stroke-opacity:${a.adv ? .75 : .3}"/>`).join("")}</g>
     <g id="bubs">${Object.values(ctry).filter(a => CENT[a.k]).sort((a, b) => b.n - a.n).map(a => { const r = 4 + 24 * Math.sqrt(a.n / maxN); return `<g class="bub${a.k === G.sel ? " sel" : ""}" data-a2="${a.k}" tabindex="0" role="button" aria-label="${esc(koName(a.k))} ${a.n}명">${donut(a, r)}${a.k === G.sel ? `<circle class="ring" r="${r + 3}"/>` : ""}<title>${esc(koName(a.k))} ${a.n}명 (관계 진전 ${a.adv}명)</title></g>`; }).join("")}</g>
     <g id="hq"><circle class="hq-ping" r="4"/><circle class="hq" r="4"/></g>`);
   frame(); drawSide(rows);
   if (!tmr) tmr = d3.timer(t => { const dt = Math.min(64, t - last); last = t;
-    if (G.view === "globe" && G.spin && !G.hover && !G.drag && tab === "db" && !document.hidden) { G.rot[0] += dt * 0.006; frame(); } });
+    if (G.spin && !G.hover && !G.drag && tab === "db" && !document.hidden) { G.rot[0] += dt * 0.006; frame(); } });
 }
 function frame() {
-  if (!proj3 || G.view !== "globe") return;
+  if (!proj3) return;
   proj3.rotate(G.rot); const path = d3.geoPath(proj3), c = proj3.invert([300, 300]), svg = d3.select("#globe");
   svg.select(".sphere").attr("d", path({type: "Sphere"})); svg.select(".grat").attr("d", path(d3.geoGraticule10()));
   svg.selectAll(".land").each(function (_, i) { this.setAttribute("d", path(world[i]) || ""); });
-  svg.selectAll(".arc").each(function () { this.setAttribute("d", path({type: "LineString", coordinates: [SEOUL, CENT[this.dataset.a2]]}) || ""); });
   const place = (el, ll) => { const vis = d3.geoDistance(ll, c) < Math.PI / 2 - .05, xy = proj3(ll); el.setAttribute("transform", `translate(${xy[0]},${xy[1]})`); el.style.display = vis ? "" : "none"; };
   svg.selectAll(".bub").each(function () { place(this, CENT[this.dataset.a2]); });
   svg.select("#hq").each(function () { place(this, SEOUL); });
 }
-function drawUS(svg, rows) {
-  svg.attr("class", "us").attr("viewBox", "0 0 975 610");
-  const us = rows.filter(r => a2Of(r.국가) === "US"), st = agg(us, stateOf), mx = Math.max(1, ...Object.values(st).map(a => a.n)), path = d3.geoPath();
-  const col = d3.scaleSqrt().domain([0, mx]).range([0.08, 0.85]);
-  svg.html(`${usStates.map(f => { const a = st[f.properties.name]; return `<path class="land${f.properties.name === G.sel ? " sel" : ""}" data-st="${esc(f.properties.name)}" d="${path(f)}" style="${a ? `fill:var(--t1);fill-opacity:${col(a.n).toFixed(2)}` : ""}"><title>${esc(f.properties.name)}${a ? ` · ${a.n}명` : ""}</title></path>`; }).join("")}
-    ${usStates.filter(f => st[f.properties.name]).map(f => { const a = st[f.properties.name], r = 5 + 20 * Math.sqrt(a.n / mx), [x, y] = path.centroid(f); return `<g class="bub${f.properties.name === G.sel ? " sel" : ""}" data-st="${esc(f.properties.name)}" transform="translate(${x},${y})" tabindex="0" role="button" aria-label="${esc(f.properties.name)} ${a.n}명">${donut(a, r)}${f.properties.name === G.sel ? `<circle class="ring" r="${r + 3}"/>` : ""}<title>${esc(f.properties.name)} ${a.n}명</title></g>`; }).join("")}`);
-  drawSide(rows, st, us);
-}
 const bars = (obj, keys, colf) => { const mx = Math.max(1, ...keys.map(k => obj[k] || 0)); return keys.filter(k => obj[k]).map(k => `<div class="hb"><span>${esc(k)}</span><b><i style="width:${(obj[k] / mx * 100).toFixed(0)}%;background:${colf(k)}"></i></b><span>${obj[k]}</span></div>`).join("") || '<p class="note">없음</p>'; };
 const count = (rows, k) => rows.reduce((m, r) => (m[r[k]] = (m[r[k]] || 0) + 1, m), {});
-function drawSide(rows, st, us) {
+function drawSide(rows) {
   const p = projects.find(x => x.id === G.proj), pnote = p ? `<p class="note">프로젝트 '${esc(p.이름)}' 매칭 상대만 표시 중</p>` : "";
   let a = null, title = "";
-  if (G.view === "us" && G.sel && st[G.sel]) { a = st[G.sel]; title = `🇺🇸 ${G.sel}`; }
-  else if (G.view === "globe" && G.sel && ctry[G.sel]) { a = ctry[G.sel]; title = `${flag(G.sel)} ${koName(G.sel)}`; }
+  if (G.sel && ctry[G.sel]) { a = ctry[G.sel]; title = `${flag(G.sel)} ${koName(G.sel)}`; }
   if (!a) {
-    if (G.view === "us") { const list = Object.values(st).sort((x, y) => y.n - x.n), none = us.length - list.reduce((s, x) => s + x.n, 0);
-      $("gside").innerHTML = `${pnote}<div class="hudlabel">미국 네트워크</div><div class="big">${us.length.toLocaleString()}명</div><p class="note">주를 누르면 자세히 봅니다. 주·도시 정보가 없는 ${none}명은 지도에 없습니다.</p><div class="rank">${list.slice(0, 15).map((x, i) => `<button type="button" data-st="${esc(x.k)}"><span class="note">${i + 1}</span><span>${esc(x.k)}</span><span>${x.n}</span></button>`).join("")}</div>`; return; }
     const list = Object.values(ctry).sort((x, y) => y.n - x.n), off = rows.filter(r => !a2Of(r.국가)), offN = count(off, "국가");
     $("gside").innerHTML = `${pnote}<div class="hudlabel">전 세계 네트워크</div><div class="big">${rows.length.toLocaleString()}명 · ${list.length}개국</div>
-      <p class="note">국가를 누르면 산업·관계·주요 인물을 봅니다. 선의 굵기는 관계가 진전된(수락 이상) 인원입니다.</p>
+      <p class="note">국가를 누르면 산업·관계·주요 인물을 봅니다.</p>
       <div class="rank">${list.slice(0, 12).map((x, i) => `<button type="button" data-a2="${x.k}"><span class="note">${i + 1}</span><span>${flag(x.k)} ${esc(koName(x.k))}</span><span>${x.n}</span></button>`).join("")}</div>
       ${off.length ? `<p class="note">지도에 없는 ${off.length}명: ${Object.entries(offN).map(([k, v]) => `${esc(k || "국가 미상")} ${v}`).join(", ")}</p>` : ""}`; return;
   }
@@ -554,8 +541,9 @@ function drawSide(rows, st, us) {
     <div class="big">${a.n.toLocaleString()}명 <span class="note">관계 진전 ${a.adv}명</span></div>
     <div class="hudlabel">유형</div>${bars(a.t, TYPES, t => TCOL[t])}
     <div class="hudlabel">산업</div>${bars(count(a.rows, "산업대"), INDS, i => ICOL[i])}
+    <div class="hudlabel">바이어 분야</div>${bars(count(a.rows.filter(r => r.유형 === "바이어").map(r => ({f: fieldOf(r)})), "f"), FIELD_KEYS, () => "var(--t1)")}
     <div class="hudlabel">관계 단계</div>${bars(count(a.rows, "관계단계"), STAGES, s => ADV.includes(s) ? "var(--go)" : "var(--muted)")}
-    <div class="row">${G.view === "globe" && G.sel === "US" ? '<button class="btn primary" type="button" id="gUS">주별 지도로 보기</button>' : ""}<button class="btn" type="button" id="gTable">표에서 전체 보기</button></div>
+    <div class="row"><button class="btn" type="button" id="gTable">표에서 전체 보기</button></div>
     <div class="hudlabel">주요 인물 (관계 깊은 순)</div><div class="ppl">${ppl.map(r => `<button type="button" data-ct="${esc(r.id)}"><b>${esc(r.이름 || r.회사)}</b> · ${esc(r.직책)} · ${esc(r.회사)} <span class="tag">${esc(r.유형)}</span> <span class="tag${ADV.includes(r.관계단계) ? " go" : ""}">${esc(r.관계단계)}</span></button>`).join("")}</div>`;
 }
 function focusA2(a2) { // 선택한 나라가 앞으로 오도록 부드럽게 돌린다
@@ -565,10 +553,10 @@ function focusA2(a2) { // 선택한 나라가 앞으로 오도록 부드럽게 �
 }
 function initGeo() {
   const svg = d3.select("#globe");
-  svg.call(d3.drag().filter(() => G.view === "globe").on("start", () => G.drag = true).on("drag", e => { G.rot[0] += e.dx * .35; G.rot[1] = Math.max(-70, Math.min(70, G.rot[1] - e.dy * .35)); frame(); }).on("end", () => G.drag = false));
+  svg.call(d3.drag().on("start", () => G.drag = true).on("drag", e => { G.rot[0] += e.dx * .35; G.rot[1] = Math.max(-70, Math.min(70, G.rot[1] - e.dy * .35)); frame(); }).on("end", () => G.drag = false));
   svg.on("pointerover", e => { if (e.target.closest(".bub")) G.hover = true; }).on("pointerout", e => { if (e.target.closest(".bub")) G.hover = false; });
-  svg.on("click", e => { const b = e.target.closest("[data-a2],[data-st]"); if (!b) return; if (b.dataset.st) { G.sel = b.dataset.st; drawGeo(); } else if (b.dataset.a2) focusA2(b.dataset.a2); });
-  svg.on("keydown", e => { if (e.key === "Enter") e.target.closest?.("[data-a2],[data-st]")?.dispatchEvent(new MouseEvent("click", {bubbles: true})); });
+  svg.on("click", e => { const b = e.target.closest("[data-a2]"); if (b?.dataset.a2) focusA2(b.dataset.a2); });
+  svg.on("keydown", e => { if (e.key === "Enter") e.target.closest?.("[data-a2]")?.dispatchEvent(new MouseEvent("click", {bubbles: true})); });
 }
 
 // ── 업로드
@@ -708,15 +696,13 @@ document.addEventListener("click", async e => {
   if (t.id === "mSheet" || t.id === "mCsv") { const p = P(), head = ["프로젝트", "기업명", "연락처ID", "이름", "직책", "회사", "유형", "국가", "이메일", "적합도", "적합 이유", "추천 메시지", "진행 상태", "관계단계"], rows = [];
     p.companies.forEach(c => (p.matches?.[c.id] || []).forEach(m => { const r = contacts.find(x => x.id === m.id) || {}; rows.push([p.이름, c.기업명, m.id, r.이름, r.직책, r.회사, r.유형, r.국가, r.이메일, m.score, m.reason, m.msg, m.status, r.관계단계]); }));
     if (t.id === "mSheet") toSheet(`NEXUS 매칭결과_${p.이름}_${today()}`, head, rows, $("mNote")); else saveCsv(`NEXUS_매칭결과_${p.이름}_${today()}.csv`, head, rows, $("mNote")); }
-  if (t.dataset.view) { G.view = t.dataset.view; G.sel = null; saveG(); drawGeo(); }
+  if (t.dataset.field !== undefined) { filt.분야 = t.dataset.field; drawDb(); }
   if (t.id === "gSpin") { G.spin = !G.spin; saveG(); drawGeo(); }
   if (t.id === "gClose") { G.sel = null; drawGeo(); }
-  if (t.id === "gUS") { G.view = "us"; G.sel = null; saveG(); drawGeo(); }
-  if (t.id === "gTable") { filt.국가 = G.view === "us" ? "미국" : koName(G.sel); drawDb(); $("dbCount").scrollIntoView({behavior: "smooth"}); }
+  if (t.id === "gTable") { filt.국가 = koName(G.sel); drawDb(); $("dbCount").scrollIntoView({behavior: "smooth"}); }
   if (t.closest(".rank") && t.dataset.a2) focusA2(t.dataset.a2);
-  if (t.closest(".rank") && t.dataset.st) { G.sel = t.dataset.st; drawGeo(); }
   if (t.dataset.mx) { const [i, ty] = t.dataset.mx.split("|"); Object.assign(filt, {산업대: i, 유형: ty}); drawDb(); }
-  if (t.id === "fReset") { filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: ""}; drawDb(); }
+  if (t.id === "fReset") { filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: "", 분야: ""}; drawDb(); }
   if (t.dataset.ct) editContact(contacts.find(r => r.id === t.dataset.ct));
   if (t.id === "addContact") editContact(null);
   if (t.id === "dbSheet" || t.id === "dbCsv") { const rows = filtered().map(r => ["id", ...F].map(k => r[k])), head = ["ID", ...F];
