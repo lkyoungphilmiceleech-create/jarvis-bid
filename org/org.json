@@ -149,6 +149,32 @@
             "기관 보고용 요약"
           ],
           "page": "https://claude.ai/artifact/JmQ3biw4gWxzSct65eCjBF"
+        },
+        {
+          "code": "CHRONOS",
+          "avatar": "chronos",
+          "팀": "공정일정 관리팀",
+          "역할": "공정일정 관리자",
+          "상태": "근무 중",
+          "page": "https://claude.ai/artifact/MpTu46T2Xd74XZYPmVXWD6",
+          "업무": [
+            "과업범위·산출내역서 검토 → 수행 체크리스트(WBS)·간트차트",
+            "실제 직원·AI 직원 배치와 작업 요청 (Google Tasks + 알림 메일 / AI 즉시 작업)",
+            "미이행 작업의 원인·해결방안 정리, 지연 점검"
+          ]
+        },
+        {
+          "code": "LEDGER",
+          "avatar": "ledger",
+          "팀": "예산 관리팀",
+          "역할": "예산 관리자",
+          "상태": "근무 중",
+          "page": "https://claude.ai/artifact/MpTu46T2Xd74XZYPmVXWD6",
+          "업무": [
+            "산출내역서(엑셀) → 예산표, 행마다 과세/영세·집행예정·집행 금액",
+            "예상·확정 수익률 상시 표시 (부가세 10% 자동)",
+            "장부: 전체 사용내역 한곳에서 확인·엑셀 저장"
+          ]
         }
       ]
     }
