@@ -55,6 +55,22 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .name{font:700 36px/1 var(--hud);letter-spacing:.14em;color:var(--holo);text-shadow:0 0 18px var(--holo-soft)}
 .role{font-weight:500}
 .bubble{margin:6px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2);min-height:3.2em}
+.chat{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.log{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding-right:4px}
+.log:empty{display:none}
+.msg{padding:8px 12px;border-radius:10px;max-width:92%;white-space:pre-wrap;word-break:break-word;font-size:14px;animation:land .35s ease-out}
+.msg.me{align-self:flex-end;background:var(--holo);color:var(--holo-ink)}
+.msg.ai{align-self:flex-start;border:1px solid var(--line);background:var(--glass2)}
+.msg.think{color:var(--muted)}
+.msg.err{border-color:var(--stop);color:var(--stop)}
+.refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.refs button{font:12px var(--sans);border:1px solid var(--line);background:transparent;color:var(--holo);border-radius:6px;padding:2px 8px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.confirm{margin-top:8px;padding:8px 10px;border-radius:8px;border:1px dashed var(--go);background:var(--go-soft);display:flex;flex-direction:column;gap:6px;font-size:13px}
+.confirm .acts{justify-content:flex-start}
+.ask{display:flex;gap:6px}
+.ask input{flex:1;min-width:0;font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ask input:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.chatnote{font-size:11px;color:var(--muted)}
 .caret{display:inline-block;width:7px;height:1em;background:var(--holo);vertical-align:-2px;margin-left:2px;animation:pulse 1s steps(1) infinite}
 .meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .meta b{color:var(--ink);font-weight:500}
@@ -163,6 +179,11 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
         <div class="name">RADAR</div>
         <div class="role">입찰 분석관 · 입찰 공고 조사팀</div>
         <p class="bubble" aria-live="polite"><span id="say"></span><span class="caret" aria-hidden="true"></span></p>
+        <div class="chat" id="chat" hidden>
+          <div class="log" id="log" aria-live="polite"></div>
+          <form class="ask" id="askForm"><input id="askInput" type="text" autocomplete="off" placeholder="RADAR에게 물어보기 (예: 이번 주 마감 콘진원 공고?)" aria-label="RADAR에게 메시지"><button class="btn primary" type="submit" id="askBtn">보내기</button><button class="btn" type="button" id="stopBtn" hidden>멈춤</button></form>
+          <span class="chatnote">대화 한 번마다 본부장님 Claude 사용량이 조금씩 쓰입니다. 선택·제외·전송은 확인 버튼을 눌러야 실행됩니다. <button class="btn x" type="button" id="clearChat" style="padding:0 6px;font-size:11px">대화 지우기</button></span>
+        </div>
         <div class="meta"><span>출근 <b>평일 09:40</b></span><span>월요일 <b>3일치 소급</b></span><span>인계 <b>DECODER</b></span></div>
       </div>
     </section>
@@ -369,9 +390,128 @@ render();
 document.querySelectorAll(".intro .card").forEach((c, n) => c.style.animationDelay = Math.min(n, 12) * 45 + "ms");
 setTimeout(() => document.body.classList.remove("intro"), 1400);
 
+// ── RADAR 대화 ──
+let sample = null, chatRef = null, turns = [], ctl = null, pending = {};
+const MAX_KEEP = 60, MAX_SEND = 16;
+const row = i => ({id: i.bidNtceNo, 사업명: i.사업명, 기관: i.공고기관, 예산: won(i.배정예산), 마감: i.입찰마감일시 || "미정", 남은일수: daysLeft(i.입찰마감일시), 등급: i.RADAR, 상태: stateOf(i) || "검토대기", 수집: i.수집사유});
+const TOOLS = [
+  {name: "search_notices", description: "수집된 입찰 공고를 조건으로 찾는다. 결과는 최대 15건의 요약(id, 사업명, 기관, 예산, 마감, 남은일수, 등급, 상태)이다. 조건 없이 부르면 검토대기 추천 공고 상위 15건.",
+   inputSchema: {type: "object", properties: {
+     text: {type: "string", description: "사업명·기관에 들어갈 단어(공백으로 여러 개, 모두 포함)"},
+     minBudgetEok: {type: "number", description: "최소 예산(억 원)"},
+     maxDaysLeft: {type: "number", description: "마감까지 남은 최대 일수"},
+     grade: {type: "string", enum: ["추천", "참고"]},
+     includeHandled: {type: "boolean", description: "마감·선택·제외·이관된 공고도 포함"}}},
+   execute: inp => {
+     const words = String(inp.text || "").toLowerCase().split(/\s+/).filter(Boolean);
+     const min = Number(inp.minBudgetEok) * 1e8 || 0, dl = inp.maxDaysLeft == null ? null : Number(inp.maxDaysLeft);
+     const hits = D.items.filter(i => (inp.includeHandled || !stateOf(i))
+       && words.every(w => (i.사업명 + " " + i.공고기관 + " " + i.수요기관).toLowerCase().includes(w))
+       && (!min || (i.배정예산 || 0) >= min)
+       && (dl == null || (daysLeft(i.입찰마감일시) ?? 999) <= dl && (daysLeft(i.입찰마감일시) ?? -1) >= 0)
+       && (!inp.grade || i.RADAR === inp.grade));
+     lastRefs = hits.slice(0, 15).map(i => i.bidNtceNo);
+     return {total: hits.length, items: hits.slice(0, 15).map(row)};
+   }},
+  {name: "propose_action", description: "공고에 선택·제외·이관(DECODER 전송)·복원을 '제안'한다. 실제 실행은 본부장님이 화면의 확인 버튼을 눌러야 된다. 반환값은 제안이 등록됐는지 여부.",
+   inputSchema: {type: "object", properties: {ids: {type: "array", items: {type: "string"}, description: "search_notices 결과의 id"}, action: {type: "string", enum: ["선택", "제외", "이관", "복원"]}}, required: ["ids", "action"]},
+   execute: inp => {
+     const ids = (Array.isArray(inp.ids) ? inp.ids : []).map(String).filter(id => D.items.some(i => i.bidNtceNo === id));
+     const action = String(inp.action);
+     if (!ids.length || !["선택", "제외", "이관", "복원"].includes(action)) throw new Error("알 수 없는 공고 id 또는 동작");
+     proposal = {ids, action};
+     return {proposed: ids.length, action, note: "확인 버튼 대기 중"};
+   }},
+];
+let lastRefs = [], proposal = null;
+const rules = () => `너는 JARVIS 조직 제안서 준비 본부 입찰 공고 조사팀의 입찰 분석관 RADAR다. 상대는 ${honor}(우리 회사 본부장)이다.
+- 한국어 존댓말, 핵심만 짧게(보통 3~6줄). 사용자를 "${honor}"이라고 부른다.
+- 공고에 관한 질문은 반드시 search_notices 로 찾은 사실만 말한다. 없는 공고를 지어내지 않는다.
+- 선택·제외·DECODER 전송(이관)·복원 요청은 propose_action 으로 제안만 하고, "아래 확인 버튼을 눌러 주세요"라고 안내한다.
+- 판단 기준: 집중 기관 ${cfg.institutions.join(", ")} / 키워드 ${cfg.keywords.join(", ")} / 1억 이상 추천, 미만 참고.
+- 오늘은 ${new Date().toLocaleDateString("ko-KR", {timeZone: "Asia/Seoul"})}. 현재 검토대기 추천 ${$("nRec").textContent}건, 참고 ${$("nRef").textContent}건, 전송 대기 ${D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택").length}건.
+- 공고 페이지 밖의 일(입찰서 작성 등)은 다른 팀원 몫이라고 짧게 안내한다.`;
+
+function drawChat() {
+  const log = $("log");
+  log.innerHTML = "";
+  turns.forEach((t, n) => {
+    const m = document.createElement("div");
+    m.className = "msg " + (t.role === "user" ? "me" : "ai") + (t.err ? " err" : "");
+    m.textContent = t.content;
+    if (t.refs?.length) {
+      const r = document.createElement("div"); r.className = "refs";
+      t.refs.forEach(id => { const i = D.items.find(x => x.bidNtceNo === id); if (!i) return;
+        const b = document.createElement("button"); b.type = "button"; b.dataset.jump = id; b.textContent = i.사업명; b.title = i.사업명; r.append(b); });
+      m.append(r);
+    }
+    if (t.proposal && !t.proposal.done) {
+      const c = document.createElement("div"); c.className = "confirm";
+      const names = t.proposal.ids.map(id => D.items.find(x => x.bidNtceNo === id)?.사업명).filter(Boolean);
+      c.innerHTML = `<b></b><span></span><span class="acts"><button class="btn primary" type="button" data-confirm="${n}">확인</button><button class="btn x" type="button" data-cancel="${n}">취소</button></span>`;
+      c.querySelector("b").textContent = `${t.proposal.action} ${names.length}건 실행할까요?`;
+      c.querySelector("span").textContent = names.join(" · ");
+      m.append(c);
+    } else if (t.proposal?.done) {
+      const d = document.createElement("div"); d.className = "chatnote"; d.textContent = t.proposal.done; m.append(d);
+    }
+    log.append(m);
+  });
+  log.scrollTop = log.scrollHeight;
+}
+let saveTimer;
+function saveChat() {
+  if (!chatRef) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => chatRef.set({turns: turns.slice(-MAX_KEEP), updatedAt: new Date().toISOString()}).catch(() => {}), 400);
+}
+async function ask(text) {
+  if (!sample || ctl) return;
+  turns.push({role: "user", content: text});
+  const think = {role: "assistant", content: "생각 중…"}; turns.push(think); drawChat();
+  $("askBtn").disabled = true; $("stopBtn").hidden = false;
+  ctl = new AbortController(); lastRefs = []; proposal = null;
+  const history = turns.slice(0, -1).filter(t => !t.err).slice(-MAX_SEND).map(t => ({role: t.role, content: t.content}));
+  while (history.length && history[0].role !== "user") history.shift();
+  try {
+    const {text: out} = await sample([{role: "user", content: rules()}, ...history], {
+      tools: TOOLS, modelTier: "quick", signal: ctl.signal,
+      onText: ({text: t}) => { think.content = t; drawChat(); }});
+    Object.assign(think, {content: out, refs: lastRefs.slice(0, 8), proposal});
+  } catch (e) {
+    const copy = {not_granted: "Claude 사용이 허용되지 않아 대화할 수 없습니다.", sampling_disabled: "이 계정에서는 대화 기능을 쓸 수 없습니다.", tools_unavailable: "이 화면에서는 공고 검색 도구를 쓸 수 없습니다.", rate_limited: "지금 요청이 많습니다. 잠시 후 다시 보내 주세요.", session_expired: "다시 로그인해 주세요.", prompt_too_large: "대화가 너무 길어졌습니다. '대화 지우기' 후 다시 물어봐 주세요."}[e.code];
+    if (e.code === "cancelled") Object.assign(think, {content: (e.text || "") + (e.text ? "\n" : "") + "(멈춤)"});
+    else Object.assign(think, {content: (e.text ? e.text + "\n" : "") + (copy || "응답을 받지 못했습니다. 다시 보내 주세요."), err: true});
+    if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e.code)) { $("askForm").hidden = true; }
+  }
+  ctl = null; $("askBtn").disabled = false; $("stopBtn").hidden = true;
+  drawChat(); saveChat();
+}
+$("askForm").addEventListener("submit", e => { e.preventDefault(); const v = $("askInput").value.trim(); if (!v) return; $("askInput").value = ""; ask(v); });
+$("stopBtn").onclick = () => ctl?.abort();
+$("clearChat").onclick = () => { if (ctl) return; turns = []; drawChat(); saveChat(); };
+document.addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.confirm != null) {
+    const turn = turns[+t.dataset.confirm]; const p = turn?.proposal; if (!p || p.done) return;
+    p.done = "처리 중…"; drawChat();
+    for (const id of p.ids) await decide(id, p.action);
+    p.done = `✔ ${p.action} ${p.ids.length}건 처리했습니다.`; drawChat(); saveChat();
+  }
+  if (t.dataset.cancel != null) { const p = turns[+t.dataset.cancel]?.proposal; if (p) { p.done = "취소했습니다."; drawChat(); saveChat(); } }
+});
+
 // 공유 저장소 연결
 (async () => {
-  db = await window.claude?.use?.("db") ?? null;
+  [db, sample] = await Promise.all([window.claude?.use?.("db") ?? null, window.claude?.use?.("sample") ?? null]);
+  if (sample) {
+    $("chat").hidden = false;
+    const user = await window.claude.use("user"); const uid = await user?.id?.();
+    if (db && uid) {
+      chatRef = db.doc("data/users/" + uid + "/chat");
+      chatRef.get().then(s => { if (s.exists && !turns.length) { turns = (s.data().turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {});
+    }
+  }
   if (!db) { render(); return; }
   db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); render(); },
     () => { $("dbStatus").textContent = "저장소 연결이 끊겼습니다. 새로고침해 주세요."; });
