@@ -42,10 +42,16 @@ INSTITUTIONS = [
     "창업진흥원",
     "중소벤처기업진흥공단",
     "경기콘텐츠진흥원",
+    "디자인진흥원",
+    "경북창조경제혁신센터",
 ]
 
 KEYWORDS_SERVC = ["투자", "상담", "박람회", "전시", "홍보관",
-                  "로드쇼", "비즈매칭", "비즈니스매칭", "마켓", "컨퍼런스"]
+                  "로드쇼", "비즈매칭", "비즈니스매칭", "마켓", "컨퍼런스",
+                  "공동관", "바이어", "B2B", "B2C", "IR", "데모데이", "포럼", "작가"]
+
+# RADAR: 배정예산이 이 금액 미만이면 '참고'로 목록 아래에 둔다 (금액 미상은 '추천' 유지)
+MIN_BUDGET = 100_000_000
 KEYWORDS_THNG = ["박람회", "전시", "홍보관", "마켓"]
 
 # ── 오탐 제거 규칙 ─────────────────────────────────────────────
@@ -228,8 +234,10 @@ def main():
             elif prev["수집사유"] == "키워드" and r["reason"] == "집중기관":
                 prev["수집사유"] = "집중기관"
 
+    for x in picked.values():
+        x["RADAR"] = "참고" if (x["배정예산"] or MIN_BUDGET) < MIN_BUDGET else "추천"
     items = sorted(picked.values(),
-                   key=lambda x: (x["수집사유"] != "집중기관", -(x["배정예산"] or 0)))
+                   key=lambda x: (x["RADAR"] == "참고", x["수집사유"] != "집중기관", -(x["배정예산"] or 0)))
 
     # 중복 제외 목록 정리
     seen, ded = set(), []
@@ -264,6 +272,7 @@ def main():
         "counts": {"수집": len(items),
                    "집중기관": sum(1 for i in items if i["수집사유"] == "집중기관"),
                    "키워드": sum(1 for i in items if i["수집사유"] == "키워드"),
+                   "참고": sum(1 for i in items if i["RADAR"] == "참고"),
                    "오탐제외": len(ded)},
         "items": items,
         "excluded": ded,
