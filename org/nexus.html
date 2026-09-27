@@ -213,6 +213,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <!-- 발굴 DB -->
   <section class="glass panel" id="tab-pipe" hidden>
     <div class="row"><h2>발굴 DB</h2><span class="note">매일 자동 발굴(한국 기업과 거래 실적이 있는 해외 바이어·투자자)과 프로젝트 웹 발굴 결과가 쌓입니다. 네트워크 DB와 따로 관리하고, 확인이 끝나면 내려받아 '자료 올리기'로 옮깁니다.</span></div>
+    <div class="seg" id="pView" role="group" aria-label="발굴 구분"></div>
     <p class="bubble" id="pDaily" hidden></p>
     <div class="fields" id="pKpis" role="group" aria-label="상태"></div>
     <div class="row"><input id="pq" type="search" placeholder="이름·회사·국가·메모 검색" style="flex:1;min-width:200px"><select id="pInd"></select><select id="pProj"></select><select id="pReach"></select></div>
@@ -299,7 +300,7 @@ const askErr = e => ({no_sample: "이 화면에서는 NEXUS(Claude)에게 일을
 // ── 상단 요약
 function drawHero() {
   const by = t => contacts.filter(r => r.유형 === t).length;
-  const live = projects.filter(p => p.상태 !== "종료");
+  const live = projects.filter(p => p.상태 !== "종료" && !p.시험);
   $("kpis").innerHTML = [["네트워크", contacts.length], ["바이어", by("바이어")], ["투자자", by("투자자")], ["진행 프로젝트", live.length]]
     .map(([k, v]) => `<div class="kpi"><span class="hudlabel">${k}</span><b>${v.toLocaleString()}</b></div>`).join("");
   const thin = INDS.filter(i => i !== "기타").map(i => [i, contacts.filter(r => r.산업대 === i).length]).sort((a, b) => a[1] - b[1])[0];
@@ -317,7 +318,7 @@ function showTab(t) { tab = t; try { localStorage.setItem("nexus-tab", t); } cat
 // ── 프로젝트
 const P = () => projects.find(p => p.id === cur);
 function drawProj() {
-  $("plist").innerHTML = projects.length ? projects.map(p => `<button type="button" data-proj="${esc(p.id)}" aria-pressed="${p.id === cur}">${esc(p.이름 || "(이름 없음)")}<small>${esc([p.마켓, p.목적, [p.국가, p.도시].filter(Boolean).join(" "), p.상태 || "준비"].filter(Boolean).join(" · "))}</small></button>`).join("") : '<p class="empty">프로젝트가 없습니다.</p>';
+  $("plist").innerHTML = projects.filter(p => !p.시험).length ? projects.filter(p => !p.시험).map(p => `<button type="button" data-proj="${esc(p.id)}" aria-pressed="${p.id === cur}">${esc(p.이름 || "(이름 없음)")}<small>${esc([p.마켓, p.목적, [p.국가, p.도시].filter(Boolean).join(" "), p.상태 || "준비"].filter(Boolean).join(" · "))}</small></button>`).join("") : '<p class="empty">프로젝트가 없습니다.</p>';
   const p = P();
   if (!p) { $("pview").innerHTML = '<p class="empty">왼쪽에서 프로젝트를 고르거나 새로 만들어 주세요. 프로젝트마다 지역·목적(바이어/투자/혼합)·타깃 산업을 정하고 참가기업 엑셀을 올리면, 네트워크 DB 매칭과 웹 발굴로 기업별 상대를 찾습니다.</p>'; return; }
   if (!p.국가 && p.지역) { const [n, ...c] = p.지역.split(/\s+/); p.국가 = n; p.도시 = c.join(" "); }
@@ -565,7 +566,7 @@ const donut = (a, r) => pie(TYPES.filter(t => a.t[t]).map(t => [t, a.t[t]])).map
 let proj3 = null, tmr = null, last = 0, ctry = {}, maxN = 1;
 function drawGeo() {
   const svg = d3.select("#globe"); if (svg.empty()) return;
-  $("gProj").innerHTML = `<option value="">전체 네트워크</option>` + projects.filter(p => p.이름).map(p => `<option value="${esc(p.id)}"${p.id === G.proj ? " selected" : ""}>프로젝트: ${esc(p.이름)}</option>`).join("");
+  $("gProj").innerHTML = `<option value="">전체 네트워크</option>` + projects.filter(p => p.이름 && !p.시험).map(p => `<option value="${esc(p.id)}"${p.id === G.proj ? " selected" : ""}>프로젝트: ${esc(p.이름)}</option>`).join("");
   $("gSpin").textContent = G.spin ? "회전 멈춤" : "자동 회전";
   $("legend").innerHTML = TYPES.map(t => `<span><i style="background:${TCOL[t]}"></i>${t}</span>`).join("") + `<span><i style="background:var(--amber)"></i>서울 본부</span>` + (G.proj ? `<span>주황 테두리 = 프로젝트 지역</span>` : "");
   const fc = count(geoRows(true).filter(r => r.유형 === "바이어").map(r => ({f: fieldOf(r)})), "f");
@@ -632,28 +633,41 @@ function initGeo() {
 // ── 발굴 DB: 발굴 세션이 쌓는 pipeline 문서(사람 1명 = 문서 1개). 상태·메모는 본부장님이 관리
 const PSTAT = ["발굴", "검토", "컨택", "수락", "미팅", "보류", "제외"];
 const P2STAGE = {"발굴": "미접촉", "검토": "미접촉", "컨택": "연결요청", "수락": "수락", "미팅": "미팅완료", "보류": "보류"};
-let pipe = [], daily = [], pf = {q: "", 상태: "", 프로젝트: "", 연락: "", 산업군: ""};
+let pipe = [], daily = [], pv = "auto", pf = {q: "", 상태: "", 프로젝트: "", 연락: "", 산업군: ""};
+try { pv = localStorage.getItem("nexus-pv") || "auto"; } catch {}
 const reach = b => b.이메일 ? "개인 이메일" : b.회사연락처 ? "회사 연락처" : b.행사경로 ? "행사 경로" : b.링크드인 ? "링크드인만" : "없음";
+const viewOf = b => b.시험 ? "test" : b.발굴경로 === "매일 발굴" ? "auto" : "proj"; // 매일 자동 발굴 / 프로젝트 발굴 / 시험 기록은 서로 섞지 않는다
+const PVIEW = {auto: "매일 자동 발굴", proj: "프로젝트 발굴", test: "시험 기록"};
 const pipeRows = () => { const q = pf.q.toLowerCase();
-  return pipe.filter(b => (!pf.상태 || (b.상태 || "발굴") === pf.상태) && (!pf.프로젝트 || (pf.프로젝트 === "__daily" ? b.발굴경로 === "매일 발굴" : (b.매칭 || []).some(m => m.pid === pf.프로젝트))) && (!pf.연락 || reach(b) === pf.연락) && (!pf.산업군 || (b.산업군 || "기타") === pf.산업군)
+  return pipe.filter(b => viewOf(b) === pv && (!pf.상태 || (b.상태 || "발굴") === pf.상태) && (pv !== "proj" || !pf.프로젝트 || (b.매칭 || []).some(m => m.pid === pf.프로젝트)) && (!pf.연락 || reach(b) === pf.연락) && (!pf.산업군 || (b.산업군 || "기타") === pf.산업군)
     && (!q || [b.이름, b.회사, b.직책, b.국가, b.분야, b.메모, b.거래실적].some(v => String(v || "").toLowerCase().includes(q))))
-    .sort((a, b) => (+b.최고적합도 || 0) - (+a.최고적합도 || 0)); };
+    .sort((a, b) => pv === "auto" ? String(b.최초발굴일).localeCompare(String(a.최초발굴일)) : (+b.최고적합도 || 0) - (+a.최고적합도 || 0)); };
 function drawPipe() {
-  const d = daily[0]; $("pDaily").hidden = !d;
-  if (d) $("pDaily").textContent = `매일 발굴 ${d.날짜} · ${d.산업군} · 새로 ${+d.추가 || 0}곳${+d.갱신 ? `, 거래 실적 보강 ${d.갱신}곳` : ""} — ${d.요약 || ""}`;
-  const cnt = s => pipe.filter(b => (b.상태 || "발굴") === s).length;
-  $("pKpis").innerHTML = `<button type="button" data-pst="" aria-pressed="${!pf.상태}">전체<small>${pipe.length}</small></button>` + PSTAT.map(s => `<button type="button" data-pst="${s}" aria-pressed="${pf.상태 === s}">${s}<small>${cnt(s)}</small></button>`).join("");
-  const pids = [...new Map(pipe.flatMap(b => (b.매칭 || []).map(m => [m.pid, m.프로젝트 || m.pid]))).entries()];
+  const inView = pipe.filter(b => viewOf(b) === pv), n = v => pipe.filter(b => viewOf(b) === v).length;
+  $("pView").innerHTML = ["auto", "proj", ...(n("test") ? ["test"] : [])].map(v => `<button type="button" data-pv="${v}" aria-pressed="${pv === v}">${PVIEW[v]} ${n(v)}</button>`).join("");
+  const d = daily[0]; $("pDaily").hidden = pv !== "auto" || !d;
+  if (d) $("pDaily").textContent = `${d.날짜} · ${d.산업군} · 새로 ${+d.추가 || 0}곳${+d.갱신 ? `, 거래 실적 보강 ${d.갱신}곳` : ""} — ${d.요약 || ""}`;
+  const cnt = s => inView.filter(b => (b.상태 || "발굴") === s).length;
+  $("pKpis").innerHTML = `<button type="button" data-pst="" aria-pressed="${!pf.상태}">전체<small>${inView.length}</small></button>` + PSTAT.map(s => `<button type="button" data-pst="${s}" aria-pressed="${pf.상태 === s}">${s}<small>${cnt(s)}</small></button>`).join("");
+  const pids = [...new Map(inView.flatMap(b => (b.매칭 || []).map(m => [m.pid, m.프로젝트 || m.pid]))).entries()];
   $("pInd").innerHTML = opt(INDS, pf.산업군, "산업군 전체");
-  $("pProj").innerHTML = `<option value="">프로젝트 전체</option><option value="__daily"${pf.프로젝트 === "__daily" ? " selected" : ""}>매일 발굴</option>` + pids.map(([id, n]) => `<option value="${esc(id)}"${pf.프로젝트 === id ? " selected" : ""}>${esc(n)}</option>`).join("");
+  $("pProj").hidden = pv !== "proj";
+  $("pProj").innerHTML = `<option value="">프로젝트 전체</option>` + pids.map(([id, nm]) => `<option value="${esc(id)}"${pf.프로젝트 === id ? " selected" : ""}>${esc(nm)}</option>`).join("");
   $("pReach").innerHTML = opt(["개인 이메일", "회사 연락처", "행사 경로", "링크드인만", "없음"], pf.연락, "연락처 전체");
+  $("pXlsx").disabled = $("pSheet").disabled = pv === "test";
   const rows = pipeRows();
-  $("pCount").textContent = `${rows.length}명`;
-  $("pTable").innerHTML = `<thead><tr><th>적합도</th><th>구분</th><th>이름·직책</th><th>회사</th><th>국가</th><th>비고 (한국 기업 거래 실적 · 매칭)</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
-    <td class="num"><b>${b.최고적합도 ? +b.최고적합도 : "–"}</b></td><td><span class="tag">${esc(b.산업군 || "기타")}</span>${b.발굴경로 === "매일 발굴" ? '<div class="note">매일 발굴</div>' : ""}</td><td><b>${esc(b.이름 || "(담당자 미확인)")}</b><div class="note">${esc(b.직책)}</div></td><td>${esc(b.회사)}<div class="note">${esc(b.분야)}</div></td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
-    <td class="note">${b.거래실적 ? `<span style="color:var(--ink)">${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}<br>` : ""}${(b.매칭 || []).map(m => `${esc(m.프로젝트 || m.pid)} · ${esc(m.기업명)} (${+m.적합도 || 0})`).join("<br>")}</td>
-    <td><span class="tag${b.이메일 ? " go" : b.회사연락처 || b.행사경로 ? " amber" : ""}">${reach(b)}</span>${b.dbId ? ` <span class="tag">DB ${esc(b.dbId)}</span>` : ""}</td>
-    <td><select data-pstat="${esc(b.id)}" aria-label="상태">${opt(PSTAT, b.상태 || "발굴")}</select></td></tr>`).join("") || '<tr><td colspan="8" class="empty">아직 발굴된 바이어가 없습니다. 매일 자동 발굴과 프로젝트 매칭 탭의 [발굴 시작]으로 쌓입니다.</td></tr>'}</tbody>`;
+  $("pCount").textContent = `${PVIEW[pv]} ${rows.length}건${pv === "test" ? " — 시험 운행 기록이라 내보내기에서 빠집니다" : ""}`;
+  const who = b => `<b>${esc(b.이름 || "(담당자 미확인)")}</b><div class="note">${esc(b.직책)}</div>`;
+  const tail = b => `<td><span class="tag${b.이메일 ? " go" : b.회사연락처 || b.행사경로 ? " amber" : ""}">${reach(b)}</span>${b.dbId ? ` <span class="tag">DB ${esc(b.dbId)}</span>` : ""}</td>
+    <td><select data-pstat="${esc(b.id)}" aria-label="상태">${opt(PSTAT, b.상태 || "발굴")}</select></td></tr>`;
+  const empty = {auto: "아직 매일 자동 발굴 기록이 없습니다. 매일 오전 7시 43분에 쌓입니다.", proj: "아직 프로젝트 발굴 기록이 없습니다. 프로젝트 매칭 탭의 [발굴 시작]으로 쌓입니다.", test: "시험 기록이 없습니다."}[pv];
+  $("pTable").innerHTML = pv === "auto"
+    ? `<thead><tr><th>구분</th><th>회사</th><th>담당자</th><th>국가</th><th>비고 (한국 기업 거래 실적)</th><th>발굴일</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
+      <td><span class="tag">${esc(b.산업군 || "기타")}</span></td><td><b>${esc(b.회사)}</b><div class="note">${esc(b.분야)}</div></td><td>${who(b)}</td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
+      <td class="note"><span style="color:var(--ink)">${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}</td><td class="note">${esc(b.최초발굴일)}</td>${tail(b)}`).join("") || `<tr><td colspan="8" class="empty">${empty}</td></tr>`}</tbody>`
+    : `<thead><tr><th>적합도</th><th>구분</th><th>이름·직책</th><th>회사</th><th>국가</th><th>매칭 (프로젝트 · 기업)</th><th>연락 경로</th><th>상태</th></tr></thead><tbody>${rows.map(b => `<tr class="click" data-pb="${esc(b.id)}">
+      <td class="num"><b>${+b.최고적합도 || 0}</b></td><td><span class="tag">${esc(b.산업군 || "기타")}</span></td><td>${who(b)}</td><td>${esc(b.회사)}<div class="note">${esc(b.분야)}</div></td><td>${esc([b.국가, b.도시].filter(Boolean).join(" "))}</td>
+      <td class="note">${(b.매칭 || []).map(m => `${esc(m.프로젝트 || m.pid)} · ${esc(m.기업명)} (${+m.적합도 || 0})`).join("<br>")}${b.거래실적 ? `<br><span style="color:var(--ink)">거래 실적: ${esc(b.거래실적)}</span>${link(b.거래출처, "출처")}` : ""}</td>${tail(b)}`).join("") || `<tr><td colspan="8" class="empty">${empty}</td></tr>`}</tbody>`;
 }
 const contactLine = b => `${b.이메일 ? `✉ <a href="mailto:${esc(b.이메일)}">${esc(b.이메일)}</a>${link(b.이메일출처, "출처")}` : "개인 이메일 미공개"}
   · 🏢 ${/^https?:\/\//i.test(b.회사연락처 || "") ? link(b.회사연락처, "회사 문의 페이지") : b.회사연락처 ? `<a href="mailto:${esc(b.회사연락처)}">${esc(b.회사연락처)}</a>` : "회사 연락처 없음"}${link(b.회사연락처출처, "출처")}
@@ -676,10 +690,10 @@ async function exportPipe(kind) { // 네트워크 DB '자료 올리기'에 그�
     웹: b.링크드인 || b.웹, 출처: "NEXUS 발굴 · " + ([...new Set((b.매칭 || []).map(m => m.프로젝트 || m.pid))].join(", ") || b.발굴경로 || ""), 취합연도: String(b.최초발굴일 || "").slice(0, 4), 관계단계: P2STAGE[b.상태 || "발굴"] || "미접촉",
     메모: [b.거래실적 && `거래실적 ${b.거래실적}`, b.회사연락처 && `회사연락처 ${b.회사연락처}`, b.행사경로 && `행사경로 ${b.행사경로}`, b.메모].filter(Boolean).join("; "), 원본파일: "NEXUS 발굴 DB"}));
   if (!out.length) { note.textContent = "내보낼 바이어가 없습니다."; return; }
-  if (kind === "sheet") return toSheet(`NEXUS 발굴 DB_${today()}`, F, out.map(o => F.map(k => o[k])), note);
+  if (kind === "sheet") return toSheet(`NEXUS ${PVIEW[pv]}_${today()}`, F, out.map(o => F.map(k => o[k])), note);
   if (!window.XLSX || !downloads) { note.textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out, {header: F}), "발굴 DB");
-  try { await downloads.save({filename: `NEXUS_발굴DB_${today()}.xlsx`, data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); note.textContent = `${out.length}명을 저장했습니다. 확인 후 '자료 올리기'에서 네트워크 DB로 올리시면 됩니다('제외' 상태는 빠짐).`; }
+  try { await downloads.save({filename: `NEXUS_${PVIEW[pv].replace(/ /g, "")}_${today()}.xlsx`, data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); note.textContent = `${out.length}명을 저장했습니다. 확인 후 '자료 올리기'에서 네트워크 DB로 올리시면 됩니다('제외' 상태는 빠짐).`; }
   catch (e) { note.textContent = e?.code === "declined" ? "" : "저장하지 못했습니다."; }
 }
 
@@ -689,7 +703,7 @@ const SYN = {이름: /^(name|full ?name|contact|이름|성명|담당자)$/i, 직
   이메일: /(e-?mail|이메일|메일)/i, 웹: /(linkedin|website|url|web|링크|홈페이지)/i, 산업세부: /(industry|sector|분야|산업)/i, 관심키워드: /(interest|keyword|관심)/i, 메모: /(note|memo|비고|메모)/i, 투자단계규모: /(stage|ticket|check size|투자)/i,
   기업명: /(company|기업명|회사명|업체명)/i, 제품: /(product|service|제품|서비스|IP)/i, 분야세부: /(industry|sector|분야)/i, 타깃국가: /(target|타깃|목표 국가)/i, 링크: /(website|url|링크|홈페이지)/i};
 function drawUpload() {
-  $("uProj").innerHTML = projects.map(p => `<option value="${esc(p.id)}"${p.id === cur ? " selected" : ""}>${esc(p.이름)}</option>`).join("");
+  $("uProj").innerHTML = projects.filter(p => !p.시험).map(p => `<option value="${esc(p.id)}"${p.id === cur ? " selected" : ""}>${esc(p.이름)}</option>`).join("");
   $("uProjWrap").hidden = $("uKind").value !== "companies";
   $("uLog").innerHTML = uploads.length ? `<div class="tw"><table><thead><tr><th>일시</th><th>파일</th><th>종류</th><th>연도</th><th>추가</th><th>병합</th></tr></thead><tbody>${uploads.map(u => `<tr><td class="note">${esc(u.at.slice(0, 16).replace("T", " "))}</td><td>${esc(u.file)}</td><td>${esc(u.kind)}</td><td>${esc(u.취합연도)}</td><td class="num">${u.added}</td><td class="num">${u.merged}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">아직 올린 자료가 없습니다.</p>';
 }
@@ -831,6 +845,7 @@ document.addEventListener("click", async e => {
   if (t.id === "gClose") { G.sel = null; drawGeo(); }
   if (t.id === "gTable") { filt.국가 = koName(G.sel); drawDb(); $("dbCount").scrollIntoView({behavior: "smooth"}); }
   if (t.closest(".rank") && t.dataset.a2) focusA2(t.dataset.a2);
+  if (t.dataset.pv) { pv = t.dataset.pv; pf.상태 = ""; pf.프로젝트 = ""; try { localStorage.setItem("nexus-pv", pv); } catch {} drawPipe(); }
   if (t.dataset.pst !== undefined) { pf.상태 = t.dataset.pst; drawPipe(); }
   if (t.dataset.pb) editPipe(pipe.find(b => b.id === t.dataset.pb));
   if (t.id === "pXlsx") exportPipe("xlsx");
