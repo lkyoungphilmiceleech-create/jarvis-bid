@@ -75,43 +75,66 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
 .dot.on{background:var(--go);box-shadow:0 0 8px var(--go)}.dot.skill{background:var(--holo)}.dot.off{background:var(--muted);opacity:.5}
-.floorwrap{padding:8px;overflow-x:auto}
-.floorhint{display:none;font-size:12px;color:var(--muted);margin:0 8px 6px}
-@media (max-width:700px){svg.map{min-width:720px}.floorhint{display:block}}
+.floorwrap{padding:0;overflow-x:auto;border-radius:14px}
+.floorhint{display:none;font-size:12px;color:var(--muted);margin:8px 12px 0}
+@media (max-width:700px){svg.map{min-width:640px}.floorhint{display:block}}
 svg.map{width:100%;height:auto;display:block}
-.flr{fill:var(--glass2);stroke:var(--line);stroke-width:1.5}
-.grid line{stroke:var(--grid);stroke-width:1}
-.wing{font:700 20px var(--hud);letter-spacing:.06em;fill:var(--holo)}
-.top{fill:color-mix(in srgb,var(--glass) 60%,var(--holo) 12%);stroke:var(--line)}
-.sideL{fill:color-mix(in srgb,var(--bg) 70%,var(--holo) 10%)}
-.sideR{fill:color-mix(in srgb,var(--bg) 85%,var(--holo) 6%)}
-.mon{fill:var(--bg);stroke:var(--holo);stroke-width:1.2}
+/* 건물 재질: 어두운 밤 사무실(기본) */
+.office{--sky1:#0b1a2a;--sky2:#15324a;--gnd:rgba(0,0,0,.35);
+  --slab-t:#2a3a46;--slab-l:#1c2932;--slab-r:#24333e;--floor:#2c3d49;--carpet:#23455a;
+  --wall-t:#4a5d69;--wall-l:#34454f;--wall-r:#3c4f5a;--win:#6fb7d6;--winop:.35;
+  --wood-t:#9c7652;--wood-l:#6f5239;--wood-r:#846246;--desk-t:#d6dbe0;--desk-l:#98a3ab;--desk-r:#b3bcc3;
+  --chair-t:#3a3f55;--chair-l:#262a3a;--chair-r:#303548;--sofa-t:#3f6f7d;--sofa-l:#2a4d57;--sofa-r:#355f6b;
+  --mon-t:#1c2126;--mon-l:#101418;--mon-r:#171c21;--pot-t:#c9b79c;--pot-l:#8d7b62;--pot-r:#a8957a;--leaf:#3fa56a;
+  --paper-t:#f4f4f0;--paper-l:#cfcfca;--paper-r:#e2e2dd;--printer-t:#e6e9ec;--printer-l:#9aa3aa;--printer-r:#bcc4ca;--board:#e9eef2;--screen:#06121c}
+:root[data-theme="light"] .office{--sky1:#cfe6f5;--sky2:#eef6fb;--gnd:rgba(20,50,70,.14);
+  --slab-t:#c9d3da;--slab-l:#a3b0b9;--slab-r:#b7c3cb;--floor:#e7ebee;--carpet:#c9dbe6;
+  --wall-t:#f1f3f5;--wall-l:#d9dfe3;--wall-r:#e6eaed;--win:#8fd0ee;--winop:.55;--screen:#0e2a3a}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .office{--sky1:#cfe6f5;--sky2:#eef6fb;--gnd:rgba(20,50,70,.14);
+  --slab-t:#c9d3da;--slab-l:#a3b0b9;--slab-r:#b7c3cb;--floor:#e7ebee;--carpet:#c9dbe6;
+  --wall-t:#f1f3f5;--wall-l:#d9dfe3;--wall-r:#e6eaed;--win:#8fd0ee;--winop:.55;--screen:#0e2a3a}}
+.sky{fill:url(#skyg)}.ground{fill:var(--gnd)}
+.core{stroke:var(--line);stroke-width:2;stroke-dasharray:4 6}
+.slab-t{fill:var(--slab-t)}.slab-l{fill:var(--slab-l)}.slab-r{fill:var(--slab-r)}
+.floor-t{fill:var(--floor)}.carpet{fill:var(--carpet);opacity:.8}
+.wall-t{fill:var(--wall-t)}.wall-l{fill:var(--wall-l)}.wall-r{fill:var(--wall-r)}
+.win{fill:var(--win);opacity:var(--winop)}.mullion{fill:var(--wall-t)}
+.wood-t{fill:var(--wood-t)}.wood-l{fill:var(--wood-l)}.wood-r{fill:var(--wood-r)}
+.desk-t{fill:var(--desk-t)}.desk-l{fill:var(--desk-l)}.desk-r{fill:var(--desk-r)}
+.chair-t{fill:var(--chair-t)}.chair-l{fill:var(--chair-l)}.chair-r{fill:var(--chair-r)}
+.sofa-t{fill:var(--sofa-t)}.sofa-l{fill:var(--sofa-l)}.sofa-r{fill:var(--sofa-r)}
+.mon-t{fill:var(--mon-t)}.mon-l{fill:var(--mon-l)}.mon-r{fill:var(--mon-r)}
+.pot-t{fill:var(--pot-t)}.pot-l{fill:var(--pot-l)}.pot-r{fill:var(--pot-r)}.leaf{fill:var(--leaf)}
+.paper-t{fill:var(--paper-t)}.paper-l{fill:var(--paper-l)}.paper-r{fill:var(--paper-r)}
+.printer-t{fill:var(--printer-t)}.printer-l{fill:var(--printer-l)}.printer-r{fill:var(--printer-r)}
+.board{fill:var(--board)}.screen{fill:var(--screen);stroke:var(--holo);stroke-width:1.5}
+.glasswall{fill:var(--holo);fill-opacity:.08;stroke:var(--holo);stroke-opacity:.45;stroke-width:1.2}
+.glow{fill:var(--holo);animation:glow 2.4s ease-in-out infinite}.dark{fill:#0a0d10}
+@keyframes glow{50%{opacity:.6}}
+.wallsign{font:700 15px var(--hud);letter-spacing:.08em;fill:var(--holo)}
+.fl{font:700 26px var(--hud);fill:var(--holo)}.fln{font:600 13px var(--sans);fill:var(--muted)}
 .desk{cursor:pointer;outline:none}
-.desk .plate{font:700 15px var(--hud);letter-spacing:.08em;fill:var(--ink);text-anchor:middle}
-.desk .sub{font:500 13px var(--sans);fill:var(--muted);text-anchor:middle}
-.desk .ring{fill:none;stroke:var(--go);stroke-width:2;opacity:0}
-.desk.on .ring{animation:ring 2.6s ease-out infinite}
-@keyframes ring{0%{opacity:.8;transform:scale(.6)}100%{opacity:0;transform:scale(1.4)}}
-.desk .ring{transform-box:fill-box;transform-origin:center}
-.desk.off image{filter:grayscale(1);opacity:.4}
-.desk.skill image{opacity:.9}
-.desk.on image{animation:bob 4s ease-in-out infinite}
+.nametag rect{fill:var(--glass);stroke:var(--line)}
+.nametag.on rect{stroke:var(--go)}.nametag.on circle{fill:var(--go)}.nametag.skill circle{fill:var(--holo)}.nametag.off circle{fill:var(--muted)}.nametag.off{opacity:.75}
+.desk .plate{font:700 12px var(--hud);letter-spacing:.06em;fill:var(--ink);text-anchor:middle}
+.desk .sub{font:500 9.5px var(--sans);fill:var(--muted);text-anchor:middle}
+.desk .vacant image{filter:grayscale(1);opacity:.28}
+.desk.on image{animation:work 3.2s ease-in-out infinite}
 .desk image{transform-box:fill-box;transform-origin:bottom}
-@keyframes bob{50%{transform:translateY(-4px)}}
-.desk:hover .top,.desk:focus-visible .top,.desk.sel .top{fill:var(--holo-soft);stroke:var(--holo);stroke-width:2}
+@keyframes work{0%,100%{transform:rotate(0)}30%{transform:rotate(-2deg) translateY(-1px)}60%{transform:rotate(1.5deg)}}
+.desk:hover .desk-t,.desk:focus-visible .desk-t,.desk.sel .desk-t{fill:var(--holo)}
 .desk.sel .plate{fill:var(--holo)}
 .typing circle{fill:var(--holo);animation:typing 1.2s infinite}
 .typing circle:nth-child(3){animation-delay:.2s}.typing circle:nth-child(4){animation-delay:.4s}
 @keyframes typing{0%,60%,100%{opacity:.25}30%{opacity:1}}
 .bubbleS{fill:var(--glass);stroke:var(--line)}
-.tag{font:700 13px var(--sans);text-anchor:middle}
-.tag.off{fill:var(--muted)}.tag.skill{fill:var(--holo)}.tag.on{fill:var(--go)}
-.flow{fill:none;stroke:var(--amber);stroke-width:2;stroke-dasharray:6 7;opacity:.7;animation:dash 1.2s linear infinite}
-.flow.later{stroke:var(--muted);opacity:.35;animation:none}
+.tag{font:700 10px var(--sans);text-anchor:middle;paint-order:stroke;stroke:var(--floor);stroke-width:3px}
+.tag.off{fill:var(--muted)}.tag.skill{fill:var(--holo)}
+.flow{fill:none;stroke:var(--amber);stroke-width:2.5;stroke-dasharray:6 7;opacity:.85;animation:dash 1.2s linear infinite}
+.flow.later{stroke:var(--muted);opacity:.4;animation:none}
 @keyframes dash{to{stroke-dashoffset:-26}}
 .env{fill:var(--amber)}
-.holo text{font:700 12px var(--hud);fill:var(--holo);text-anchor:middle}
-.holo .big{font-size:22px}
+.holo text{font:700 11px var(--hud);fill:var(--holo)}.holo .big{font-size:15px}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
 @media (max-width:820px){.cols{grid-template-columns:1fr}}
 .panel{padding:18px;display:flex;flex-direction:column;gap:10px}
@@ -145,11 +168,11 @@ svg.map{width:100%;height:auto;display:block}
   </header>
 
   <div class="hero">
-    <div><h1>JARVIS 가상 사무실</h1><p>2개 본부 · 11개 팀 · 책상을 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
+    <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
     <div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
   </div>
 
-  <section class="glass floorwrap" aria-label="사무실 지도"><p class="floorhint">지도를 옆으로 밀어서 두 본부를 모두 볼 수 있습니다.</p>__SVG__</section>
+  <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p>__SVG__</section>
 
   <div class="cols">
     <section class="glass panel" id="panel" aria-live="polite"></section>
