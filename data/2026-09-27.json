@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-27 19:14:31 KST",
+  "generated_at": "2026-09-27 19:16:31 KST",
   "status": "ok",
   "window": {
     "begin": "202609260000",
@@ -7,8 +7,8 @@
     "how": "auto(전일)"
   },
   "query_stats": {
-    "total": 54,
-    "ok": 54,
+    "total": 70,
+    "ok": 70,
     "failed": [],
     "error_samples": []
   },
@@ -16,6 +16,7 @@
     "수집": 0,
     "집중기관": 0,
     "키워드": 0,
+    "참고": 0,
     "오탐제외": 0
   },
   "items": [],
