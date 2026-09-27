@@ -1,5 +1,5 @@
 """data/*.json 전체 → org/radar.html (RADAR 직원 카드 + 보고서). 사용: python org/build_radar.py"""
-import json, sys, pathlib
+import base64, json, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import os; os.environ.setdefault("DATA_GO_KR_KEY", "-")
 from collect import INSTITUTIONS, KEYWORDS_SERVC, MIN_BUDGET
@@ -21,5 +21,6 @@ data = {
 }
 tpl = pathlib.Path(__file__).with_name("radar.tpl.html").read_text(encoding="utf-8")
 out = pathlib.Path(__file__).with_name("radar.html")
-out.write_text(tpl.replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/")), encoding="utf-8")
+avatar = "data:image/png;base64," + base64.b64encode(pathlib.Path(__file__).with_name("avatars").joinpath("radar.png").read_bytes()).decode()
+out.write_text(tpl.replace("__AVATAR__", avatar).replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/")), encoding="utf-8")
 print(out, len(data["items"]), "건")
