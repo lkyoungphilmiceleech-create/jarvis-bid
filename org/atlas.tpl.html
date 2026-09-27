@@ -194,7 +194,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <nav class="tabs" role="tablist"><button type="button" role="tab" data-tab="briefs" aria-selected="true">동향 브리핑</button><button type="button" role="tab" data-tab="deep" aria-selected="false">심층 리포트</button><button type="button" role="tab" data-tab="rep" aria-selected="false">보고서 아카이브</button><button type="button" role="tab" data-tab="lib" aria-selected="false">제안 조사 자료</button></nav>
 
   <section class="glass panel" id="tab-deep" hidden>
-    <div class="row"><h2 style="margin:0">심층 리포트</h2><span class="note">밤 22시~새벽 5시에 진흥원 백서·컨퍼런스 발표자료·전문가 SNS·전문지·언론 기사를 국내외에서 조사하고, 5시 이후 마케팅·제안서용 보고서(한국 기업 사례·벤치마킹 사례·수치 차트)로 만듭니다.</span></div>
+    <div class="row"><h2 style="margin:0">심층 리포트</h2><span class="note">밤 22·00·02시에 진흥원 백서·컨퍼런스 발표자료·전문가 SNS·전문지·언론 기사를 국내외에서 조사하고(3회), 새벽 5·6·7시에 마케팅·제안서용 보고서를 초안 → 검증·보강 → 완성 3단계로 만듭니다(한국 기업 사례·벤치마킹 사례·수치 차트).</span></div>
     <div class="item" id="dFocus"><div class="row"><b>이번 주 리서치 주제</b><span class="note">매일 밤 이 주제로 조사합니다. 비우거나 기간이 지나면 콘텐츠·출판·과학기술을 돌아가며 조사합니다.</span></div>
       <div class="row"><input id="dT" placeholder="주제 — 예) 미주 지역 IP 비즈니스" style="flex:2;min-width:220px"><input id="dR" placeholder="권역 — 예) 미주(미국·캐나다·중남미)" style="flex:1;min-width:160px"><label class="note">적용 마지막 날 <input type="date" id="dE"></label></div>
       <textarea id="dS" placeholder="세부 관점 (한 줄에 하나) — 예) IP 라이선싱·머천다이징 시장 규모" style="min-height:70px"></textarea>
@@ -272,13 +272,13 @@ function chartSvg(c) {
 const chartBox = c => `<div class="chart"><b>${esc(c.제목)}</b>${c.단위 ? ` <span class="note">(${esc(c.단위)})</span>` : ""}${chartSvg(c)}<div class="note">${link(c.URL, c.출처명 || "출처")}${c.기준 ? ` · 기준 ${esc(c.기준)}` : ""}</div>
   <details><summary class="note">표로 보기</summary><table>${(c.데이터 || []).map(p => `<tr><td>${esc(p.라벨)}</td><td class="num">${fmtN(p.값)}${esc(c.단위 || "")}</td></tr>`).join("")}</table></details></div>`;
 function nightLine(n) { const r = n.회차기록 || [], t = k => r.reduce((m, x) => m + (+x.토큰?.[k] || 0), 0);
-  return `${n.날짜} 리서치 · ${esc(n.주제 || "")} · ${r.filter(x => x.단계 === "조사").length}회차 자료 ${r.reduce((m, x) => m + (+x.수집 || 0), 0)}건${r.some(x => x.단계 === "보고서") ? " · 보고서 작성 완료" : ""} · 토큰 ${tok(t("합계"))} (출력 ${tok(t("출력"))})`; }
+  return `${n.날짜} 리서치 · ${esc(n.주제 || "")} · ${r.filter(x => x.단계 === "조사").length}회차 자료 ${r.reduce((m, x) => m + (+x.수집 || 0), 0)}건${r.some(x => x.단계 === "보고서") ? ` · 보고서 ${Math.max(...r.filter(x => x.단계 === "보고서").map(x => +x.보고단계 || 1))}/3단계` : ""} · 토큰 ${tok(t("합계"))} (출력 ${tok(t("출력"))})`; }
 function drawDeep() {
   if (document.activeElement?.closest?.("#dFocus") == null) { $("dT").value = dfocus.주제 || ""; $("dR").value = dfocus.권역 || ""; $("dE").value = dfocus.종료 || ""; $("dS").value = (dfocus.세부 || []).join("\n"); }
   const n = nights[0]; $("dNight").hidden = !n; if (n) $("dNight").textContent = nightLine(n);
   const r = reports.find(x => x.id === dcur) || reports[0]; dcur = r?.id;
-  $("dDays").innerHTML = reports.map(x => `<button type="button" data-rday="${esc(x.id)}" aria-pressed="${x.id === dcur}">${esc(x.날짜)}<small>${esc(x.제목 || x.주제 || "")}</small></button>`).join("") || '<p class="empty">아직 리포트가 없습니다. 첫 리포트는 밤샘 조사 후 새벽 5시 이후에 올라옵니다.</p>';
-  $("dView").innerHTML = !r ? "" : `<div class="row"><h2 style="margin:0">${esc(r.제목)}</h2><span style="flex:1"></span><span class="note">${esc(r.날짜)} · 자료 ${+r.자료수 || 0}건 · ${dl(r.파일)}</span></div>
+  $("dDays").innerHTML = reports.map(x => `<button type="button" data-rday="${esc(x.id)}" aria-pressed="${x.id === dcur}">${esc(x.날짜)}<small>${esc(x.제목 || x.주제 || "")}</small></button>`).join("") || '<p class="empty">아직 리포트가 없습니다. 첫 리포트는 밤샘 조사 후 새벽 5시에 초안, 7시에 완성본이 올라옵니다.</p>';
+  $("dView").innerHTML = !r ? "" : `<div class="row"><h2 style="margin:0">${esc(r.제목)}</h2><span style="flex:1"></span><span class="note">${esc(r.날짜)} · <span class="tag${r.완성 ? " go" : " amber"}">${r.완성 ? "완성" : ["", "초안", "검증·보강"][+r.단계 || 1] || "작성 중"}</span> · 자료 ${+r.자료수 || 0}건 · ${dl(r.파일)}</span></div>
     ${(r.핵심요약 || []).length ? `<div class="item"><b>핵심 요약</b><ul class="heads">${r.핵심요약.map(h => `<li>${esc(h)}</li>`).join("")}</ul></div>` : ""}
     ${(r.차트 || []).length ? `<div class="charts">${r.차트.map(chartBox).join("")}</div>` : ""}
     ${(r.섹션 || []).map(sec => `<div class="item"><h3>${esc(sec.제목)}</h3>${(sec.문단 || []).map(p => `<div class="why">${esc(p)}</div>`).join("")}</div>`).join("")}
