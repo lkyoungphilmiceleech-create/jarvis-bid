@@ -134,7 +134,7 @@ def fetch(task):
             time.sleep(1.5)
     return {"label": label, "ok": False, "kind": kind, "reason": reason,
             "param_key": param_key, "param_val": param_val,
-            "error": last_err, "items": [], "total": 0}
+            "error": str(last_err).replace(SERVICE_KEY, "***"), "items": [], "total": 0}
 
 
 def decide_window():
