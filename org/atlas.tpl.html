@@ -179,14 +179,22 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div class="kpis" id="kpis"></div>
   </section>
 
-  <section class="glass panel">
+  <nav class="tabs" role="tablist"><button type="button" role="tab" data-tab="briefs" aria-selected="true">동향 브리핑</button><button type="button" role="tab" data-tab="lib" aria-selected="false">제안 조사 자료</button></nav>
+
+  <section class="glass panel" id="tab-lib" hidden>
+    <h2 style="margin:0">제안 조사 자료</h2>
+    <p class="note">DECODER가 공고를 분석할 때마다(그리고 ORACLE이 전략을 세울 때) 사업·대상 국가·조사 필요 주제를 ATLAS에 넘깁니다. ATLAS는 여기 있는 대상 국가를 매일 가장 먼저 조사하고, 관련 브리핑 항목에 표시합니다.</p>
+    <div id="lib" class="brief"></div>
+  </section>
+
+  <section class="glass panel" id="tab-briefs">
     <div class="grid2">
       <div><div class="hudlabel">브리핑 날짜</div><div class="days" id="days"></div></div>
       <div class="brief">
         <div class="row"><input id="q" type="search" placeholder="제목·요약·기관 검색 (전체 기간)" style="flex:1;min-width:200px"><select id="fInd"></select><select id="fReg"></select></div>
         <div id="head"></div>
         <div id="items" class="brief"></div>
-        <p class="note">매일(평일) 오전 8시대에 ATLAS가 콘텐츠·출판·과학기술 분야의 국내외 동향(정책·시장·투자·유통·공동제작·주요 기관 발표)을 조사해 올립니다. 모든 항목은 출처 링크가 있습니다. 제안서에 인용할 때는 원문을 한 번 더 확인해 주세요.</p>
+        <p class="note">매일 오전 8시대에 ATLAS가 주요 타깃 국가(진행 중 제안 대상국 → 미국·프랑스·일본·싱가포르 → 동남아·중화권·독일·영국·캐나다·중동)를 중심으로 콘텐츠·출판·과학기술 분야의 동향(정책·시장·투자·유통·공동제작·주요 기관 발표)을 조사해 올립니다. 모든 항목은 출처 링크가 있습니다. 제안서에 인용할 때는 원문을 한 번 더 확인해 주세요.</p>
       </div>
     </div>
   </section>
@@ -203,25 +211,33 @@ let th = "system"; try { th = localStorage.getItem("atlas-theme") || "system"; }
 const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}); tick(); setInterval(tick, 1000);
 
 const INDS = ["콘텐츠", "출판", "과학기술", "공통"];
-let briefs = [], cur = null, f = {q: "", 산업: "", 권역: ""};
+let briefs = [], lib = [], tab = "briefs", cur = null, f = {q: "", 산업: "", 권역: ""};
 const REG = () => [...new Set(briefs.flatMap(b => (b.항목 || []).map(i => i.권역)).filter(Boolean))].sort();
+function drawLib() {
+  const rel = id => briefs.flatMap(b => (b.항목 || []).filter(i => String(i.관련제안 || "").includes(id)).map(i => ({...i, _d: b.날짜})));
+  $("lib").innerHTML = lib.map(l => { const r = rel(l.id); return `<div class="item"><div class="row" style="gap:6px"><span class="tag">${esc(l.분야)}</span>${(l.대상국가 || []).map(c => `<span class="tag">${esc(c)}</span>`).join("")}<span class="tag amber">${esc(l.상태 || "제안 준비")}</span><span class="note">마감 ${esc(l.제출마감)}</span></div>
+    <h3>${esc(l.사업명)}</h3><div class="note">${esc(l.발주처)} · 공고 ${esc(l.공고번호 || l.id)} · ${esc(l.출처)} ${esc(l.분석일)}</div><div class="why">${esc(l.한줄요약)}</div>
+    ${(l.조사필요 || []).length ? `<div class="so"><b>ATLAS 조사 필요</b><ul class="heads">${l.조사필요.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <div class="note">관련 브리핑 ${r.length}건${r.slice(0, 5).map(i => ` · ${esc(i._d)} ${link(i.URL, i.제목)}`).join("")}</div></div>`; }).join("") || '<p class="empty">아직 넘겨받은 제안 조사 자료가 없습니다.</p>';
+}
 function draw() {
   const b = briefs.find(x => x.id === cur) || briefs[0]; cur = b?.id;
   const all = briefs.flatMap(x => x.항목 || []);
-  $("kpis").innerHTML = [["브리핑", briefs.length], ["누적 동향", all.length], ["오늘", (briefs[0]?.항목 || []).length]].map(([k, v]) => `<div class="kpi"><span class="hudlabel">${k}</span><b>${v}</b></div>`).join("");
-  $("say").textContent = !briefs.length ? "본부장님, 첫 동향 브리핑을 준비하고 있습니다. 평일 오전 8시대에 올라옵니다." : `본부장님, ${briefs[0].날짜} 브리핑입니다. ${briefs[0].헤드라인?.[0] || ""}`;
+  $("kpis").innerHTML = [["브리핑", briefs.length], ["누적 동향", all.length], ["오늘", (briefs[0]?.항목 || []).length], ["제안 자료", lib.length]].map(([k, v]) => `<div class="kpi"><span class="hudlabel">${k}</span><b>${v}</b></div>`).join("");
+  $("say").textContent = !briefs.length ? "본부장님, 첫 동향 브리핑을 준비하고 있습니다. 매일 오전 8시대에 올라옵니다." : `본부장님, ${briefs[0].날짜} 브리핑입니다. ${briefs[0].헤드라인?.[0] || ""}`;
   $("days").innerHTML = briefs.map(x => `<button type="button" data-day="${esc(x.id)}" aria-pressed="${x.id === cur}">${esc(x.날짜)}<small>${(x.항목 || []).length}건 · ${esc((x.헤드라인 || [])[0] || "")}</small></button>`).join("") || '<p class="empty">아직 브리핑이 없습니다.</p>';
   $("fInd").innerHTML = opt(INDS, f.산업, "산업 전체"); $("fReg").innerHTML = opt(REG(), f.권역, "권역 전체");
   const q = f.q.toLowerCase(), searching = !!q;
   const src = searching ? briefs.flatMap(x => (x.항목 || []).map(i => ({...i, _d: x.날짜}))) : (b?.항목 || []);
   const rows = src.filter(i => (!f.산업 || i.산업 === f.산업) && (!f.권역 || i.권역 === f.권역) && (!q || [i.제목, i.요약, i.시사점, i.출처명].some(v => String(v || "").toLowerCase().includes(q))));
   $("head").innerHTML = b && !searching ? `<h2 style="margin:0">${esc(b.날짜)} 동향 브리핑</h2><ul class="heads">${(b.헤드라인 || []).map(h => `<li>${esc(h)}</li>`).join("")}</ul>${(b.제안서활용 || []).length ? `<div class="item"><b>제안서 활용 포인트</b><ul class="heads">${b.제안서활용.map(h => `<li>${esc(h)}</li>`).join("")}</ul></div>` : ""}` : searching ? `<h2 style="margin:0">검색 결과 ${rows.length}건</h2>` : "";
-  $("items").innerHTML = rows.map(i => `<div class="item"><div class="row" style="gap:6px"><span class="tag">${esc(i.산업)}</span><span class="tag">${esc(i.권역)}</span>${i._d ? `<span class="note">${esc(i._d)}</span>` : ""}</div>
+  $("items").innerHTML = rows.map(i => `<div class="item"><div class="row" style="gap:6px"><span class="tag">${esc(i.산업)}</span><span class="tag">${esc(i.권역)}${i.국가 ? " · " + esc(i.국가) : ""}</span>${i.관련제안 ? `<span class="tag amber">관련 제안 ${esc(i.관련제안)}</span>` : ""}${i._d ? `<span class="note">${esc(i._d)}</span>` : ""}</div>
     <h3>${esc(i.제목)}</h3><div class="why">${esc(i.요약)}</div>${i.시사점 ? `<div class="so"><b>시사점</b> ${esc(i.시사점)}</div>` : ""}
     <div class="note">${link(i.URL, i.출처명 || "출처")} · ${esc(i.발행일)}</div></div>`).join("") || (b ? '<p class="empty">조건에 맞는 항목이 없습니다.</p>' : "");
 }
 document.addEventListener("click", e => { const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
+  if (t.dataset.tab) { tab = t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab)); $("tab-briefs").hidden = tab !== "briefs"; $("tab-lib").hidden = tab !== "lib"; drawLib(); }
   if (t.dataset.day) { cur = t.dataset.day; f.q = ""; $("q").value = ""; draw(); } });
 document.addEventListener("change", e => { if (e.target.id === "fInd") { f.산업 = e.target.value; draw(); } if (e.target.id === "fReg") { f.권역 = e.target.value; draw(); } });
 $("q").addEventListener("input", e => { f.q = e.target.value; draw(); });
@@ -229,6 +245,7 @@ draw();
 (async () => {
   const db = await window.claude?.use?.("db");
   if (!db) { $("say").textContent = "본부장님, 이 화면에서는 브리핑 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요."; return; }
-  db.collection("briefs").orderBy("날짜", "desc").limit(60).onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); }, () => { $("say").textContent = "본부장님, 브리핑을 불러오지 못했습니다. 새로고침해 주세요."; });
+  db.collection("library").onSnapshot(s => { lib = s.docs.map(d => ({id: d.id, ...d.data()})); drawLib(); draw(); });
+  db.collection("briefs").orderBy("날짜", "desc").limit(60).onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); drawLib(); }, () => { $("say").textContent = "본부장님, 브리핑을 불러오지 못했습니다. 새로고침해 주세요."; });
 })();
 </script>
