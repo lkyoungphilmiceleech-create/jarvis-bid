@@ -469,7 +469,7 @@ const world = topojson.feature(GEO.world, GEO.world.objects.countries).features.
 const mainPart = f => { if (f.geometry.type !== "MultiPolygon") return f; // 해외 영토 때문에 중심이 틀어지지 않게 가장 큰 덩어리 기준
   const polys = f.geometry.coordinates.map(c => ({type: "Polygon", coordinates: c})); return polys.sort((a, b) => d3.geoArea(b) - d3.geoArea(a))[0]; };
 const CENT = {}; world.forEach(f => { if (f.a2) CENT[f.a2] = d3.geoCentroid(mainPart(f)); }); Object.assign(CENT, EXTRA);
-const FIELDS = [["AI·데이터", /\bAI\b|Big Data|데이터|Cloud|Software|Hardware|Telecom|클라우드|소프트웨어/i], ["게임", /게임|Gaming|E-?Sport/i], ["미디어·엔터", /미디어|엔터|Media|Entertain|Creative|콘텐츠|영화|방송|음악|웹툰/i],
+const FIELDS = [["AI·데이터", /\bAI\b|Big Data|데이터|Cloud|Software|Hardware|Telecom|클라우드|소프트웨어/i], ["게임", /게임|Gaming|E-?Sport/i], ["미디어·엔터", /미디어|엔터|Media|Entertain|Creative|콘텐츠|영화|방송|음악|웹툰|OTT|배급|애니|포맷|통신|드라마|Broadcast|Film/i],
   ["리테일·커머스", /리테일|Retail|Commerce|CPG|유통|커머스/i], ["교육", /교육|Education|EdTech/i], ["금융·핀테크", /Fin|Bank|Insurance|Asset|금융|보험/i], ["마케팅·광고", /Marketing|Advertis|AdTech|광고|마케팅/i],
   ["헬스케어", /Health|Bio|의료|헬스|바이오/i], ["딥테크·제조", /DeepTech|R&D|Manufactur|Industry|Supply|Logistic|제조|딥테크/i], ["에너지·그린", /Energy|Green|Sustain|Oil|에너지/i],
   ["모빌리티·도시", /Mobility|Transport|Smart City|PropTech|모빌리티/i], ["컨설팅·서비스", /Consult|Legal|\bHR|Cyber|Defense|Government|Nonprofit|컨설팅/i]];
