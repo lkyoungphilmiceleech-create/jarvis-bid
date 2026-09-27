@@ -5,3 +5,4 @@ https://github.com/microsoft/fluentui-emoji
 
 - radar.png: Technologist, Medium-Light
 - decoder.png: Detective, Medium-Light
+- oracle: Person mage · quill: Teacher · tribunal: Judge · atlas: Pilot · prism: Artist · babel: Office worker · nexus: Person in tuxedo · maestro: Singer · scribe: Student (모두 Medium-Light)
