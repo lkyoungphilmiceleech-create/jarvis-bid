@@ -3,131 +3,302 @@
 <style>
 :root{
   --bg:#EEF2F1;--panel:#FFFFFF;--ink:#17222B;--muted:#5B6B74;--line:#D5DEDC;
-  --accent:#12708A;--accent-soft:#DCEEF2;--warn:#9A6212;--warn-soft:#F6EBD8;--ok:#1F7A4D;
+  --accent:#12708A;--accent-ink:#FFFFFF;--accent-soft:#DCEEF2;--warn:#9A6212;--warn-soft:#F6EBD8;--ok:#1F7A4D;--ok-soft:#DDF0E5;--bad:#A33B32;
+  --skin:#F2C9A5;--hair:#2B2F3A;--jacket:#1F4E5F;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   color-scheme:dark;--bg:#0F171C;--panel:#16222A;--ink:#E3ECEE;--muted:#93A5AD;--line:#26363F;
-  --accent:#4FB6D0;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;}}
+  --accent:#4FB6D0;--accent-ink:#0F171C;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;--ok-soft:#173527;--bad:#E07A70;--jacket:#2D6B80;}}
 :root[data-theme="dark"]{
   color-scheme:dark;--bg:#0F171C;--panel:#16222A;--ink:#E3ECEE;--muted:#93A5AD;--line:#26363F;
-  --accent:#4FB6D0;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;}
-body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:24px 48px}
-.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
-.crumb{font:500 12px var(--sans);letter-spacing:.02em;color:var(--muted);text-transform:uppercase}
+  --accent:#4FB6D0;--accent-ink:#0F171C;--accent-soft:#163743;--warn:#E0A955;--warn-soft:#3A2D18;--ok:#5CC08B;--ok-soft:#173527;--bad:#E07A70;--jacket:#2D6B80;}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.crumb{font-size:12px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 13px var(--sans);padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
-.hero{display:grid;grid-template-columns:120px 1fr;gap:20px;align-items:center}
-@media (max-width:560px){.hero{grid-template-columns:1fr}}
-.avatar{width:120px;height:120px}
-.sweep{transform-origin:60px 60px;animation:spin 4s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.sweep{animation:none}}
+.hero{display:grid;grid-template-columns:168px 1fr;gap:24px;align-items:center}
+@media (max-width:600px){.hero{grid-template-columns:1fr;justify-items:start}}
+.avatar{width:168px;height:168px}
+.blink{animation:blink 5s infinite;transform-origin:center 88px;transform-box:view-box}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+.glint{animation:glint 3s ease-in-out infinite}
+@keyframes glint{0%,100%{opacity:.25}50%{opacity:.9}}
+@media (prefers-reduced-motion:reduce){.blink,.glint{animation:none}}
 h1{font:700 34px/1 var(--mono);letter-spacing:.08em;margin:0}
 .role{color:var(--accent);font-weight:700;margin-top:6px}
-.persona{margin:10px 0 0;max-width:60ch}
-.meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:13px;color:var(--muted)}
+.bubble{position:relative;margin:12px 0 0;max-width:60ch;background:var(--accent-soft);border-radius:10px;padding:10px 14px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:13px;color:var(--muted)}
 .meta b{color:var(--ink);font-weight:500}
-h2{font-size:17px;margin:0 0 12px;text-wrap:balance}
-.rule{display:grid;grid-template-columns:88px 1fr;gap:10px 14px;align-items:start}
-.rule dt{font:500 13px var(--sans);color:var(--muted);padding-top:4px}
-.rule dd{margin:0;display:flex;flex-wrap:wrap;gap:6px}
-.chip{font-size:13px;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink)}
+h2{font-size:17px;margin:0;text-wrap:balance}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.rule{display:grid;grid-template-columns:92px 1fr;gap:12px 14px;align-items:start}
+@media (max-width:520px){.rule{grid-template-columns:1fr}}
+.rule dt{font-weight:500;font-size:13px;color:var(--muted);padding-top:4px}
+.rule dd{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:13px;padding:2px 4px 2px 10px;border-radius:999px;background:var(--accent-soft);display:inline-flex;align-items:center;gap:2px}
+.chip.static{padding-right:10px}
 .chip.plain{background:transparent;border:1px solid var(--line)}
-.stats{display:flex;flex-wrap:wrap;gap:24px;margin-bottom:6px}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 6px;border-radius:999px}
+.chip button:hover{color:var(--bad)}
+.add{display:inline-flex;gap:4px}
+.add input{width:120px}
+input[type=text],input[type=search]{font:14px var(--sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.btn{font:500 13px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sel{color:var(--ok);border-color:var(--ok)}
+.btn.exc{color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:default}
+.sync{font-size:12px;padding:2px 8px;border-radius:4px}
+.sync.wait{background:var(--warn-soft);color:var(--warn)} .sync.done{background:var(--ok-soft);color:var(--ok)}
+.hint{font-size:13px;color:var(--muted);margin:10px 0 0}
+.stats{display:flex;flex-wrap:wrap;gap:28px}
 .stat b{display:block;font:700 28px var(--mono);font-variant-numeric:tabular-nums}
 .stat span{font-size:13px;color:var(--muted)}
-.stat.rec b{color:var(--accent)} .stat.ref b{color:var(--warn)}
-.note{font-size:13px;color:var(--muted);margin:0 0 14px}
+.stat.rec b{color:var(--accent)} .stat.refc b{color:var(--warn)} .stat.selc b{color:var(--ok)}
+.tools{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:14px 0}
+.tools input[type=search]{flex:1 1 240px;padding:8px 10px}
+.tools label{font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.note{font-size:13px;color:var(--muted);margin:0 0 10px}
 .tablebox{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:14px;min-width:600px}
-th{font:500 12px var(--sans);color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:680px}
+th{font-weight:500;font-size:12px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
-td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
-th.num{text-align:right}
+td.num,th.num{text-align:right}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.act{white-space:nowrap;display:flex;gap:6px;justify-content:flex-end}
 a{color:var(--ink);text-decoration-color:var(--line);text-underline-offset:3px}
 a:hover,a:focus-visible{color:var(--accent);text-decoration-color:currentColor}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .org{font-size:12px;color:var(--muted);display:block}
-.tag{font-size:12px;padding:1px 8px;border-radius:4px;white-space:nowrap}
-.tag.focus{background:var(--accent);color:var(--panel)}
-.tag.kw{border:1px solid var(--line);color:var(--muted)}
+.tag{font-size:12px;padding:1px 8px;border-radius:4px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
+.tag.focus{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .dday{font:500 12px var(--mono);white-space:nowrap}
 .dday.soon{color:var(--warn)} .dday.gone{color:var(--muted);text-decoration:line-through}
 tr.refrow{background:var(--warn-soft)}
-.divider td{background:var(--warn-soft);font:500 13px var(--sans);color:var(--warn)}
+tr.hiddenrow td{opacity:.6}
+tr.divider td{background:var(--warn-soft);font-weight:500;font-size:13px;color:var(--warn)}
+.why{font-size:12px;padding:1px 8px;border-radius:4px;background:var(--line);color:var(--ink);white-space:nowrap}
+.empty{color:var(--muted);font-size:14px;padding:16px 0}
+.tray{border-color:var(--ok)}
+.tray ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tray li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.tray li:last-child{border-bottom:0}
+.status{font-size:13px;color:var(--muted)}
 </style>
 
 <div class="wrap">
-  <div class="crumb">JARVIS · 제안서 준비 본부 › 입찰 공고 조사팀</div>
+  <div class="top">
+    <div class="crumb">JARVIS · 제안서 준비 본부 › 입찰 공고 조사팀</div>
+    <div class="seg" role="group" aria-label="화면 모드">
+      <button type="button" data-mode="system">시스템</button><button type="button" data-mode="light">라이트</button><button type="button" data-mode="dark">다크</button>
+    </div>
+  </div>
 
   <section class="card hero">
-    <svg class="avatar" viewBox="0 0 120 120" role="img" aria-label="RADAR 아바타: 레이더 화면">
-      <circle cx="60" cy="60" r="56" fill="var(--accent-soft)"/>
-      <circle cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".35"/>
-      <circle cx="60" cy="60" r="22" fill="none" stroke="var(--accent)" stroke-opacity=".35"/>
-      <path d="M60 4V116M4 60H116" stroke="var(--accent)" stroke-opacity=".2"/>
-      <g class="sweep"><path d="M60 60L60 4A56 56 0 0 1 108 32Z" fill="var(--accent)" fill-opacity=".35"/></g>
-      <circle cx="84" cy="40" r="4" fill="var(--accent)"/>
-      <circle cx="38" cy="78" r="3" fill="var(--warn)"/>
-      <circle cx="60" cy="60" r="4" fill="var(--ink)"/>
+    <svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="RADAR 아바타: 헤드셋을 쓰고 태블릿으로 공고를 살피는 분석관">
+      <circle cx="100" cy="100" r="96" fill="var(--accent-soft)"/>
+      <circle cx="100" cy="100" r="72" fill="none" stroke="var(--accent)" stroke-opacity=".18"/>
+      <circle cx="100" cy="100" r="48" fill="none" stroke="var(--accent)" stroke-opacity=".12"/>
+      <path d="M28 200c4-38 34-58 72-58s68 20 72 58z" fill="var(--jacket)"/>
+      <path d="M84 142l16 22 16-22" fill="#FFFFFF"/>
+      <path d="M92 146l8 14 8-14" fill="var(--accent)"/>
+      <rect x="124" y="166" width="26" height="14" rx="3" fill="#FFFFFF"/>
+      <text x="137" y="176" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" font-weight="700" fill="var(--jacket)">RADAR</text>
+      <rect x="90" y="120" width="20" height="24" rx="8" fill="var(--skin)"/>
+      <ellipse cx="100" cy="88" rx="36" ry="40" fill="var(--skin)"/>
+      <ellipse cx="64" cy="92" rx="6" ry="9" fill="var(--skin)"/>
+      <ellipse cx="136" cy="92" rx="6" ry="9" fill="var(--skin)"/>
+      <path d="M63 84c-4-34 18-50 40-50 24 0 40 16 36 48-6-16-18-24-30-26-14 10-32 14-46 28z" fill="var(--hair)"/>
+      <path d="M58 88c0-34 18-54 42-54s42 20 42 54" fill="none" stroke="#1E2A33" stroke-width="5" stroke-linecap="round"/>
+      <rect x="52" y="80" width="12" height="22" rx="5" fill="#1E2A33"/>
+      <rect x="136" y="80" width="12" height="22" rx="5" fill="#1E2A33"/>
+      <path d="M58 100c2 16 12 24 28 24" fill="none" stroke="#1E2A33" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="88" cy="124" r="4" fill="var(--accent)"/>
+      <g class="blink"><circle cx="86" cy="88" r="3.5" fill="var(--hair)"/><circle cx="114" cy="88" r="3.5" fill="var(--hair)"/></g>
+      <circle cx="86" cy="88" r="11" fill="var(--accent)" fill-opacity=".12" stroke="#1E2A33" stroke-width="2.5"/>
+      <circle cx="114" cy="88" r="11" fill="var(--accent)" fill-opacity=".12" stroke="#1E2A33" stroke-width="2.5"/>
+      <path d="M97 88h6" stroke="#1E2A33" stroke-width="2.5"/>
+      <path class="glint" d="M108 82l4-3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      <path d="M78 74q8-5 16 0M106 74q8-5 16 0" fill="none" stroke="var(--hair)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M92 106q8 6 16 0" fill="none" stroke="#9A4B3A" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="76" cy="100" r="5" fill="#E8927C" fill-opacity=".35"/><circle cx="124" cy="100" r="5" fill="#E8927C" fill-opacity=".35"/>
+      <g transform="rotate(-8 60 170)">
+        <rect x="34" y="150" width="54" height="38" rx="5" fill="#1E2A33"/>
+        <rect x="38" y="154" width="46" height="30" rx="2" fill="var(--accent-soft)"/>
+        <circle cx="61" cy="169" r="11" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <path d="M61 169l8-7" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="66" cy="164" r="2" fill="var(--warn)"/>
+      </g>
+      <ellipse cx="50" cy="180" rx="9" ry="7" fill="var(--skin)"/>
     </svg>
     <div>
       <h1>RADAR</h1>
       <div class="role">입찰 분석관 · 입찰 공고 조사팀</div>
-      <p class="persona">새벽같이 나라장터를 훑고, 우리 회사가 이길 수 있는 판만 골라 올리는 꼼꼼한 정찰병. 1억 원이 넘는 공고는 맨 위에, 작은 건은 “참고”로 조용히 아래에 둡니다.</p>
+      <p class="bubble" id="greet"></p>
       <div class="meta">
         <span>출근 <b>평일 09:40 자동</b></span>
         <span>월요일 <b>금~일 3일치 소급</b></span>
-        <span>보고서 <b>data/latest.json</b></span>
+        <span>인계 대상 <b>DECODER · 제안 사전 분석팀</b></span>
       </div>
     </div>
   </section>
 
-  <section class="card">
-    <h2>판단 기준</h2>
-    <dl class="rule">
-      <dt>집중 기관</dt><dd id="inst"></dd>
-      <dt>과업 키워드</dt><dd id="kw"></dd>
-      <dt>금액</dt><dd><span class="chip">1억 원 이상 → 추천</span><span class="chip plain">1억 원 미만 → 참고</span><span class="chip plain">금액 미상 → 추천</span></dd>
-      <dt>자동 제외</dt><dd><span class="chip plain">전기차 충전설비</span><span class="chip plain">폐기·철거</span><span class="chip plain">금융성 투자</span><span class="chip plain">입시·심리 상담</span><span class="chip plain">단순 시설관리</span></dd>
-    </dl>
+  <section class="card tray" id="tray" hidden>
+    <div class="head"><h2>선택한 공고 · DECODER 인계 대기</h2><button class="btn primary" type="button" id="moveAll">모두 DECODER로 이관</button></div>
+    <ul id="trayList"></ul>
   </section>
 
   <section class="card">
-    <h2>RADAR 보고서</h2>
+    <div class="head"><h2>RADAR 보고서</h2><span class="status" id="dbStatus"></span></div>
     <div class="stats">
-      <div class="stat rec"><b id="nRec"></b><span>추천</span></div>
-      <div class="stat ref"><b id="nRef"></b><span>참고 (1억 미만)</span></div>
-      <div class="stat"><b id="nEx"></b><span>오탐 제외</span></div>
+      <div class="stat rec"><b id="nRec">0</b><span>추천</span></div>
+      <div class="stat refc"><b id="nRef">0</b><span>참고 (1억 미만)</span></div>
+      <div class="stat selc"><b id="nMoved">0</b><span>DECODER 이관</span></div>
+      <div class="stat"><b id="nHidden">0</b><span>숨김 (마감·선택·제외)</span></div>
+    </div>
+    <div class="tools">
+      <input type="search" id="q" placeholder="사업명·기관 검색 (예: 공동관, 콘텐츠진흥원)" aria-label="공고 검색">
+      <label><input type="checkbox" id="showHidden"> 삭제된 내역도 보기</label>
+      <a class="btn" href="https://www.g2b.go.kr" target="_blank" rel="noopener">나라장터에서 직접 찾기 ↗</a>
     </div>
     <p class="note" id="src"></p>
     <div class="tablebox">
       <table>
-        <thead><tr><th>사업명 · 발주기관</th><th class="num">배정예산</th><th>마감</th><th>수집 사유</th></tr></thead>
+        <thead><tr><th>사업명 · 발주기관</th><th class="num">배정예산</th><th>마감</th><th>수집</th><th class="num">처리</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>판단 기준</h2><span class="sync" id="syncBadge" hidden></span></div>
+    <dl class="rule">
+      <dt>집중 기관</dt><dd id="inst"></dd>
+      <dt>과업 키워드</dt><dd id="kw"></dd>
+      <dt>금액</dt><dd><span class="chip static">1억 원 이상 → 추천</span><span class="chip static plain">1억 원 미만 → 참고</span><span class="chip static plain">금액 미상 → 추천</span></dd>
+      <dt>자동 제외</dt><dd><span class="chip static plain">전기차 충전설비</span><span class="chip static plain">폐기·철거</span><span class="chip static plain">금융성 투자</span><span class="chip static plain">입시·심리 상담</span><span class="chip static plain">단순 시설관리</span></dd>
+    </dl>
+    <p class="hint">기관·키워드를 고치면 여기 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
   </section>
 </div>
 
 <script>
 const D = __DATA__;
 const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const won = n => n == null ? "미상" : n >= 1e8 ? (n/1e8).toFixed(1) + "억" : Math.round(n/1e4).toLocaleString("ko-KR") + "만";
-const dday = s => {
-  if (!s) return '<span class="dday">미정</span>';
-  const d = Math.ceil((new Date(s.replace(" ", "T") + "+09:00") - Date.now()) / 864e5);
-  if (d < 0) return '<span class="dday gone">마감</span>';
-  return `<span class="dday${d <= 3 ? " soon" : ""}">D-${d || "DAY"}</span>`;
+const daysLeft = s => s ? Math.ceil((new Date(s.replace(" ", "T") + "+09:00") - Date.now()) / 864e5) : null;
+const expired = i => { const d = daysLeft(i.입찰마감일시); return d !== null && d < 0; };
+
+// ── 화면 모드 ──
+const applyMode = m => {
+  if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  try { localStorage.setItem("radar-mode", m); } catch {}
 };
-$("inst").innerHTML = D.institutions.map(x => `<span class="chip">${esc(x)}</span>`).join("");
-$("kw").innerHTML = D.keywords.map(x => `<span class="chip plain">${esc(x)}</span>`).join("");
-const rec = D.items.filter(i => i.RADAR === "추천"), ref = D.items.filter(i => i.RADAR === "참고");
-$("nRec").textContent = rec.length; $("nRef").textContent = ref.length; $("nEx").textContent = D.excluded;
+let mode = "system"; try { mode = localStorage.getItem("radar-mode") || "system"; } catch {}
+applyMode(mode);
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+
+// ── 상태 ──
+let decisions = {};                 // 공고번호 → {status, ...}
+let cfg = {institutions: D.institutions, keywords: D.keywords, synced: true};
+let db = null;
+
+const stateOf = i => decisions[i.bidNtceNo]?.status || (expired(i) ? "마감" : "");
+
+function render() {
+  const q = $("q").value.trim().toLowerCase(), showHidden = $("showHidden").checked;
+  const match = i => !q || (i.사업명 + " " + i.공고기관 + " " + i.수요기관).toLowerCase().includes(q);
+  const visible = D.items.filter(i => !stateOf(i));
+  const hidden = D.items.filter(i => stateOf(i));
+  $("nRec").textContent = visible.filter(i => i.RADAR === "추천").length;
+  $("nRef").textContent = visible.filter(i => i.RADAR === "참고").length;
+  $("nMoved").textContent = Object.values(decisions).filter(d => d.status === "이관").length;
+  $("nHidden").textContent = hidden.length;
+
+  const acts = i => {
+    const s = stateOf(i);
+    if (!s) return `<button class="btn sel" data-act="선택" data-id="${esc(i.bidNtceNo)}">선택</button><button class="btn exc" data-act="제외" data-id="${esc(i.bidNtceNo)}">제외</button>`;
+    return `<span class="why">${esc(s)}</span>` + (s !== "마감" && s !== "이관" ? `<button class="btn" data-act="복원" data-id="${esc(i.bidNtceNo)}">복원</button>` : "");
+  };
+  const row = (i, cls) => {
+    const d = daysLeft(i.입찰마감일시);
+    const dd = d === null ? '<span class="dday">미정</span>' : d < 0 ? '<span class="dday gone">마감</span>' : `<span class="dday${d <= 3 ? " soon" : ""}">D-${d || "DAY"}</span>`;
+    return `<tr class="${cls}${stateOf(i) ? " hiddenrow" : ""}"><td><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><span class="org">${esc(i.공고기관)} · 공고 ${esc(i.공고일자)}</span></td><td class="num">${won(i.배정예산)}</td><td>${dd}</td><td><span class="tag${i.수집사유 === "집중기관" ? " focus" : ""}">${esc(i.수집사유)}</span></td><td><div class="act" style="display:flex;gap:6px;justify-content:flex-end">${acts(i)}</div></td></tr>`;
+  };
+  const list = (showHidden ? D.items : visible).filter(match);
+  const rec = list.filter(i => i.RADAR === "추천"), ref = list.filter(i => i.RADAR === "참고");
+  let html = rec.map(i => row(i, "")).join("");
+  if (ref.length) html += `<tr class="divider"><td colspan="5">참고 · 1억 원 미만 ${ref.length}건</td></tr>` + ref.map(i => row(i, "refrow")).join("");
+  $("rows").innerHTML = html || `<tr><td colspan="5" class="empty">${q ? "검색 결과가 없습니다." : "새로 검토할 공고가 없습니다. 숨긴 공고는 “삭제된 내역도 보기”로 확인하세요."}</td></tr>`;
+
+  const picked = D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택");
+  $("tray").hidden = !picked.length;
+  $("trayList").innerHTML = picked.map(i => `<li><span><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><span class="org">${esc(i.공고기관)} · ${won(i.배정예산)}</span></span><span style="display:flex;gap:6px"><button class="btn" data-act="복원" data-id="${esc(i.bidNtceNo)}">취소</button><button class="btn primary" data-act="이관" data-id="${esc(i.bidNtceNo)}">DECODER로 이관</button></span></li>`).join("");
+
+  const topRec = visible.filter(i => i.RADAR === "추천").length;
+  $("greet").textContent = topRec
+    ? `대표님, 검토할 추천 공고 ${topRec}건을 찾았습니다. 마음에 드는 건 “선택”, 아닌 건 “제외”로 골라 주세요. 선택한 공고는 DECODER에게 넘기겠습니다.`
+    : "대표님, 지금은 새로 검토할 추천 공고가 없습니다. 다음 수집(평일 09:40)에서 다시 살펴보겠습니다.";
+
+  const chips = (arr, key) => arr.map((x, n) => `<span class="chip">${esc(x)}${db ? `<button type="button" aria-label="${esc(x)} 삭제" data-del="${key}" data-n="${n}">×</button>` : ""}</span>`).join("")
+    + (db ? `<span class="add"><input type="text" id="add-${key}" placeholder="추가" aria-label="${key === "keywords" ? "키워드" : "기관"} 추가"><button class="btn" type="button" data-add="${key}">추가</button></span>` : "");
+  $("inst").innerHTML = chips(cfg.institutions, "institutions");
+  $("kw").innerHTML = chips(cfg.keywords, "keywords");
+  const b = $("syncBadge"); b.hidden = !db;
+  b.className = "sync " + (cfg.synced ? "done" : "wait");
+  b.textContent = cfg.synced ? "수집기에 반영됨" : "수집기 반영 대기";
+}
+
+// ── 저장 ──
+const busy = new Set();
+async function decide(id, status) {
+  if (!db || busy.has(id)) return;
+  const i = D.items.find(x => x.bidNtceNo === id);
+  busy.add(id);
+  try {
+    const ref = db.doc("decisions/" + id);
+    if (status === "복원") { await ref.delete(); delete decisions[id]; }
+    else {
+      const body = {status, at: new Date().toISOString(), 공고번호: i.공고번호, 사업명: i.사업명, 공고기관: i.공고기관, 배정예산: i.배정예산, 입찰마감일시: i.입찰마감일시, 공고URL: i.공고URL};
+      await ref.set(body); decisions[id] = body;
+    }
+    $("dbStatus").textContent = "";
+  } catch (e) { $("dbStatus").textContent = "저장하지 못했습니다. 잠시 후 다시 눌러 주세요."; }
+  busy.delete(id); render();
+}
+async function saveCfg(next) {
+  const prev = cfg; cfg = {...next, synced: false}; render();
+  try { await db.doc("config/radar").set({institutions: cfg.institutions, keywords: cfg.keywords, synced: false, updatedAt: new Date().toISOString()}); }
+  catch (e) { cfg = prev; render(); $("dbStatus").textContent = "기준을 저장하지 못했습니다."; }
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.act) decide(t.dataset.id, t.dataset.act);
+  if (t.dataset.del) { const k = t.dataset.del, arr = cfg[k].filter((_, n) => n !== +t.dataset.n); saveCfg({...cfg, [k]: arr}); }
+  if (t.dataset.add) { const k = t.dataset.add, v = $("add-" + k).value.trim(); if (v && !cfg[k].includes(v)) saveCfg({...cfg, [k]: [...cfg[k], v]}); }
+  if (t.id === "moveAll") D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택").forEach(i => decide(i.bidNtceNo, "이관"));
+});
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("add-")) document.querySelector(`[data-add="${e.target.id.slice(4)}"]`)?.click(); });
+$("q").oninput = render; $("showHidden").onchange = render;
 $("src").textContent = D.note;
-const row = (i, cls) => `<tr class="${cls}"><td><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><span class="org">${esc(i.공고기관)}</span></td><td class="num">${won(i.배정예산)}</td><td>${dday(i.입찰마감일시)}</td><td><span class="tag ${i.수집사유 === "집중기관" ? "focus" : "kw"}">${esc(i.수집사유)}</span></td></tr>`;
-$("rows").innerHTML = rec.map(i => row(i, "")).join("")
-  + (ref.length ? `<tr class="divider"><td colspan="4">참고 · 1억 원 미만 ${ref.length}건</td></tr>` + ref.map(i => row(i, "refrow")).join("") : "");
+render();
+
+// ── 공유 저장소 연결 ──
+(async () => {
+  db = await window.claude?.use?.("db") ?? null;
+  if (!db) { $("dbStatus").textContent = "보기 전용: 선택·제외는 저장되지 않습니다."; render(); return; }
+  db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); render(); },
+    () => { $("dbStatus").textContent = "저장소 연결이 끊겼습니다. 새로고침해 주세요."; });
+  db.doc("config/radar").onSnapshot(s => { if (s.exists) { const d = s.data(); cfg = {institutions: d.institutions, keywords: d.keywords, synced: !!d.synced}; } render(); });
+  render();
+})();
 </script>
