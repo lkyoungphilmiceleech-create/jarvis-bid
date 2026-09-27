@@ -135,6 +135,26 @@ svg.map{width:100%;height:auto;display:block}
 @keyframes dash{to{stroke-dashoffset:-26}}
 .env{fill:var(--amber)}
 .holo text{font:700 11px var(--hud);fill:var(--holo)}.holo .big{font-size:15px}
+.chat{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.clog{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding-right:4px}
+.clog:empty{display:none}
+.msg{padding:8px 12px;border-radius:12px;max-width:92%;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.6}
+.msg.me{align-self:flex-end;background:var(--holo);color:var(--holo-ink)}
+.msg.ai{align-self:flex-start;border:1px solid var(--line);background:var(--glass2)}
+.msg.err{border-color:var(--stop);color:var(--stop)}
+.msg .by{display:flex;align-items:center;gap:6px;font:700 12px var(--hud);letter-spacing:.06em;color:var(--holo);margin-bottom:2px}
+.msg .by img{width:22px;height:22px}
+.msg.sum{border-color:var(--amber);background:var(--amber-soft)}
+.ask{display:flex;gap:6px}
+.ask textarea{flex:1;min-width:0;min-height:42px;max-height:160px;resize:vertical;font:14px/1.5 var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ask textarea:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.meet{padding:18px;display:flex;flex-direction:column;gap:10px}
+.meet[hidden]{display:none}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;font:13px var(--sans)}
+.pick label:has(input:checked){border-color:var(--holo);background:var(--holo-soft)}
+.pick img{width:26px;height:26px}
+.pick input{accent-color:var(--holo)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
 @media (max-width:820px){.cols{grid-template-columns:1fr}}
 .panel{padding:18px;display:flex;flex-direction:column;gap:10px}
@@ -169,10 +189,19 @@ svg.map{width:100%;height:auto;display:block}
 
   <div class="hero">
     <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
-    <div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
+    <button class="btn primary" type="button" id="openMeet">2F 회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
   </div>
 
   <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p>__SVG__</section>
+
+  <section class="glass meet" id="meet" hidden aria-label="2F 회의실">
+    <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0;font:700 18px var(--sans)">2F 회의실</h2><span class="chatnote" id="kAt"></span><button class="btn x" type="button" id="closeMeet">닫기</button></div>
+    <div class="hudlabel">참석자 (본부장님이 고르면 순서대로 발언하고, 마지막에 JARVIS가 종합합니다)</div>
+    <div class="pick" id="pick"></div>
+    <div class="clog" id="mlog"></div>
+    <div class="ask"><textarea id="mq" placeholder="안건을 적어 주세요. 예) KOREA360 USA 제안 준비 상황 점검"></textarea><button class="btn primary" type="button" id="mgo">회의 시작</button></div>
+    <details><summary class="chatnote" style="cursor:pointer">지난 회의록</summary><div id="mhist" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div></details>
+  </section>
 
   <div class="cols">
     <section class="glass panel" id="panel" aria-live="polite"></section>
@@ -210,10 +239,85 @@ function show(code) {
     <div class="hudlabel">담당 업무</div><ul>${t.업무.map(w => `<li>${esc(w)}</li>`).join("")}</ul>
     ${t.page ? `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 들어가기 ↗</a>`
       : t.상태 === "스킬 보유" ? `<p class="chatnote">전용 업무실은 아직 없습니다. JARVIS 채팅에서 요청하면 이 직원의 스킬로 바로 처리합니다.</p>`
-      : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}`;
+      : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}
+    ${t.상태 === "근무 중" ? `<div class="chat"><div class="hudlabel">${esc(t.code)}와 대화</div><div class="clog" id="clog"></div>
+      <div class="ask"><textarea id="cq" placeholder="${esc(t.code)}에게 물어보세요"></textarea><button class="btn primary" type="button" id="cgo">보내기</button></div>
+      <p class="chatnote" id="cnote">업무 자료(${esc(D.지식시각)} 기준)를 바탕으로 답합니다. 대화는 본부장님만 볼 수 있게 저장됩니다.</p></div>` : ""}`;
+  drawChat();
+}
+// ── 대화: 1:1과 회의실. Claude 호출은 본부장님 계정 사용량으로 처리된다
+let sample = null, db = null, uid = null, chats = {}, meetings = [], busy = false;
+const working = staff.filter(t => t.상태 === "근무 중");
+function persona(t) {
+  return `너는 JARVIS 조직 ${t.본부} ${t.팀}의 ${t.역할} ${t.code}다. 사용자는 우리 회사 본부장이며 "본부장님"이라고 부른다.
+담당 업무: ${t.업무.join(" / ")}
+[업무 자료, ${D.지식시각} 기준]
+${D.지식?.[t.code] || "이 화면에 실린 업무 자료가 없다. 일반 지식으로 답하고, 자료가 없다는 점을 밝힌다."}
+규칙: 한국어로 짧고 쉽게, 결론 먼저(3~6문장 또는 개조식). 업무 자료에 있는 사실은 날짜·출처와 함께 말하고, 없는 사실은 지어내지 않는다. 최신 웹 조사·파일 작성·저장 같은 실제 작업이 필요하면 담당 업무실${t.page ? `(${t.page})` : ""}이나 JARVIS 채팅에서 요청하도록 안내한다. 오늘은 ${new Date().toLocaleDateString("ko-KR", {timeZone: "Asia/Seoul"})}.`;
+}
+const bubble = (m, t) => `<div class="msg ${m.r === "me" ? "me" : "ai"}${m.err ? " err" : ""}${m.sum ? " sum" : ""}">${m.r === "me" ? "" : `<div class="by">${t ? `<img alt="" src="${D.avatars[t.avatar]}">` : ""}${esc(m.by || t?.code || "JARVIS")}</div>`}${esc(m.t)}</div>`;
+function drawChat() {
+  const t = staff.find(x => x.code === sel), log = $("clog"); if (!log) return;
+  log.innerHTML = (chats[sel] || []).map(m => bubble(m, t)).join(""); log.scrollTop = log.scrollHeight;
+}
+const errText = e => ({not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 보내 주세요.", prompt_too_large: "대화가 너무 깁니다. 새 대화로 시작해 주세요."}[e?.code] || "답을 받지 못했습니다. 다시 보내 주세요.");
+async function saveChat(code) { if (db && uid) db.doc(`data/users/${uid}/chat_${code}`).set({msgs: (chats[code] || []).slice(-60)}).catch(() => {}); }
+async function sendChat() {
+  const q = $("cq").value.trim(), t = staff.find(x => x.code === sel); if (!q || busy) return;
+  if (!sample) { $("cnote").textContent = "이 화면에서는 대화를 쓸 수 없습니다. claude.ai에서 열어 주세요."; return; }
+  const code = sel, list = chats[code] = chats[code] || [];
+  list.push({r: "me", t: q, at: new Date().toISOString()}); $("cq").value = ""; busy = true; $("cgo").disabled = true;
+  const ai = {r: "ai", t: "…", at: new Date().toISOString()}; list.push(ai); drawChat();
+  const turns = list.slice(-13, -1).map(m => ({role: m.r === "me" ? "user" : "assistant", content: m.t}));
+  try { const r = await sample([{role: "user", content: persona(t)}, {role: "assistant", content: `네, ${t.code}입니다.`}, ...turns], {cache: false, onText: ({text}) => { ai.t = text; if (sel === code) drawChat(); }}); ai.t = r.text; }
+  catch (e) { ai.t = (e?.text ? e.text + "\n\n" : "") + errText(e); ai.err = true; }
+  busy = false; if ($("cgo")) $("cgo").disabled = false; if (sel === code) drawChat(); saveChat(code);
+}
+function drawMeet() {
+  $("kAt").textContent = `업무 자료 ${D.지식시각} 기준`;
+  if (!$("pick").children.length) $("pick").innerHTML = working.map(t => `<label><input type="checkbox" value="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}">${esc(t.code)}</label>`).join("");
+  $("mhist").innerHTML = meetings.slice().reverse().map((m, i) => `<button class="btn" type="button" data-mh="${meetings.length - 1 - i}" style="text-align:left;white-space:normal">${esc(m.at.slice(0, 16).replace("T", " "))} · ${esc(m.안건.slice(0, 50))} <span class="chatnote">(${esc(m.참석.join(", "))})</span></button>`).join("") || '<p class="chatnote">아직 회의록이 없습니다.</p>';
+}
+async function runMeet() {
+  const q = $("mq").value.trim(), who = [...$("pick").querySelectorAll("input:checked")].map(i => i.value);
+  if (!q || busy) return; if (!who.length) { alert("참석자를 한 명 이상 골라 주세요."); return; }
+  if (!sample) { alert("이 화면에서는 회의를 열 수 없습니다. claude.ai에서 열어 주세요."); return; }
+  busy = true; $("mgo").disabled = true;
+  const rec = {at: new Date().toISOString(), 안건: q, 참석: who, 발언: [], 종합: ""}, log = [{r: "me", t: q}];
+  const draw = () => { $("mlog").innerHTML = log.map(m => bubble(m, staff.find(x => x.code === m.by))).join(""); $("mlog").scrollTop = $("mlog").scrollHeight; };
+  for (const code of who) {
+    const t = staff.find(x => x.code === code), m = {r: "ai", by: code, t: "…"}; log.push(m); draw();
+    const before = rec.발언.map(s => `${s.code}: ${s.t}`).join("\n\n") || "(아직 없음)";
+    try { const r = await sample(`${persona(t)}\n\n[회의] 본부장님이 연 회의다. 참석: ${who.join(", ")}.\n안건: ${q}\n[앞선 발언]\n${before}\n\n너의 담당 관점에서만 2~5문장으로 발언한다. 앞선 발언을 반복하지 말고, 필요하면 다른 직원 발언에 보태거나 이견을 말한다.`, {cache: false, onText: ({text}) => { m.t = text; draw(); }}); m.t = r.text; }
+    catch (e) { m.t = errText(e); m.err = true; }
+    rec.발언.push({code, t: m.t}); draw();
+  }
+  const s = {r: "ai", by: "JARVIS 종합", t: "…", sum: true}; log.push(s); draw();
+  try { const r = await sample(`너는 회의 사회자 JARVIS다. 사용자는 본부장이며 "본부장님"이라고 부른다.\n안건: ${q}\n[발언]\n${rec.발언.map(x => `${x.code}: ${x.t}`).join("\n\n")}\n\n본부장님께 드릴 종합을 한국어 개조식으로 짧게: 1) 결론 2) 할 일(담당 직원·기한) 3) 본부장님 결정이 필요한 것. 발언에 없는 사실은 만들지 않는다.`, {cache: false, onText: ({text}) => { s.t = text; draw(); }}); s.t = r.text; }
+  catch (e) { s.t = errText(e); s.err = true; }
+  draw(); rec.종합 = s.t; meetings.push(rec); meetings = meetings.slice(-20);
+  if (db && uid) db.doc(`data/users/${uid}/meetings`).set({list: meetings}).catch(() => {});
+  busy = false; $("mgo").disabled = false; $("mq").value = ""; drawMeet();
 }
 $("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
-document.addEventListener("click", e => { const d = e.target.closest("[data-code]"); if (d) show(d.dataset.code); });
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-code]"); if (d) show(d.dataset.code);
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "cgo") sendChat();
+  if (b.id === "openMeet") { $("meet").hidden = false; drawMeet(); $("meet").scrollIntoView({behavior: "smooth"}); }
+  if (b.id === "closeMeet") $("meet").hidden = true;
+  if (b.id === "mgo") runMeet();
+  if (b.dataset.mh) { const m = meetings[+b.dataset.mh]; $("mlog").innerHTML = [{r: "me", t: m.안건}, ...m.발언.map(x => ({r: "ai", by: x.code, t: x.t})), {r: "ai", by: "JARVIS 종합", t: m.종합, sum: true}].map(x => bubble(x, staff.find(s => s.code === x.by))).join(""); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (e.target.id === "cq")) { e.preventDefault(); sendChat(); } });
 document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); show(d.dataset.code); } });
 show(sel);
+(async () => {
+  [sample, db] = await Promise.all(["sample", "db"].map(n => window.claude?.use?.(n) ?? null));
+  const user = await window.claude?.use?.("user"); uid = await user?.id?.().catch(() => null);
+  if (!db || !uid) return;
+  const snap = await db.collection(`data/users/${uid}`).get().catch(() => null);
+  snap?.docs.forEach(d => { if (d.id.startsWith("chat_")) chats[d.id.slice(5)] = d.data().msgs || []; if (d.id === "meetings") meetings = d.data().list || []; });
+  drawChat(); if (!$("meet").hidden) drawMeet();
+})();
 </script>

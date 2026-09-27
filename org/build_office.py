@@ -1,6 +1,7 @@
-"""org/org.json + 수집·분석 데이터 → org/office.html (JARVIS 빌딩 2층 조감도). 사용: python org/build_office.py
+"""org/org.json + 수집·분석 데이터 → org/office.html (JARVIS 빌딩 2층 조감도). 사용: python org/build_office.py [--knowledge <폴더>]
+--knowledge: 루틴이 ATLAS·NEXUS 페이지 저장소를 ArtifactData out_dir 로 내려받은 폴더(atlas/briefs, atlas/library, nexus/contacts|pipeline|daily|projects). 직원 대화의 업무 자료가 된다.
 아이소메트릭 3D 좌표(X: 오른쪽 아래, Y: 왼쪽 아래, Z: 위)를 화면 좌표로 투영해 SVG를 만든다."""
-import base64, datetime as dt, json, pathlib
+import base64, collections, datetime as dt, json, pathlib, sys
 
 root = pathlib.Path(__file__).resolve().parent
 repo = root.parent
@@ -151,8 +152,51 @@ def svg(rec, ncase):
     return f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 조감도: 2층 제안서 준비 본부 6명, 1층 사업 수행 본부 5명">' + "".join(parts) + "</svg>"
 
 
+def docs(folder):
+    """ArtifactData out_dir 로 저장된 문서들({id, data} 또는 data 자체)."""
+    return [(lambda j: j.get("data", j))(json.loads(f.read_text(encoding="utf-8"))) for f in sorted(folder.glob("*.json"))] if folder.is_dir() else []
+
+
+def knowledge(kdir):
+    """직원별 대화용 업무 자료(짧은 글). kdir: 루틴이 ATLAS·NEXUS 저장소를 내려받아 둔 폴더(없으면 저장소 자료만)."""
+    items = {}
+    for f in sorted((repo / "data").glob("2*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8"))["items"]:
+            items[x["bidNtceNo"]] = x
+    live = [x for x in items.values() if not x.get("입찰마감일시") or x["입찰마감일시"][:10] >= now.strftime("%Y-%m-%d")]
+    live.sort(key=lambda x: -(x.get("배정예산") or 0))
+    kn = {"RADAR": f"[마감 전 공고 {len(live)}건, {now:%Y-%m-%d} 기준, 1억 이상=추천]\n" + "\n".join(
+        f"- [{'추천' if (x.get('배정예산') or 10**8) >= 10**8 else '참고'}] {x['사업명']} | {x['공고기관']} | 예산 {(x.get('배정예산') or 0) / 1e8:.1f}억 | 마감 {str(x.get('입찰마감일시'))[:16]}" for x in live[:30])}
+    cases = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((repo / "decoder" / "analysis").glob("*.json"))]
+    kn["DECODER"] = "\n\n".join(
+        f"[{c['사업명']}] ({c['bidNtceNo']}, {c['발주기관']}, 분석 {c['analyzedAt']})\n요약: {c['한줄요약']}\n평가: {c['평가']['방식']}\n"
+        + "다가오는 일정: " + "; ".join(f"{e['날짜']} {e['항목']}" for e in c["일정"] if e["날짜"] >= now.strftime("%Y-%m-%d"))[:600]
+        + "\n리스크: " + "; ".join(f"[{r['수준']}] {r['내용']}" for r in c["리스크"][:4])
+        + "\n전략힌트: " + "; ".join(c["전략힌트"]) for c in cases) or "분석한 공고 없음"
+    if kdir:
+        briefs = sorted(docs(kdir / "atlas" / "briefs"), key=lambda b: b.get("날짜", ""), reverse=True)[:3]
+        kn["ATLAS"] = "\n\n".join(f"[{b['날짜']} 브리핑] 헤드라인: " + " / ".join(b.get("헤드라인", [])) + "\n"
+                                  + "\n".join(f"- ({i.get('산업')}·{i.get('국가') or i.get('권역')}) {i['제목']}: {i['요약']} [{i.get('출처명')}, {i.get('발행일')}]" for i in b.get("항목", []))
+                                  for b in briefs)[:9000] or "브리핑 없음"
+        lib = docs(kdir / "atlas" / "library")
+        if lib:
+            kn["ATLAS"] += "\n\n[제안 조사 자료] " + "; ".join(f"{l.get('사업명')}(대상 {','.join(l.get('대상국가', []))}, 조사필요: {', '.join(l.get('조사필요', []))})" for l in lib)
+        rows = [r for c in docs(kdir / "nexus" / "contacts") for r in c.get("rows", [])]
+        pipe = [p for p in docs(kdir / "nexus" / "pipeline") if not p.get("시험")]
+        daily = sorted(docs(kdir / "nexus" / "daily"), key=lambda d: d.get("날짜", ""), reverse=True)[:3]
+        projs = [p for p in docs(kdir / "nexus" / "projects") if not p.get("시험")]
+        cnt = lambda xs, k, n=8: ", ".join(f"{a} {b}" for a, b in collections.Counter(x.get(k) or "미상" for x in xs).most_common(n))
+        kn["NEXUS"] = (f"[네트워크 DB] {len(rows)}명 · 유형: {cnt(rows, '유형')} · 산업: {cnt(rows, '산업대')} · 국가: {cnt(rows, '국가', 12)} · 관계: {cnt(rows, '관계단계')}\n"
+                       f"[발굴 DB] {len(pipe)}건 · 매일 자동 발굴 {sum(1 for p in pipe if p.get('발굴경로') == '매일 발굴')} / 프로젝트 발굴 {sum(1 for p in pipe if p.get('발굴경로') != '매일 발굴')} · 상태: {cnt(pipe, '상태')} · 산업군: {cnt(pipe, '산업군')}\n"
+                       + "".join(f"[매일 발굴 {d.get('날짜')}] {d.get('산업군')} 새로 {d.get('추가')}곳 — {d.get('요약')}\n" for d in daily)
+                       + "[프로젝트] " + ("; ".join(f"{p.get('이름')}({p.get('목적')}, {p.get('국가') or p.get('지역')}, 참가기업 {len(p.get('companies', []))}곳)" for p in projs) or "없음")
+                       + "\n※ 개인 연락처는 여기 없음. 명단은 NEXUS 매칭 센터에서 확인.")
+    return kn
+
+
 k, rec, ncase = kpis()
-data = {"본부": org["본부"], "kpi": k}
+kdir = pathlib.Path(sys.argv[sys.argv.index("--knowledge") + 1]) if "--knowledge" in sys.argv else None
+data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M")}
 tpl = (root / "office.tpl.html").read_text(encoding="utf-8")
 html = tpl.replace("__SVG__", svg(rec, ncase)).replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 (root / "office.html").write_text(html, encoding="utf-8")
