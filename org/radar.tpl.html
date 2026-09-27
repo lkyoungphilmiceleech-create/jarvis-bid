@@ -192,12 +192,13 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
   <section class="glass params" aria-label="스캔 파라미터">
     <div class="feedhead"><h2>스캔 파라미터</h2><span class="sync" id="syncBadge" hidden></span></div>
     <dl class="rule">
+      <dt>부르는 호칭</dt><dd><span class="add"><input type="text" id="honor" aria-label="RADAR가 부르는 호칭" maxlength="20" value="본부장님"><button class="btn" type="button" id="honorSave">저장</button></span></dd>
       <dt>집중 기관</dt><dd id="inst"></dd>
       <dt>과업 키워드</dt><dd id="kw"></dd>
       <dt>금액</dt><dd><span class="chip static">1억 원 이상 → 추천</span><span class="chip static">1억 원 미만 → 참고</span><span class="chip static">금액 미상 → 추천</span></dd>
       <dt>자동 제외</dt><dd><span class="chip static">전기차 충전설비</span><span class="chip static">폐기·철거</span><span class="chip static">금융성 투자</span><span class="chip static">입시·심리 상담</span><span class="chip static">단순 시설관리</span></dd>
     </dl>
-    <p class="hint">기관·키워드를 고치면 여기에 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
+    <p class="hint">호칭은 저장 즉시 바뀝니다. 기관·키워드를 고치면 여기에 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
   </section>
 </div>
 
@@ -225,7 +226,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 tick(); setInterval(tick, 1000);
 
 // 상태
-let decisions = {}, db = null, limits = {추천: 30, 참고: 30};
+let decisions = {}, db = null, limits = {추천: 30, 참고: 30}, honor = "본부장님";
 let cfg = {institutions: D.institutions, keywords: D.keywords, synced: true};
 const stateOf = i => decisions[i.bidNtceNo]?.status || (expired(i) ? "마감" : "");
 
@@ -285,9 +286,9 @@ function render() {
   $("trayEmpty").hidden = !!picked.length; $("moveAll").hidden = picked.length < 2;
   $("port").classList.toggle("hot", !!picked.length);
 
-  say(!db ? "대표님, 지금은 보기 전용이라 선택과 제외가 저장되지 않습니다."
+  say(!db ? `${honor}, 지금은 보기 전용이라 선택과 제외가 저장되지 않습니다.`
     : picked.length ? `전송 대기 ${picked.length}건. “전송”을 누르시면 DECODER에게 넘기고 제안요청서를 받아 두겠습니다.`
-    : rec.length ? `대표님, 레이더에 추천 공고 ${rec.length}건이 잡혔습니다. 우리 판이다 싶은 건 “선택”, 아닌 건 “제외”로 골라 주세요.`
+    : rec.length ? `${honor}, 레이더에 추천 공고 ${rec.length}건이 잡혔습니다. 우리 판이다 싶은 건 “선택”, 아닌 건 “제외”로 골라 주세요.`
     : "지금은 새로 검토할 추천 공고가 없습니다. 다음 스캔은 평일 09:40입니다.");
 
   const chips = (arr, key) => arr.map((x, n) => `<span class="chip">${esc(x)}${db ? `<button type="button" aria-label="${esc(x)} 삭제" data-del="${key}" data-n="${n}">×</button>` : ""}</span>`).join("")
@@ -343,6 +344,7 @@ document.addEventListener("click", e => {
   if (t.dataset.jump) { const c = $("c-" + t.dataset.jump); if (c) { c.scrollIntoView({behavior: calm ? "auto" : "smooth", block: "center"}); c.animate?.([{boxShadow: "0 0 0 2px var(--holo)"}, {boxShadow: "none"}], 1600); } }
   if (t.dataset.del) { const k = t.dataset.del; saveCfg({...cfg, [k]: cfg[k].filter((_, n) => n !== +t.dataset.n)}); }
   if (t.dataset.add) { const k = t.dataset.add, v = $("add-" + k).value.trim(); if (v && !cfg[k].includes(v)) saveCfg({...cfg, [k]: [...cfg[k], v]}); }
+  if (t.id === "honorSave" && db) { const v = $("honor").value.trim(); if (v) { honor = v; lastLine = ""; render(); db.doc("config/profile").set({honorific: v, updatedAt: new Date().toISOString()}).catch(() => $("dbStatus").textContent = "호칭을 저장하지 못했습니다."); } }
   if (t.id === "moveAll") D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택").forEach(i => decide(i.bidNtceNo, "이관"));
 });
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("add-")) document.querySelector(`[data-add="${e.target.id.slice(4)}"]`)?.click(); });
@@ -360,6 +362,7 @@ setTimeout(() => document.body.classList.remove("intro"), 1400);
   if (!db) { render(); return; }
   db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); render(); },
     () => { $("dbStatus").textContent = "저장소 연결이 끊겼습니다. 새로고침해 주세요."; });
+  db.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; $("honor").value = honor; lastLine = ""; render(); } });
   db.doc("config/radar").onSnapshot(s => { if (s.exists) { const d = s.data(); cfg = {institutions: d.institutions, keywords: d.keywords, synced: !!d.synced}; } render(); });
   render();
 })();
