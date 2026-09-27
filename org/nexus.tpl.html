@@ -1,12 +1,15 @@
 <title>NEXUS 매칭 센터</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <style>
 :root{
   color-scheme:dark;
   --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
   --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--amber-soft:rgba(245,185,66,.14);
   --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --oc1:#0B2A3C;--oc2:#050D15;--landc:#16384C;--landhas:#1F5670;--t1:#38D5F0;--t2:#F5B942;--t3:#4BE3A0;--t4:#B18CFF;--t5:#FF8FB8;--t6:#7FA8FF;
   --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
   --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
 }
@@ -15,12 +18,13 @@
   --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
   --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
   --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);
+  --oc1:#F4FAFD;--oc2:#CFE3EC;--landc:#B9CFDA;--landhas:#8FB6C8;--t1:#0A7FA0;--t2:#B07406;--t3:#127A4E;--t4:#6B45C9;--t5:#C23F76;--t6:#2F5FC4;
 }
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
   color-scheme:light;
   --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
   --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
-  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);--oc1:#F4FAFD;--oc2:#CFE3EC;--landc:#B9CFDA;--landhas:#8FB6C8;--t1:#0A7FA0;--t2:#B07406;--t3:#127A4E;--t4:#6B45C9;--t5:#C23F76;--t6:#2F5FC4;}}
 body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
   background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
 .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
@@ -107,6 +111,42 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .steps span.on{border-color:var(--holo);color:var(--holo)}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--bg2);color:var(--ink);max-width:760px;width:calc(100% - 32px);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.55)}
+.geo{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:16px}
+@media (max-width:860px){.geo{grid-template-columns:1fr}}
+.stage{display:flex;flex-direction:column;gap:8px;min-width:0}
+.gbar{gap:8px}
+#globe{width:100%;aspect-ratio:1/1;max-height:620px;touch-action:pan-y;cursor:grab;display:block}
+#globe.us{aspect-ratio:975/610;cursor:default}
+#globe:active{cursor:grabbing}
+.sphere{fill:url(#ocean);stroke:var(--holo);stroke-opacity:.5}
+.halo{fill:none;stroke:var(--holo);stroke-opacity:.12;stroke-width:14;filter:blur(6px)}
+.grat{fill:none;stroke:var(--holo);stroke-opacity:.12;stroke-width:.6}
+.land{fill:var(--landc);stroke:var(--bg);stroke-width:.5;cursor:pointer;transition:fill .3s}
+.land.has{fill:var(--landhas)}
+.land.sel,.land:hover{fill:var(--holo-soft);stroke:var(--holo);stroke-width:1}
+.land.target{stroke:var(--amber);stroke-width:1.6}
+.arc{fill:none;stroke:var(--holo);stroke-linecap:round;stroke-dasharray:4 7;animation:flow 1.6s linear infinite;pointer-events:none}
+@keyframes flow{to{stroke-dashoffset:-22}}
+.bub{cursor:pointer}
+.bub .core{fill:var(--bg);fill-opacity:.75}
+.bub text{font:700 10px var(--hud);fill:var(--ink);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.bub.sel .ring{stroke:var(--ink);stroke-width:2;fill:none}
+.hq{fill:var(--amber)}
+.hq-ping{fill:none;stroke:var(--amber);animation:ping 2s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes ping{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(4)}}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.gside{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--glass2);display:flex;flex-direction:column;gap:10px;min-width:0;max-height:760px;overflow-y:auto}
+.gside h3{margin:0;font:700 20px var(--sans)}
+.gside .big{font:700 30px var(--hud);color:var(--holo)}
+.hb{display:grid;grid-template-columns:78px minmax(0,1fr) 44px;gap:6px;align-items:center;font-size:12px}
+.hb span:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.hb b{display:block;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.hb b i{display:block;height:100%;border-radius:4px}
+.rank button{display:grid;grid-template-columns:22px 1fr auto;gap:6px;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);padding:4px 2px;cursor:pointer;font:13px var(--sans);border-bottom:1px dashed var(--line)}
+.rank button:hover{color:var(--holo)}
+.ppl button{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 8px;margin-bottom:5px;cursor:pointer;font:13px var(--sans)}
+.ppl button:hover{border-color:var(--holo)}
 .empty{font-size:13px;color:var(--muted);padding:6px 0}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
 </style>
@@ -141,13 +181,21 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 
   <!-- 네트워크 DB -->
   <section class="glass panel" id="tab-db" hidden>
-    <h2>산업 × 유형 현황 <span class="note">숫자를 누르면 그 목록만 봅니다</span></h2>
-    <div class="tw"><table class="matrix" id="matrix"></table></div>
     <div class="row">
       <input id="q" type="search" placeholder="이름·회사·키워드·이메일 검색" style="flex:1;min-width:200px">
       <select id="fType"></select><select id="fInd"></select><select id="fCountry"></select><select id="fYear"></select><select id="fStage"></select>
       <button class="btn x" type="button" id="fReset">초기화</button>
     </div>
+    <div class="geo">
+      <div class="stage">
+        <div class="row gbar"><div class="seg" role="group" aria-label="지도"><button type="button" data-view="globe">지구본</button><button type="button" data-view="us">미국 주별</button></div>
+          <select id="gProj" aria-label="프로젝트 보기"></select><button class="btn" type="button" id="gSpin"></button><span class="note" id="gHint"></span></div>
+        <svg id="globe" role="img" aria-label="네트워크 지구본"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <aside class="gside" id="gside" aria-live="polite"></aside>
+    </div>
+    <details class="fold"><summary>산업 × 유형 표 <span class="note">숫자를 누르면 그 목록만 봅니다</span></summary><div class="tw" style="margin-top:8px"><table class="matrix" id="matrix"></table></div></details>
     <div class="row"><span class="note" id="dbCount"></span><span style="flex:1"></span>
       <button class="btn" type="button" id="addContact">+ 직접 추가</button>
       <button class="btn" type="button" id="dbSheet">구글 시트로 저장</button>
@@ -362,7 +410,7 @@ function editCompany(c) {
 
 // ── 네트워크 DB
 const filtered = () => { const q = filt.q.toLowerCase();
-  return contacts.filter(r => ["유형", "산업대", "국가", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q)))); };
+  return contacts.filter(r => ["유형", "산업대", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && (!filt.국가 || r.국가 === filt.국가 || (a2Of(filt.국가) && a2Of(r.국가) === a2Of(filt.국가))) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q)))); };
 function drawDb() {
   const uniq = k => [...new Set(contacts.map(r => r[k]).filter(Boolean))].sort();
   $("fType").innerHTML = opt(TYPES, filt.유형, "유형 전체"); $("fInd").innerHTML = opt(INDS, filt.산업대, "산업 전체");
@@ -370,6 +418,7 @@ function drawDb() {
   $("fStage").innerHTML = opt(STAGES, filt.관계단계, "관계 전체"); $("q").value = filt.q;
   const n = (i, t) => contacts.filter(r => r.산업대 === i && (!t || r.유형 === t)).length;
   $("matrix").innerHTML = `<thead><tr><th>산업</th>${TYPES.map(t => `<th>${t}</th>`).join("")}<th>합계</th></tr></thead><tbody>${INDS.map(i => `<tr><td>${i}</td>${TYPES.map(t => `<td class="num">${n(i, t) ? `<button type="button" data-mx="${i}|${t}">${n(i, t)}</button>` : '<span class="note">0</span>'}</td>`).join("")}<td class="num"><b>${n(i)}</b></td></tr>`).join("")}</tbody>`;
+  drawGeo();
   const rows = filtered();
   $("dbCount").textContent = `${rows.length.toLocaleString()}명${rows.length > 300 ? " (앞 300명 표시, 검색·필터로 좁혀 주세요)" : ""}`;
   $("dbTable").innerHTML = `<thead><tr><th>ID</th><th>이름·직책</th><th>회사</th><th>유형</th><th>국가</th><th>산업</th><th>연도</th><th>출처</th><th>관계</th></tr></thead><tbody>${rows.slice(0, 300).map(r => `<tr class="click" data-ct="${esc(r.id)}"><td class="note">${esc(r.id)}</td><td>${esc(r.이름)}<div class="note">${esc(r.직책)}</div></td><td>${esc(r.회사)}</td><td>${esc(r.유형)}</td><td>${esc(r.국가)}</td><td>${esc(r.산업대)}<div class="note">${esc(r.산업세부)}</div></td><td>${esc(r.취합연도)}</td><td class="note">${esc(r.출처)}</td><td><span class="tag${["수락", "미팅확정", "미팅완료", "후속중", "계약/투자"].includes(r.관계단계) ? " go" : ""}">${esc(r.관계단계)}</span></td></tr>`).join("") || '<tr><td colspan="9" class="empty">해당하는 연락처가 없습니다.</td></tr>'}</tbody>`;
@@ -396,6 +445,130 @@ async function addRows(rows) { // 새 연락처는 id를 붙여 마지막 묶음
     const id = nextId(); const row = {id}; F.forEach(k => row[k] = r[k] || ""); chunks[last].push(row); contacts.push({...row, _c: last}); touched.add(last);
   }
   await writeChunks([...touched]);
+}
+
+// ── 네트워크 지구본 · 미국 주별 지도
+const GEO = __GEO__;
+const TCOL = {"바이어": "var(--t1)", "투자자": "var(--t2)", "기관": "var(--t3)", "협회": "var(--t4)", "미디어": "var(--t5)", "파트너": "var(--t6)"};
+const ICOL = {"콘텐츠": "var(--t1)", "출판": "var(--t4)", "과학기술": "var(--t6)", "소비재": "var(--t5)", "관광": "var(--t3)", "기타": "var(--muted)"};
+const SEOUL = [126.98, 37.57];
+const EXTRA = {HK: [114.17, 22.32], SG: [103.82, 1.35], MU: [57.55, -20.25], BH: [50.56, 26.07], AD: [1.52, 42.51], PF: [-149.4, -17.7], MT: [14.4, 35.9], MO: [113.55, 22.2], MC: [7.42, 43.74], LI: [9.55, 47.16]};
+const ALIAS = {"한국": "KR", "남한": "KR", "대한민국": "KR", "미국": "US", "UAE": "AE", "호주": "AU", "남아공": "ZA", "남아프리카공화국": "ZA", "영국": "GB", "홍콩": "HK", "대만": "TW", "체코": "CZ", "튀르키예": "TR", "터키": "TR", "러시아": "RU", "베트남": "VN", "USA": "US", "US": "US", "UK": "GB"};
+const nk = s => String(s || "").replace(/\(.*?\)/g, "").replace(/\s/g, "").toLowerCase();
+const KO = (() => { const m = {}; let dn = null; try { dn = new Intl.DisplayNames(["ko"], {type: "region"}); } catch {}
+  let en = null; try { en = new Intl.DisplayNames(["en"], {type: "region"}); } catch {}
+  GEO.a2.forEach(a => { [dn, en].forEach(d => { const n = d?.of(a); if (n && n !== a) m[nk(n)] = a; }); });
+  Object.entries(ALIAS).forEach(([k, v]) => m[nk(k)] = v); return m; })();
+const koName = a => { if (a === "KR") return "한국"; try { return new Intl.DisplayNames(["ko"], {type: "region"}).of(a).replace(/\(.*?\)/, "").trim(); } catch { return a; } };
+const a2Of = name => KO[nk(name)] || "";
+const flag = a => a && a.length === 2 ? String.fromCodePoint(...[...a].map(c => 0x1F1A5 + c.charCodeAt(0))) : "🌐";
+const US_ST = "AL Alabama|AK Alaska|AZ Arizona|AR Arkansas|CA California|CO Colorado|CT Connecticut|DE Delaware|DC District of Columbia|FL Florida|GA Georgia|HI Hawaii|ID Idaho|IL Illinois|IN Indiana|IA Iowa|KS Kansas|KY Kentucky|LA Louisiana|ME Maine|MD Maryland|MA Massachusetts|MI Michigan|MN Minnesota|MS Mississippi|MO Missouri|MT Montana|NE Nebraska|NV Nevada|NH New Hampshire|NJ New Jersey|NM New Mexico|NY New York|NC North Carolina|ND North Dakota|OH Ohio|OK Oklahoma|OR Oregon|PA Pennsylvania|RI Rhode Island|SC South Carolina|SD South Dakota|TN Tennessee|TX Texas|UT Utah|VT Vermont|VA Virginia|WA Washington|WV West Virginia|WI Wisconsin|WY Wyoming|PR Puerto Rico".split("|").map(x => [x.slice(0, 2), x.slice(3)]);
+const STATE = (() => { const m = {}; US_ST.forEach(([c, n]) => { m[nk(n)] = n; m[c.toLowerCase()] = n; });
+  // LA는 루이지애나 약어와 겹치지만 명단에서는 로스앤젤레스로 쓰인다
+  const city = {California: "LA 로스앤젤레스 LosAngeles 캘리포니아 SF SF베이 샌프란시스코 SanFrancisco 베이에어리어 실리콘밸리 팰로앨토 PaloAlto 멘로파크 MenloPark 산호세 SanJose 새너제이 샌디에이고 SanDiego 어바인 Irvine 마운틴뷰 오클랜드 버클리 산타모니카 쿠퍼티노",
+    "New York": "뉴욕 NYC 브루클린 맨해튼", Massachusetts: "보스턴 Boston 케임브리지 매사추세츠", Washington: "시애틀 Seattle 레드먼드 워싱턴주", "District of Columbia": "DC 워싱턴DC WashingtonDC", Illinois: "시카고 Chicago 일리노이",
+    Texas: "텍사스 오스틴 Austin 댈러스 Dallas 휴스턴 Houston", Florida: "플로리다 마이애미 Miami 올랜도", Nevada: "네바다 라스베이거스 LasVegas", Georgia: "애틀랜타 Atlanta 조지아주", Colorado: "덴버 Denver 콜로라도", Utah: "유타 솔트레이크", "New Jersey": "뉴저지", Pennsylvania: "필라델피아 피츠버그", Arizona: "피닉스 애리조나", Oregon: "포틀랜드 오리건", Michigan: "디트로이트 미시간", Minnesota: "미니애폴리스", Tennessee: "내슈빌 테네시", "North Carolina": "샬럿 롤리"};
+  Object.entries(city).forEach(([st, ws]) => ws.split(" ").forEach(w => m[nk(w)] = st)); return m; })();
+const stateOf = r => STATE[nk(r.도시)] || STATE[nk((r.도시 || "").split(/[,/]/)[0])] || "";
+
+const world = topojson.feature(GEO.world, GEO.world.objects.countries).features.map(f => ({...f, a2: GEO.num2a2[f.id] || ""}));
+const usStates = topojson.feature(GEO.us, GEO.us.objects.states).features;
+const mainPart = f => { if (f.geometry.type !== "MultiPolygon") return f; // 해외 영토 때문에 중심이 틀어지지 않게 가장 큰 덩어리 기준
+  const polys = f.geometry.coordinates.map(c => ({type: "Polygon", coordinates: c})); return polys.sort((a, b) => d3.geoArea(b) - d3.geoArea(a))[0]; };
+const CENT = {}; world.forEach(f => { if (f.a2) CENT[f.a2] = d3.geoCentroid(mainPart(f)); }); Object.assign(CENT, EXTRA);
+const ADV = ["수락", "미팅확정", "미팅완료", "후속중", "계약/투자"];
+let G = {view: "globe", rot: [-150, -28], spin: !matchMedia("(prefers-reduced-motion: reduce)").matches, sel: null, proj: "", size: 560, hover: false, drag: false};
+try { const g = JSON.parse(localStorage.getItem("nexus-geo") || "{}"); if (g.view) G.view = g.view; if ("spin" in g) G.spin = g.spin; } catch {}
+const saveG = () => { try { localStorage.setItem("nexus-geo", JSON.stringify({view: G.view, spin: G.spin})); } catch {} };
+
+function geoRows() { // 국가 필터를 뺀 나머지 필터 + 프로젝트 보기
+  const q = filt.q.toLowerCase(); let rows = contacts.filter(r => ["유형", "산업대", "취합연도", "관계단계"].every(k => !filt[k] || r[k] === filt[k]) && (!q || F.some(k => String(r[k] || "").toLowerCase().includes(q))));
+  const p = projects.find(x => x.id === G.proj);
+  if (p) { const ids = new Set(Object.values(p.matches || {}).flat().map(m => m.id)); rows = rows.filter(r => ids.has(r.id)); }
+  return rows;
+}
+function agg(rows, keyFn) { const m = {}; rows.forEach(r => { const k = keyFn(r); if (!k) return; const a = m[k] ||= {k, n: 0, adv: 0, t: {}, rows: []}; a.n++; a.t[r.유형] = (a.t[r.유형] || 0) + 1; if (ADV.includes(r.관계단계)) a.adv++; a.rows.push(r); }); return m; }
+const pie = d3.pie().sort(null).value(d => d[1]);
+const donut = (a, r) => pie(TYPES.filter(t => a.t[t]).map(t => [t, a.t[t]])).map(s => `<path d="${d3.arc().innerRadius(r * .58).outerRadius(r)(s)}" style="fill:${TCOL[s.data[0]]}"/>`).join("") + `<circle class="core" r="${r * .58}"/>` + (r >= 11 ? `<text>${a.n}</text>` : "");
+
+let proj3 = null, tmr = null, last = 0, ctry = {}, maxN = 1;
+function drawGeo() {
+  const svg = d3.select("#globe"); if (svg.empty()) return;
+  $("gProj").innerHTML = `<option value="">전체 네트워크</option>` + projects.filter(p => p.이름).map(p => `<option value="${esc(p.id)}"${p.id === G.proj ? " selected" : ""}>프로젝트: ${esc(p.이름)}</option>`).join("");
+  document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === G.view));
+  $("gSpin").hidden = G.view !== "globe"; $("gSpin").textContent = G.spin ? "회전 멈춤" : "자동 회전";
+  $("legend").innerHTML = TYPES.map(t => `<span><i style="background:${TCOL[t]}"></i>${t}</span>`).join("") + `<span><i style="background:var(--amber)"></i>서울 본부</span>` + (G.proj ? `<span>주황 테두리 = 프로젝트 지역</span>` : "");
+  const rows = geoRows();
+  if (G.view === "us") return drawUS(svg, rows);
+  svg.attr("class", null);
+  ctry = agg(rows, r => a2Of(r.국가)); maxN = Math.max(1, ...Object.values(ctry).map(a => a.n));
+  const W = 600; svg.attr("viewBox", `0 0 ${W} ${W}`);
+  proj3 = d3.geoOrthographic().scale(W / 2 - 18).translate([W / 2, W / 2]).clipAngle(90).rotate(G.rot);
+  const p = projects.find(x => x.id === G.proj), targets = new Set(p ? (p.지역 || "").split(/[\s,·/]+/).map(a2Of).filter(Boolean) : []);
+  svg.html(`<defs><radialGradient id="ocean" cx="40%" cy="35%"><stop offset="0" stop-color="var(--oc1)"/><stop offset="1" stop-color="var(--oc2)"/></radialGradient></defs>
+    <circle class="halo" cx="${W / 2}" cy="${W / 2}" r="${W / 2 - 16}"/><path class="sphere"/><path class="grat"/>
+    <g id="lands">${world.map(f => `<path class="land${ctry[f.a2] ? " has" : ""}${f.a2 === G.sel ? " sel" : ""}${targets.has(f.a2) ? " target" : ""}" data-a2="${f.a2}"><title>${esc(koName(f.a2) || f.properties.name)}${ctry[f.a2] ? ` · ${ctry[f.a2].n}명` : ""}</title></path>`).join("")}</g>
+    <g id="arcs">${Object.values(ctry).filter(a => a.k !== "KR" && CENT[a.k]).map(a => `<path class="arc" data-a2="${a.k}" style="stroke-width:${(0.6 + Math.log2(1 + a.adv) * .45).toFixed(2)};stroke-opacity:${a.adv ? .75 : .3}"/>`).join("")}</g>
+    <g id="bubs">${Object.values(ctry).filter(a => CENT[a.k]).sort((a, b) => b.n - a.n).map(a => { const r = 4 + 24 * Math.sqrt(a.n / maxN); return `<g class="bub${a.k === G.sel ? " sel" : ""}" data-a2="${a.k}" tabindex="0" role="button" aria-label="${esc(koName(a.k))} ${a.n}명">${donut(a, r)}${a.k === G.sel ? `<circle class="ring" r="${r + 3}"/>` : ""}<title>${esc(koName(a.k))} ${a.n}명 (관계 진전 ${a.adv}명)</title></g>`; }).join("")}</g>
+    <g id="hq"><circle class="hq-ping" r="4"/><circle class="hq" r="4"/></g>`);
+  frame(); drawSide(rows);
+  if (!tmr) tmr = d3.timer(t => { const dt = Math.min(64, t - last); last = t;
+    if (G.view === "globe" && G.spin && !G.hover && !G.drag && tab === "db" && !document.hidden) { G.rot[0] += dt * 0.006; frame(); } });
+}
+function frame() {
+  if (!proj3 || G.view !== "globe") return;
+  proj3.rotate(G.rot); const path = d3.geoPath(proj3), c = proj3.invert([300, 300]), svg = d3.select("#globe");
+  svg.select(".sphere").attr("d", path({type: "Sphere"})); svg.select(".grat").attr("d", path(d3.geoGraticule10()));
+  svg.selectAll(".land").each(function (_, i) { this.setAttribute("d", path(world[i]) || ""); });
+  svg.selectAll(".arc").each(function () { this.setAttribute("d", path({type: "LineString", coordinates: [SEOUL, CENT[this.dataset.a2]]}) || ""); });
+  const place = (el, ll) => { const vis = d3.geoDistance(ll, c) < Math.PI / 2 - .05, xy = proj3(ll); el.setAttribute("transform", `translate(${xy[0]},${xy[1]})`); el.style.display = vis ? "" : "none"; };
+  svg.selectAll(".bub").each(function () { place(this, CENT[this.dataset.a2]); });
+  svg.select("#hq").each(function () { place(this, SEOUL); });
+}
+function drawUS(svg, rows) {
+  svg.attr("class", "us").attr("viewBox", "0 0 975 610");
+  const us = rows.filter(r => a2Of(r.국가) === "US"), st = agg(us, stateOf), mx = Math.max(1, ...Object.values(st).map(a => a.n)), path = d3.geoPath();
+  const col = d3.scaleSqrt().domain([0, mx]).range([0.08, 0.85]);
+  svg.html(`${usStates.map(f => { const a = st[f.properties.name]; return `<path class="land${f.properties.name === G.sel ? " sel" : ""}" data-st="${esc(f.properties.name)}" d="${path(f)}" style="${a ? `fill:var(--t1);fill-opacity:${col(a.n).toFixed(2)}` : ""}"><title>${esc(f.properties.name)}${a ? ` · ${a.n}명` : ""}</title></path>`; }).join("")}
+    ${usStates.filter(f => st[f.properties.name]).map(f => { const a = st[f.properties.name], r = 5 + 20 * Math.sqrt(a.n / mx), [x, y] = path.centroid(f); return `<g class="bub${f.properties.name === G.sel ? " sel" : ""}" data-st="${esc(f.properties.name)}" transform="translate(${x},${y})" tabindex="0" role="button" aria-label="${esc(f.properties.name)} ${a.n}명">${donut(a, r)}${f.properties.name === G.sel ? `<circle class="ring" r="${r + 3}"/>` : ""}<title>${esc(f.properties.name)} ${a.n}명</title></g>`; }).join("")}`);
+  drawSide(rows, st, us);
+}
+const bars = (obj, keys, colf) => { const mx = Math.max(1, ...keys.map(k => obj[k] || 0)); return keys.filter(k => obj[k]).map(k => `<div class="hb"><span>${esc(k)}</span><b><i style="width:${(obj[k] / mx * 100).toFixed(0)}%;background:${colf(k)}"></i></b><span>${obj[k]}</span></div>`).join("") || '<p class="note">없음</p>'; };
+const count = (rows, k) => rows.reduce((m, r) => (m[r[k]] = (m[r[k]] || 0) + 1, m), {});
+function drawSide(rows, st, us) {
+  const p = projects.find(x => x.id === G.proj), pnote = p ? `<p class="note">프로젝트 '${esc(p.이름)}' 매칭 상대만 표시 중</p>` : "";
+  let a = null, title = "";
+  if (G.view === "us" && G.sel && st[G.sel]) { a = st[G.sel]; title = `🇺🇸 ${G.sel}`; }
+  else if (G.view === "globe" && G.sel && ctry[G.sel]) { a = ctry[G.sel]; title = `${flag(G.sel)} ${koName(G.sel)}`; }
+  if (!a) {
+    if (G.view === "us") { const list = Object.values(st).sort((x, y) => y.n - x.n), none = us.length - list.reduce((s, x) => s + x.n, 0);
+      $("gside").innerHTML = `${pnote}<div class="hudlabel">미국 네트워크</div><div class="big">${us.length.toLocaleString()}명</div><p class="note">주를 누르면 자세히 봅니다. 주·도시 정보가 없는 ${none}명은 지도에 없습니다.</p><div class="rank">${list.slice(0, 15).map((x, i) => `<button type="button" data-st="${esc(x.k)}"><span class="note">${i + 1}</span><span>${esc(x.k)}</span><span>${x.n}</span></button>`).join("")}</div>`; return; }
+    const list = Object.values(ctry).sort((x, y) => y.n - x.n), off = rows.filter(r => !a2Of(r.국가)), offN = count(off, "국가");
+    $("gside").innerHTML = `${pnote}<div class="hudlabel">전 세계 네트워크</div><div class="big">${rows.length.toLocaleString()}명 · ${list.length}개국</div>
+      <p class="note">국가를 누르면 산업·관계·주요 인물을 봅니다. 선의 굵기는 관계가 진전된(수락 이상) 인원입니다.</p>
+      <div class="rank">${list.slice(0, 12).map((x, i) => `<button type="button" data-a2="${x.k}"><span class="note">${i + 1}</span><span>${flag(x.k)} ${esc(koName(x.k))}</span><span>${x.n}</span></button>`).join("")}</div>
+      ${off.length ? `<p class="note">지도에 없는 ${off.length}명: ${Object.entries(offN).map(([k, v]) => `${esc(k || "국가 미상")} ${v}`).join(", ")}</p>` : ""}`; return;
+  }
+  const ppl = [...a.rows].sort((x, y) => STAGES.indexOf(y.관계단계) - STAGES.indexOf(x.관계단계) || String(y.취합연도).localeCompare(String(x.취합연도))).slice(0, 12);
+  $("gside").innerHTML = `${pnote}<div class="row"><h3>${esc(title)}</h3><span style="flex:1"></span><button class="btn x" type="button" id="gClose">닫기</button></div>
+    <div class="big">${a.n.toLocaleString()}명 <span class="note">관계 진전 ${a.adv}명</span></div>
+    <div class="hudlabel">유형</div>${bars(a.t, TYPES, t => TCOL[t])}
+    <div class="hudlabel">산업</div>${bars(count(a.rows, "산업대"), INDS, i => ICOL[i])}
+    <div class="hudlabel">관계 단계</div>${bars(count(a.rows, "관계단계"), STAGES, s => ADV.includes(s) ? "var(--go)" : "var(--muted)")}
+    <div class="row">${G.view === "globe" && G.sel === "US" ? '<button class="btn primary" type="button" id="gUS">주별 지도로 보기</button>' : ""}<button class="btn" type="button" id="gTable">표에서 전체 보기</button></div>
+    <div class="hudlabel">주요 인물 (관계 깊은 순)</div><div class="ppl">${ppl.map(r => `<button type="button" data-ct="${esc(r.id)}"><b>${esc(r.이름 || r.회사)}</b> · ${esc(r.직책)} · ${esc(r.회사)} <span class="tag">${esc(r.유형)}</span> <span class="tag${ADV.includes(r.관계단계) ? " go" : ""}">${esc(r.관계단계)}</span></button>`).join("")}</div>`;
+}
+function focusA2(a2) { // 선택한 나라가 앞으로 오도록 부드럽게 돌린다
+  G.sel = a2; drawGeo(); const ll = CENT[a2]; if (!ll || !proj3) return;
+  const from = [...G.rot], to = [-ll[0], Math.max(-60, Math.min(60, -ll[1]))], it = d3.interpolate(from, to);
+  d3.select("#globe").transition().duration(900).tween("rot", () => t => { G.rot = it(t); frame(); });
+}
+function initGeo() {
+  const svg = d3.select("#globe");
+  svg.call(d3.drag().filter(() => G.view === "globe").on("start", () => G.drag = true).on("drag", e => { G.rot[0] += e.dx * .35; G.rot[1] = Math.max(-70, Math.min(70, G.rot[1] - e.dy * .35)); frame(); }).on("end", () => G.drag = false));
+  svg.on("pointerover", e => { if (e.target.closest(".bub")) G.hover = true; }).on("pointerout", e => { if (e.target.closest(".bub")) G.hover = false; });
+  svg.on("click", e => { const b = e.target.closest("[data-a2],[data-st]"); if (!b) return; if (b.dataset.st) { G.sel = b.dataset.st; drawGeo(); } else if (b.dataset.a2) focusA2(b.dataset.a2); });
+  svg.on("keydown", e => { if (e.key === "Enter") e.target.closest?.("[data-a2],[data-st]")?.dispatchEvent(new MouseEvent("click", {bubbles: true})); });
 }
 
 // ── 업로드
@@ -535,6 +708,13 @@ document.addEventListener("click", async e => {
   if (t.id === "mSheet" || t.id === "mCsv") { const p = P(), head = ["프로젝트", "기업명", "연락처ID", "이름", "직책", "회사", "유형", "국가", "이메일", "적합도", "적합 이유", "추천 메시지", "진행 상태", "관계단계"], rows = [];
     p.companies.forEach(c => (p.matches?.[c.id] || []).forEach(m => { const r = contacts.find(x => x.id === m.id) || {}; rows.push([p.이름, c.기업명, m.id, r.이름, r.직책, r.회사, r.유형, r.국가, r.이메일, m.score, m.reason, m.msg, m.status, r.관계단계]); }));
     if (t.id === "mSheet") toSheet(`NEXUS 매칭결과_${p.이름}_${today()}`, head, rows, $("mNote")); else saveCsv(`NEXUS_매칭결과_${p.이름}_${today()}.csv`, head, rows, $("mNote")); }
+  if (t.dataset.view) { G.view = t.dataset.view; G.sel = null; saveG(); drawGeo(); }
+  if (t.id === "gSpin") { G.spin = !G.spin; saveG(); drawGeo(); }
+  if (t.id === "gClose") { G.sel = null; drawGeo(); }
+  if (t.id === "gUS") { G.view = "us"; G.sel = null; saveG(); drawGeo(); }
+  if (t.id === "gTable") { filt.국가 = G.view === "us" ? "미국" : koName(G.sel); drawDb(); $("dbCount").scrollIntoView({behavior: "smooth"}); }
+  if (t.closest(".rank") && t.dataset.a2) focusA2(t.dataset.a2);
+  if (t.closest(".rank") && t.dataset.st) { G.sel = t.dataset.st; drawGeo(); }
   if (t.dataset.mx) { const [i, ty] = t.dataset.mx.split("|"); Object.assign(filt, {산업대: i, 유형: ty}); drawDb(); }
   if (t.id === "fReset") { filt = {q: "", 유형: "", 산업대: "", 국가: "", 취합연도: "", 관계단계: ""}; drawDb(); }
   if (t.dataset.ct) editContact(contacts.find(r => r.id === t.dataset.ct));
@@ -551,6 +731,7 @@ document.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.mst) { const [cid, i] = t.dataset.mst.split("|"), p = P(); p.matches[cid][+i].status = t.value; saveProj(p); }
   if (["fType", "fInd", "fCountry", "fYear", "fStage"].includes(t.id)) { filt[{fType: "유형", fInd: "산업대", fCountry: "국가", fYear: "취합연도", fStage: "관계단계"}[t.id]] = t.value; drawDb(); }
+  if (t.id === "gProj") { G.proj = t.value; G.sel = null; drawGeo(); }
   if (t.id === "file" && t.files[0]) readFile(t.files[0]).catch(() => stage('<p class="err">파일을 읽지 못했습니다. 엑셀·CSV 파일인지 확인해 주세요.</p>'));
   if (t.id === "uKind") { $("uProjWrap").hidden = t.value !== "companies"; if (up) { guessMap(); drawStage(); } }
   if (!up) return;
@@ -566,7 +747,7 @@ const drop = $("drop");
 ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("on"); }));
 drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) readFile(f).catch(() => stage('<p class="err">파일을 읽지 못했습니다.</p>')); });
 
-showTab(tab); drawHero();
+initGeo(); showTab(tab); drawHero();
 (async () => {
   [db, sample, mcp, downloads] = await Promise.all(["db", "sample", "mcp", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   if (!db) { drawHero(); return; }
