@@ -157,6 +157,39 @@ def docs(folder):
     return [(lambda j: j.get("data", j))(json.loads(f.read_text(encoding="utf-8"))) for f in sorted(folder.glob("*.json"))] if folder.is_dir() else []
 
 
+def night(d):
+    """NEXUS daily 문서 한 줄 요약(회차기록 형식·예전 형식 모두)."""
+    r = d.get("회차기록")
+    if not r:
+        return f"{d.get('산업군', '')} 새로 {d.get('추가', 0)}곳 — {str(d.get('요약', ''))[:300]}"
+    s = lambda k: sum(int(x.get(k) or 0) for x in r)
+    return f"{len(r)}회차 · 1차 후보 +{s('후보추가')} · 2차 검증 {s('검증')}곳(한국 {s('한국')}·아시아 {s('아시아')}·가능성 {s('가능성')}) · 인물 {s('인물')}명"
+
+
+def briefing(kdir):
+    """가상 사무실 첫 화면 '오늘 브리핑' 카드(직원별 한눈 요약 + 업무실 바로가기)."""
+    page = {t["code"]: t.get("page") for b in org["본부"] for t in b["팀"]}
+    items = {}
+    for f in sorted((repo / "data").glob("2*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8"))["items"]:
+            items[x["bidNtceNo"]] = x
+    live = sorted((x for x in items.values() if (not x.get("입찰마감일시") or x["입찰마감일시"][:10] >= now.strftime("%Y-%m-%d")) and (x.get("배정예산") or 10**8) >= 10**8),
+                  key=lambda x: str(x.get("입찰마감일시") or "9"))
+    cards = [{"code": "RADAR", "값": str(len(live)), "라벨": "마감 전 추천 공고", "줄": [f"{x['사업명'][:28]} · 마감 {str(x.get('입찰마감일시') or '미정')[5:10]}" for x in live[:3]], "url": page["RADAR"]}]
+    cases = [json.loads(p.read_text(encoding="utf-8")) for p in (repo / "decoder" / "analysis").glob("*.json")]
+    nxt = sorted((e["날짜"], e["항목"], c["사업명"]) for c in cases for e in c["일정"] if len(e["날짜"]) == 10 and e["날짜"] >= now.strftime("%Y-%m-%d"))
+    cards.append({"code": "DECODER", "값": str(len(cases)), "라벨": "분석한 공고", "줄": [f"{d[5:]} {i[:22]} ({n[:14]})" for d, i, n in nxt[:3]] or ["다가오는 일정 없음"], "url": page["DECODER"]})
+    if kdir:
+        b = max(docs(kdir / "atlas" / "briefs"), key=lambda b: b.get("날짜", ""), default=None)
+        cards.append({"code": "ATLAS", "값": str(len(b.get("항목", []))) if b else "-", "라벨": f"{b['날짜']} 동향" if b else "동향 브리핑", "줄": (b.get("헤드라인", [])[:2] if b else []) + ["심층 리포트는 리서치실 '심층 리포트' 탭"], "url": page["ATLAS"]})
+        d = max(docs(kdir / "nexus" / "daily"), key=lambda d: d.get("날짜", ""), default=None)
+        pipe = [p for p in docs(kdir / "nexus" / "pipeline") if not p.get("시험")]
+        cards.append({"code": "NEXUS", "값": str(sum(1 for p in pipe if (p.get("상태") or "발굴") == "발굴")), "라벨": "검토 대기 바이어·투자자", "줄": [f"{d.get('날짜')} {night(d)}"[:90]] if d else ["야간 발굴 기록 없음"], "url": page["NEXUS"]})
+    cards.append({"code": "CHRONOS", "값": "→", "라벨": "공정·예산", "줄": ["공정 지연·예산 수익률은 관제실에서", "지연·임박 작업은 아침 카톡으로 알림"], "url": page["CHRONOS"]})
+    links = [["업무 데스크(BABEL·MAESTRO·SCRIBE)", page["BABEL"]], ["운영 보드(환율·할 일·입찰 기록)", "https://claude.ai/artifact/R6sS9fpQa9UQn2Hzj7MKED"]]
+    return {"시각": now.strftime("%m/%d %H:%M"), "카드": cards, "링크": links}
+
+
 def knowledge(kdir):
     """직원별 대화용 업무 자료(짧은 글). kdir: 루틴이 ATLAS·NEXUS 저장소를 내려받아 둔 폴더(없으면 저장소 자료만)."""
     items = {}
@@ -188,7 +221,7 @@ def knowledge(kdir):
         cnt = lambda xs, k, n=8: ", ".join(f"{a} {b}" for a, b in collections.Counter(x.get(k) or "미상" for x in xs).most_common(n))
         kn["NEXUS"] = (f"[네트워크 DB] {len(rows)}명 · 유형: {cnt(rows, '유형')} · 산업: {cnt(rows, '산업대')} · 국가: {cnt(rows, '국가', 12)} · 관계: {cnt(rows, '관계단계')}\n"
                        f"[발굴 DB] {len(pipe)}건 · 매일 자동 발굴 {sum(1 for p in pipe if p.get('발굴경로') == '매일 발굴')} / 프로젝트 발굴 {sum(1 for p in pipe if p.get('발굴경로') != '매일 발굴')} · 상태: {cnt(pipe, '상태')} · 산업군: {cnt(pipe, '산업군')}\n"
-                       + "".join(f"[매일 발굴 {d.get('날짜')}] {d.get('산업군')} 새로 {d.get('추가')}곳 — {d.get('요약')}\n" for d in daily)
+                       + "".join(f"[야간 발굴 {d.get('날짜')}] {night(d)}\n" for d in daily)
                        + "[프로젝트] " + ("; ".join(f"{p.get('이름')}({p.get('목적')}, {p.get('국가') or p.get('지역')}, 참가기업 {len(p.get('companies', []))}곳)" for p in projs) or "없음")
                        + "\n※ 개인 연락처는 여기 없음. 명단은 NEXUS 매칭 센터에서 확인.")
     return kn
@@ -196,7 +229,7 @@ def knowledge(kdir):
 
 k, rec, ncase = kpis()
 kdir = pathlib.Path(sys.argv[sys.argv.index("--knowledge") + 1]) if "--knowledge" in sys.argv else None
-data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M")}
+data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M"), "브리핑": briefing(kdir)}
 tpl = (root / "office.tpl.html").read_text(encoding="utf-8")
 html = tpl.replace("__SVG__", svg(rec, ncase)).replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 (root / "office.html").write_text(html, encoding="utf-8")

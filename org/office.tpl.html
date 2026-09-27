@@ -165,6 +165,13 @@ svg.map{width:100%;height:auto;display:block}
 .st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
 .st.on{color:var(--go);border-color:var(--go)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
 .panel ul{margin:0;padding-left:18px;font-size:14px}
+.today{padding:14px 16px}
+.today .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
+.today a.card{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--glass2);color:var(--ink);text-decoration:none}
+.today a.card:hover,.today a.card:focus-visible{border-color:var(--holo)}
+.today .card b{font:700 22px var(--hud);color:var(--holo)}
+.today .card small{font-size:12px;color:var(--muted);line-height:1.45}
+.today .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:13px}
 .kpi{display:flex;gap:18px;flex-wrap:wrap}
 .kpi b{display:block;font:700 22px var(--hud);color:var(--holo)}
 .kpi span{font-size:12px;color:var(--muted)}
@@ -191,6 +198,8 @@ svg.map{width:100%;height:auto;display:block}
     <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
     <button class="btn primary" type="button" id="openMeet">2F 회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
   </div>
+
+  <section class="glass today" aria-label="오늘 브리핑"><div class="row" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0;font:700 18px var(--sans)">오늘 브리핑</h2><span class="chatnote" id="tAt"></span></div><div class="cards" id="tCards"></div><div class="links" id="tLinks"></div></section>
 
   <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p>__SVG__</section>
 
@@ -225,6 +234,11 @@ tick(); setInterval(tick, 1000);
 if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll("animateMotion").forEach(a => a.remove());
 
 D.avatars = Object.fromEntries([...document.querySelectorAll("image[data-av]")].map(i => [i.dataset.av, i.getAttribute("href")]));
+if (D.브리핑) {
+  $("tAt").textContent = `${D.브리핑.시각} 갱신 · 카드를 누르면 업무실로 이동`;
+  $("tCards").innerHTML = D.브리핑.카드.map(c => `<a class="card" href="${esc(c.url)}" target="_blank" rel="noopener"><span class="hudlabel">${esc(c.code)} · ${esc(c.라벨)}</span><b>${esc(c.값)}</b>${c.줄.map(l => `<small>${esc(l)}</small>`).join("")}</a>`).join("");
+  $("tLinks").innerHTML = D.브리핑.링크.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join("");
+}
 const staff = D.본부.flatMap(b => b.팀.map(t => ({...t, 본부: b.이름})));
 const cls = s => s === "근무 중" ? "on" : s === "스킬 보유" ? "skill" : "off";
 let sel = "RADAR";
