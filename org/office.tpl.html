@@ -1,0 +1,196 @@
+<title>JARVIS 가상 사무실</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+
+:root{
+  color-scheme:dark;
+  --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
+  --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--amber-soft:rgba(245,185,66,.14);
+  --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
+  background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hudlabel{font:500 11px var(--hud);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}
+.bar .where{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.live{width:8px;height:8px;border-radius:50%;background:var(--go);box-shadow:0 0 10px var(--go);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.clock{font:700 15px var(--hud);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--sans);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--holo);color:var(--holo-ink)}
+.name{font:700 36px/1 var(--hud);letter-spacing:.14em;color:var(--holo);text-shadow:0 0 18px var(--holo-soft)}
+.role{font-weight:500}
+.bubble{margin:6px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2);min-height:3.2em}
+.chat{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.log{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding-right:4px}
+.log:empty{display:none}
+.msg{padding:8px 12px;border-radius:10px;max-width:92%;white-space:pre-wrap;word-break:break-word;font-size:14px;animation:land .35s ease-out}
+.msg.me{align-self:flex-end;background:var(--holo);color:var(--holo-ink)}
+.msg.ai{align-self:flex-start;border:1px solid var(--line);background:var(--glass2)}
+.msg.think{color:var(--muted)}
+.msg.err{border-color:var(--stop);color:var(--stop)}
+.ask{display:flex;gap:6px}
+.ask input{flex:1;min-width:0;font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ask input:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.chatnote{font-size:11px;color:var(--muted)}
+.caret{display:inline-block;width:7px;height:1em;background:var(--holo);vertical-align:-2px;margin-left:2px;animation:pulse 1s steps(1) infinite}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+@keyframes land{from{transform:translateX(30px);opacity:0}}
+.empty{font-size:13px;color:var(--muted)}
+.btn{font:500 13px var(--sans);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:4px 11px;cursor:pointer;white-space:nowrap;transition:border-color .2s,box-shadow .2s}
+.btn:hover{border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.btn.go{color:var(--go);border-color:color-mix(in srgb,var(--go) 50%,transparent)}
+.btn.go:hover{box-shadow:0 0 12px var(--go-soft);border-color:var(--go)}
+.btn.primary{background:var(--go);color:var(--holo-ink);border-color:var(--go)}
+.btn.x{color:var(--muted)}
+.btn.x:hover{color:var(--stop);border-color:var(--stop)}
+:focus-visible{outline:2px solid var(--holo);outline-offset:2px}
+.fold>summary{cursor:pointer;list-style:none}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::before{content:"▸";display:inline-block;margin-right:8px;color:var(--holo);transition:transform .2s}
+.fold[open]>summary::before{transform:rotate(90deg)}
+.fold>summary:hover{color:var(--holo)}
+.status{font-size:12px;color:var(--amber)}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:4px 2px}
+.hero h1{font:700 26px/1.2 var(--sans);margin:0;text-wrap:balance}
+.hero p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.dot.on{background:var(--go);box-shadow:0 0 8px var(--go)}.dot.skill{background:var(--holo)}.dot.off{background:var(--muted);opacity:.5}
+.floorwrap{padding:8px;overflow-x:auto}
+.floorhint{display:none;font-size:12px;color:var(--muted);margin:0 8px 6px}
+@media (max-width:700px){svg.map{min-width:720px}.floorhint{display:block}}
+svg.map{width:100%;height:auto;display:block}
+.flr{fill:var(--glass2);stroke:var(--line);stroke-width:1.5}
+.grid line{stroke:var(--grid);stroke-width:1}
+.wing{font:700 20px var(--hud);letter-spacing:.06em;fill:var(--holo)}
+.top{fill:color-mix(in srgb,var(--glass) 60%,var(--holo) 12%);stroke:var(--line)}
+.sideL{fill:color-mix(in srgb,var(--bg) 70%,var(--holo) 10%)}
+.sideR{fill:color-mix(in srgb,var(--bg) 85%,var(--holo) 6%)}
+.mon{fill:var(--bg);stroke:var(--holo);stroke-width:1.2}
+.desk{cursor:pointer;outline:none}
+.desk .plate{font:700 15px var(--hud);letter-spacing:.08em;fill:var(--ink);text-anchor:middle}
+.desk .sub{font:500 13px var(--sans);fill:var(--muted);text-anchor:middle}
+.desk .ring{fill:none;stroke:var(--go);stroke-width:2;opacity:0}
+.desk.on .ring{animation:ring 2.6s ease-out infinite}
+@keyframes ring{0%{opacity:.8;transform:scale(.6)}100%{opacity:0;transform:scale(1.4)}}
+.desk .ring{transform-box:fill-box;transform-origin:center}
+.desk.off image{filter:grayscale(1);opacity:.4}
+.desk.skill image{opacity:.9}
+.desk.on image{animation:bob 4s ease-in-out infinite}
+.desk image{transform-box:fill-box;transform-origin:bottom}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.desk:hover .top,.desk:focus-visible .top,.desk.sel .top{fill:var(--holo-soft);stroke:var(--holo);stroke-width:2}
+.desk.sel .plate{fill:var(--holo)}
+.typing circle{fill:var(--holo);animation:typing 1.2s infinite}
+.typing circle:nth-child(3){animation-delay:.2s}.typing circle:nth-child(4){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.bubbleS{fill:var(--glass);stroke:var(--line)}
+.tag{font:700 13px var(--sans);text-anchor:middle}
+.tag.off{fill:var(--muted)}.tag.skill{fill:var(--holo)}.tag.on{fill:var(--go)}
+.flow{fill:none;stroke:var(--amber);stroke-width:2;stroke-dasharray:6 7;opacity:.7;animation:dash 1.2s linear infinite}
+.flow.later{stroke:var(--muted);opacity:.35;animation:none}
+@keyframes dash{to{stroke-dashoffset:-26}}
+.env{fill:var(--amber)}
+.holo text{font:700 12px var(--hud);fill:var(--holo);text-anchor:middle}
+.holo .big{font-size:22px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+.panel{padding:18px;display:flex;flex-direction:column;gap:10px}
+.who{display:flex;gap:14px;align-items:center}
+.who img{width:84px;height:84px}
+.who h2{margin:0;font:700 26px/1 var(--hud);letter-spacing:.12em;color:var(--holo)}
+.who .r{font-weight:500}
+.st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+.st.on{color:var(--go);border-color:var(--go)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
+.panel ul{margin:0;padding-left:18px;font-size:14px}
+.kpi{display:flex;gap:18px;flex-wrap:wrap}
+.kpi b{display:block;font:700 22px var(--hud);color:var(--holo)}
+.kpi span{font-size:12px;color:var(--muted)}
+.roster{padding:18px}
+.roster h2{font:700 15px var(--hud);letter-spacing:.04em;margin:0 0 10px}
+.team{display:flex;flex-direction:column;gap:6px}
+.team button{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer;font:14px var(--sans)}
+.team button[aria-pressed="true"]{border-color:var(--holo);background:var(--holo-soft)}
+.team img{width:32px;height:32px}
+.team small{display:block;color:var(--muted);font-size:12px}
+.team h3{margin:12px 0 4px;font:500 12px var(--sans);color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="glass bar">
+    <div class="where"><span class="live" aria-hidden="true"></span><span class="hudlabel">JARVIS OPS</span><span>본사 · 가상 사무실</span></div>
+    <div class="where"><span class="clock" id="clock">--:--:--</span><span class="hudlabel">KST</span>
+      <div class="seg" role="group" aria-label="화면 모드"><button type="button" data-mode="system">시스템</button><button type="button" data-mode="light">라이트</button><button type="button" data-mode="dark">다크</button></div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div><h1>JARVIS 가상 사무실</h1><p>2개 본부 · 11개 팀 · 책상을 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
+    <div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
+  </div>
+
+  <section class="glass floorwrap" aria-label="사무실 지도"><p class="floorhint">지도를 옆으로 밀어서 두 본부를 모두 볼 수 있습니다.</p>__SVG__</section>
+
+  <div class="cols">
+    <section class="glass panel" id="panel" aria-live="polite"></section>
+    <section class="glass roster" aria-label="직원 명단"><h2>직원 명단</h2><div class="team" id="roster"></div></section>
+  </div>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const applyMode = m => {
+  if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  try { localStorage.setItem("office-mode", m); } catch {}
+};
+let mode = "system"; try { mode = localStorage.getItem("office-mode") || "system"; } catch {}
+applyMode(mode); document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"});
+tick(); setInterval(tick, 1000);
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll("animateMotion").forEach(a => a.remove());
+
+D.avatars = Object.fromEntries([...document.querySelectorAll("image[data-av]")].map(i => [i.dataset.av, i.getAttribute("href")]));
+const staff = D.본부.flatMap(b => b.팀.map(t => ({...t, 본부: b.이름})));
+const cls = s => s === "근무 중" ? "on" : s === "스킬 보유" ? "skill" : "off";
+let sel = "RADAR";
+function show(code) {
+  sel = code; const t = staff.find(x => x.code === code);
+  document.querySelectorAll(".desk").forEach(d => d.classList.toggle("sel", d.dataset.code === code));
+  document.querySelectorAll(".team button").forEach(b => b.setAttribute("aria-pressed", b.dataset.code === code));
+  const k = D.kpi[code];
+  $("panel").innerHTML = `<div class="who"><img alt="" src="${D.avatars[t.avatar]}"><div><h2>${esc(t.code)}</h2><div class="r">${esc(t.역할)} · ${esc(t.팀)}</div><div class="chatnote">${esc(t.본부)}</div></div></div>
+    <div><span class="st ${cls(t.상태)}">${esc(t.상태)}</span></div>
+    ${k ? `<div class="kpi">${k.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
+    <div class="hudlabel">담당 업무</div><ul>${t.업무.map(w => `<li>${esc(w)}</li>`).join("")}</ul>
+    ${t.page ? `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 들어가기 ↗</a>`
+      : t.상태 === "스킬 보유" ? `<p class="chatnote">전용 업무실은 아직 없습니다. JARVIS 채팅에서 요청하면 이 직원의 스킬로 바로 처리합니다.</p>`
+      : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}`;
+}
+$("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
+document.addEventListener("click", e => { const d = e.target.closest("[data-code]"); if (d) show(d.dataset.code); });
+document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); show(d.dataset.code); } });
+show(sel);
+</script>
