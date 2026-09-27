@@ -95,6 +95,12 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .lane{font:500 12px var(--hud);letter-spacing:.04em;color:var(--muted);margin:18px 0 10px;display:flex;align-items:center;gap:10px}
 .lane::after{content:"";flex:1;height:1px;background:var(--line)}
 .lane.amber{color:var(--amber)}
+.fold>summary{cursor:pointer;list-style:none}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::before{content:"▸";display:inline-block;margin-right:8px;color:var(--holo);transition:transform .2s}
+.fold[open]>summary::before{transform:rotate(90deg)}
+.fold>summary:hover{color:var(--holo)}
+.params>summary{display:flex}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
 .card{position:relative;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--glass2);display:flex;flex-direction:column;gap:10px;overflow:hidden}
 .intro .card{animation:rise .5s ease-out both}
@@ -189,8 +195,8 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
     <div id="feed"></div>
   </section>
 
-  <section class="glass params" aria-label="스캔 파라미터">
-    <div class="feedhead"><h2>스캔 파라미터</h2><span class="sync" id="syncBadge" hidden></span></div>
+  <details class="glass params fold" data-fold="params" id="paramsFold">
+    <summary class="feedhead"><h2>스캔 파라미터</h2><span class="sync" id="syncBadge" hidden></span></summary>
     <dl class="rule">
       <dt>부르는 호칭</dt><dd><span class="add"><input type="text" id="honor" aria-label="RADAR가 부르는 호칭" maxlength="20" value="본부장님"><button class="btn" type="button" id="honorSave">저장</button></span></dd>
       <dt>집중 기관</dt><dd id="inst"></dd>
@@ -199,14 +205,14 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
       <dt>자동 제외</dt><dd><span class="chip static">전기차 충전설비</span><span class="chip static">폐기·철거</span><span class="chip static">금융성 투자</span><span class="chip static">입시·심리 상담</span><span class="chip static">단순 시설관리</span></dd>
     </dl>
     <p class="hint">호칭은 저장 즉시 바뀝니다. 기관·키워드를 고치면 여기에 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
-  </section>
+  </details>
 </div>
 
 <script>
 const D = __DATA__;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const won = n => n == null ? "미상" : n >= 1e8 ? (n/1e8).toFixed(1) + "억" : Math.round(n/1e4).toLocaleString("ko-KR") + "만";
+const won = n => !n ? "미상" : n >= 1e8 ? (n/1e8).toFixed(1) + "억" : Math.round(n/1e4).toLocaleString("ko-KR") + "만";
 const daysLeft = s => s ? Math.ceil((new Date(s.replace(" ", "T") + "+09:00") - Date.now()) / 864e5) : null;
 const expired = i => { const d = daysLeft(i.입찰마감일시); return d !== null && d < 0; };
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -226,6 +232,8 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 tick(); setInterval(tick, 1000);
 
 // 상태
+let folds = {추천: true, 참고: false, params: false};
+try { Object.assign(folds, JSON.parse(localStorage.getItem("radar-folds") || "{}")); } catch {}
 let decisions = {}, db = null, limits = {추천: 30, 참고: 30}, honor = "본부장님";
 let cfg = {institutions: D.institutions, keywords: D.keywords, synced: true};
 const stateOf = i => decisions[i.bidNtceNo]?.status || (expired(i) ? "마감" : "");
@@ -274,8 +282,8 @@ function render() {
   const lane = (kind, label, cls) => {
     const arr = list.filter(i => i.RADAR === kind); if (!arr.length) return "";
     const shown = arr.slice(0, limits[kind]);
-    return `<div class="lane ${cls}">${label} · ${arr.length}건</div><div class="cards">${shown.map(card).join("")}</div>`
-      + (arr.length > shown.length ? `<button class="btn more" type="button" data-more="${kind}">더 보기 (${arr.length - shown.length}건 남음)</button>` : "");
+    return `<details class="fold" data-fold="${kind}"${folds[kind] ? " open" : ""}><summary class="lane ${cls}">${label} · ${arr.length}건</summary><div class="cards">${shown.map(card).join("")}</div>`
+      + (arr.length > shown.length ? `<button class="btn more" type="button" data-more="${kind}">더 보기 (${arr.length - shown.length}건 남음)</button>` : "") + `</details>`;
   };
   $("feed").innerHTML = lane("추천", "추천 · 1억 원 이상", "") + lane("참고", "참고 · 1억 원 미만", "amber")
     || `<p class="empty">${q ? "검색 결과가 없습니다." : "새로 검토할 공고가 없습니다. 보관된 공고는 “보관된 공고도 보기”로 확인하세요."}</p>`;
@@ -350,6 +358,11 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("add-")) document.querySelector(`[data-add="${e.target.id.slice(4)}"]`)?.click(); });
 $("q").oninput = () => { limits = {추천: 30, 참고: 30}; render(); };
 $("showHidden").onchange = render;
+$("paramsFold").open = folds.params;
+document.addEventListener("toggle", e => {
+  const k = e.target.dataset?.fold; if (!k) return;
+  folds[k] = e.target.open; try { localStorage.setItem("radar-folds", JSON.stringify(folds)); } catch {}
+}, true);
 $("src").textContent = D.note;
 document.body.classList.add("intro");
 render();
