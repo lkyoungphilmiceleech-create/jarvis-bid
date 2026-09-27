@@ -1,0 +1,366 @@
+<title>RADAR 입찰 분석관</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
+  --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--amber-soft:rgba(245,185,66,.14);
+  --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
+  background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hudlabel{font:500 11px var(--hud);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* top bar */
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}
+.bar .where{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.live{width:8px;height:8px;border-radius:50%;background:var(--go);box-shadow:0 0 10px var(--go);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.clock{font:700 15px var(--hud);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--sans);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--holo);color:var(--holo-ink)}
+/* stage */
+.stage{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+@media (max-width:820px){.stage{grid-template-columns:1fr}}
+.bay{position:relative;padding:18px;overflow:hidden;min-height:400px;display:flex;flex-direction:column}
+.scope{position:relative;width:min(340px,86%);aspect-ratio:1;margin:8px auto 0;border-radius:50%;
+  background:radial-gradient(circle,transparent 0 24%,var(--line) 24.3% 24.8%,transparent 25% 49%,var(--line) 49.3% 49.8%,transparent 50% 74%,var(--line) 74.3% 74.8%,transparent 75%),var(--holo-soft);
+  border:1px solid var(--line);box-shadow:0 0 60px var(--holo-soft) inset,0 0 40px var(--holo-soft)}
+.scope::before,.scope::after{content:"";position:absolute;background:var(--line)}
+.scope::before{left:50%;top:0;bottom:0;width:1px}.scope::after{top:50%;left:0;right:0;height:1px}
+.sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 300deg,var(--holo-soft) 330deg,color-mix(in srgb,var(--holo) 55%,transparent) 360deg);animation:spin 4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.blip{position:absolute;width:9px;height:9px;margin:-4.5px;border-radius:50%;background:var(--holo);box-shadow:0 0 12px var(--holo);animation:ping 4s linear infinite;cursor:pointer;border:0;padding:0}
+.blip.ref{background:var(--amber);box-shadow:0 0 12px var(--amber)}
+@keyframes ping{0%{transform:scale(.6);opacity:.35}8%{transform:scale(1.6);opacity:1}30%,100%{transform:scale(1);opacity:.75}}
+.pilot{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:170px;filter:drop-shadow(0 12px 24px rgba(0,0,0,.45));animation:bob 4.5s ease-in-out infinite}
+@keyframes bob{50%{transform:translate(-50%,-6px)}}
+.pad{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);width:200px;height:34px;border-radius:50%;background:radial-gradient(var(--holo-soft),transparent 70%);border:1px solid var(--line)}
+.who{margin-top:auto;padding-top:18px;display:flex;flex-direction:column;gap:6px}
+.name{font:700 36px/1 var(--hud);letter-spacing:.14em;color:var(--holo);text-shadow:0 0 18px var(--holo-soft)}
+.role{font-weight:500}
+.bubble{margin:6px 0 0;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--glass2);min-height:3.2em}
+.caret{display:inline-block;width:7px;height:1em;background:var(--holo);vertical-align:-2px;margin-left:2px;animation:pulse 1s steps(1) infinite}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+/* right column */
+.side{display:flex;flex-direction:column;gap:18px}
+.gauges{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.g b{display:block;font:700 30px/1.1 var(--hud);font-variant-numeric:tabular-nums}
+.g.rec b{color:var(--holo)} .g.refc b{color:var(--amber)} .g.moved b{color:var(--go)}
+.port{padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.port.hot{border-color:var(--go);box-shadow:0 0 30px var(--go-soft)}
+.port h2,.params h2,.feedhead h2{font:700 15px var(--hud);letter-spacing:.04em;margin:0}
+.beam{height:3px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--go),transparent);background-size:200% 100%;animation:flow 1.6s linear infinite;opacity:.8}
+@keyframes flow{to{background-position:-200% 0}}
+.port ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto}
+.port li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--go-soft);animation:land .5s ease-out}
+@keyframes land{from{transform:translateX(30px);opacity:0}}
+.port li span{min-width:0}
+.port .t{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{font-size:13px;color:var(--muted)}
+/* buttons */
+.btn{font:500 13px var(--sans);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:4px 11px;cursor:pointer;white-space:nowrap;transition:border-color .2s,box-shadow .2s}
+.btn:hover{border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.btn.go{color:var(--go);border-color:color-mix(in srgb,var(--go) 50%,transparent)}
+.btn.go:hover{box-shadow:0 0 12px var(--go-soft);border-color:var(--go)}
+.btn.primary{background:var(--go);color:var(--holo-ink);border-color:var(--go)}
+.btn.x{color:var(--muted)}
+.btn.x:hover{color:var(--stop);border-color:var(--stop)}
+:focus-visible{outline:2px solid var(--holo);outline-offset:2px}
+/* feed */
+.feed{padding:16px}
+.feedhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.cmd{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 6px}
+.prompt{flex:1 1 260px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--glass2)}
+.prompt span{font:700 14px var(--hud);color:var(--holo)}
+.prompt input{flex:1;border:0;background:transparent;color:var(--ink);font:14px var(--sans);padding:9px 0;outline:0;min-width:0}
+.cmd label{font-size:13px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.note{font-size:12px;color:var(--muted);margin:0 0 12px}
+.lane{font:500 12px var(--hud);letter-spacing:.04em;color:var(--muted);margin:18px 0 10px;display:flex;align-items:center;gap:10px}
+.lane::after{content:"";flex:1;height:1px;background:var(--line)}
+.lane.amber{color:var(--amber)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{position:relative;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--glass2);display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.intro .card{animation:rise .5s ease-out both}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--holo)}
+.card.ref::before{background:var(--amber)}
+.card.gone{opacity:.55}
+.card:hover{border-color:var(--holo);box-shadow:0 0 22px var(--holo-soft)}
+@keyframes rise{from{transform:translateY(14px);opacity:0}}
+.card a{color:var(--ink);text-decoration:none;font-weight:500;line-height:1.45}
+.card a:hover,.card a:focus-visible{color:var(--holo)}
+.org{font-size:12px;color:var(--muted)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.money{font:700 20px var(--hud);font-variant-numeric:tabular-nums}
+.card.ref .money{color:var(--amber)}
+.dday{font:700 12px var(--hud);letter-spacing:.06em;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.dday.soon{color:var(--amber);border-color:var(--amber)} .dday.over{text-decoration:line-through;color:var(--muted)}
+.tag{font-size:11px;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.tag.focus{background:var(--holo);color:var(--holo-ink);border-color:var(--holo)}
+.acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.why{font-size:12px;padding:2px 8px;border-radius:4px;background:var(--holo-soft)}
+.more{display:block;margin:14px auto 0}
+.flying{position:fixed;z-index:9;pointer-events:none;margin:0}
+/* params */
+.params{padding:16px}
+.rule{display:grid;grid-template-columns:96px 1fr;gap:12px 14px;margin:12px 0 0}
+@media (max-width:520px){.rule{grid-template-columns:1fr}}
+.rule dt{font-size:13px;color:var(--muted);padding-top:3px}
+.rule dd{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:13px;padding:2px 4px 2px 10px;border-radius:999px;border:1px solid var(--line);background:var(--holo-soft);display:inline-flex;align-items:center;gap:2px}
+.chip.static{padding-right:10px;background:transparent}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 6px;border-radius:999px}
+.chip button:hover{color:var(--stop)}
+.add{display:inline-flex;gap:4px}
+.add input{width:120px;font:13px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+.sync{font-size:12px;padding:2px 8px;border-radius:4px}
+.sync.wait{background:var(--amber-soft);color:var(--amber)} .sync.done{background:var(--go-soft);color:var(--go)}
+.hint{font-size:12px;color:var(--muted);margin:12px 0 0}
+.status{font-size:12px;color:var(--amber)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="glass bar">
+    <div class="where"><span class="live" aria-hidden="true"></span><span class="hudlabel">JARVIS OPS</span><span>제안서 준비 본부 › 입찰 공고 조사팀 관제실</span></div>
+    <div class="where"><span class="clock" id="clock">--:--:--</span><span class="hudlabel">KST</span>
+      <div class="seg" role="group" aria-label="화면 모드"><button type="button" data-mode="system">시스템</button><button type="button" data-mode="light">라이트</button><button type="button" data-mode="dark">다크</button></div>
+    </div>
+  </header>
+
+  <div class="stage">
+    <section class="glass bay" aria-label="RADAR 근무석">
+      <div class="hudlabel">OPERATOR BAY · 01</div>
+      <div class="scope" id="scope">
+        <div class="sweep"></div>
+        <div id="blips"></div>
+        <div class="pad"></div>
+        <img class="pilot" alt="RADAR 아바타: 노트북으로 공고를 살피는 분석관" src="__AVATAR__">
+      </div>
+      <div class="who">
+        <div class="name">RADAR</div>
+        <div class="role">입찰 분석관 · 입찰 공고 조사팀</div>
+        <p class="bubble" aria-live="polite"><span id="say"></span><span class="caret" aria-hidden="true"></span></p>
+        <div class="meta"><span>출근 <b>평일 09:40</b></span><span>월요일 <b>3일치 소급</b></span><span>인계 <b>DECODER</b></span></div>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="glass gauges" aria-label="현황">
+        <div class="g rec"><b id="nRec">0</b><span class="hudlabel">추천</span></div>
+        <div class="g refc"><b id="nRef">0</b><span class="hudlabel">참고 · 1억 미만</span></div>
+        <div class="g moved"><b id="nMoved">0</b><span class="hudlabel">DECODER 이관</span></div>
+        <div class="g"><b id="nHidden">0</b><span class="hudlabel">보관 (마감·처리)</span></div>
+      </section>
+      <section class="glass port" id="port" aria-label="DECODER 전송 포트">
+        <div class="feedhead"><h2>DECODER 전송 포트</h2><button class="btn primary" type="button" id="moveAll" hidden>모두 전송</button></div>
+        <div class="beam" aria-hidden="true"></div>
+        <ul id="trayList"></ul>
+        <p class="empty" id="trayEmpty">공고 카드에서 “선택”을 누르면 여기로 옮겨집니다. 전송하면 DECODER가 제안요청서를 받아 분석합니다.</p>
+        <span class="status" id="dbStatus"></span>
+      </section>
+    </div>
+  </div>
+
+  <section class="glass feed" aria-label="수신 공고">
+    <div class="feedhead"><h2>수신 공고 피드</h2><span class="hudlabel" id="feedCount"></span></div>
+    <div class="cmd">
+      <div class="prompt"><span aria-hidden="true">&gt;</span><input type="search" id="q" placeholder="사업명·기관 검색 (예: 공동관, 콘텐츠진흥원)" aria-label="공고 검색"></div>
+      <label><input type="checkbox" id="showHidden"> 보관된 공고도 보기</label>
+      <a class="btn" href="https://www.g2b.go.kr" target="_blank" rel="noopener">나라장터 ↗</a>
+    </div>
+    <p class="note" id="src"></p>
+    <div id="feed"></div>
+  </section>
+
+  <section class="glass params" aria-label="스캔 파라미터">
+    <div class="feedhead"><h2>스캔 파라미터</h2><span class="sync" id="syncBadge" hidden></span></div>
+    <dl class="rule">
+      <dt>집중 기관</dt><dd id="inst"></dd>
+      <dt>과업 키워드</dt><dd id="kw"></dd>
+      <dt>금액</dt><dd><span class="chip static">1억 원 이상 → 추천</span><span class="chip static">1억 원 미만 → 참고</span><span class="chip static">금액 미상 → 추천</span></dd>
+      <dt>자동 제외</dt><dd><span class="chip static">전기차 충전설비</span><span class="chip static">폐기·철거</span><span class="chip static">금융성 투자</span><span class="chip static">입시·심리 상담</span><span class="chip static">단순 시설관리</span></dd>
+    </dl>
+    <p class="hint">기관·키워드를 고치면 여기에 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const won = n => n == null ? "미상" : n >= 1e8 ? (n/1e8).toFixed(1) + "억" : Math.round(n/1e4).toLocaleString("ko-KR") + "만";
+const daysLeft = s => s ? Math.ceil((new Date(s.replace(" ", "T") + "+09:00") - Date.now()) / 864e5) : null;
+const expired = i => { const d = daysLeft(i.입찰마감일시); return d !== null && d < 0; };
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// 화면 모드
+const applyMode = m => {
+  if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  try { localStorage.setItem("radar-mode", m); } catch {}
+};
+let mode = "system"; try { mode = localStorage.getItem("radar-mode") || "system"; } catch {}
+applyMode(mode);
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+
+// 시계
+const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"});
+tick(); setInterval(tick, 1000);
+
+// 상태
+let decisions = {}, db = null, limits = {추천: 30, 참고: 30};
+let cfg = {institutions: D.institutions, keywords: D.keywords, synced: true};
+const stateOf = i => decisions[i.bidNtceNo]?.status || (expired(i) ? "마감" : "");
+
+// 말풍선 타이핑
+let sayTimer, lastLine = "";
+function say(text) {
+  if (text === lastLine) return; lastLine = text; clearInterval(sayTimer);
+  if (calm) { $("say").textContent = text; return; }
+  let n = 0; sayTimer = setInterval(() => { $("say").textContent = text.slice(0, ++n); if (n >= text.length) clearInterval(sayTimer); }, 28);
+}
+
+// 레이더 표적: 공고번호로 위치를 고정
+function blips(list) {
+  const h = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  $("blips").innerHTML = list.slice(0, 24).map(i => {
+    const v = h(i.bidNtceNo), ang = (v % 360) * Math.PI / 180, r = 14 + (v % 33);
+    const x = 50 + r * Math.cos(ang), y = 50 + r * Math.sin(ang);
+    return `<button class="blip${i.RADAR === "참고" ? " ref" : ""}" style="left:${x}%;top:${y}%;animation-delay:${((v % 360) / 360 * 4 - 4).toFixed(2)}s" data-jump="${esc(i.bidNtceNo)}" aria-label="${esc(i.사업명)}" title="${esc(i.사업명)}"></button>`;
+  }).join("");
+}
+
+function card(i) {
+  const d = daysLeft(i.입찰마감일시), s = stateOf(i);
+  const dd = d === null ? '<span class="dday">마감 미정</span>' : d < 0 ? '<span class="dday over">마감</span>' : `<span class="dday${d <= 3 ? " soon" : ""}">D-${d || "DAY"}</span>`;
+  const acts = !s ? `<button class="btn x" data-act="제외" data-id="${esc(i.bidNtceNo)}">제외</button><button class="btn go" data-act="선택" data-id="${esc(i.bidNtceNo)}">선택</button>`
+    : `<span class="why">${esc(s)}</span>` + (s === "선택" || s === "제외" ? `<button class="btn" data-act="복원" data-id="${esc(i.bidNtceNo)}">복원</button>` : "");
+  return `<article class="card${i.RADAR === "참고" ? " ref" : ""}${s ? " gone" : ""}" id="c-${esc(i.bidNtceNo)}">
+    <div class="row"><span class="tag${i.수집사유 === "집중기관" ? " focus" : ""}">${esc(i.수집사유)}</span>${dd}</div>
+    <div><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><div class="org">${esc(i.공고기관)} · 공고 ${esc(i.공고일자)}</div></div>
+    <div class="row"><span class="money">${won(i.배정예산)}</span><span class="acts">${acts}</span></div></article>`;
+}
+
+function render() {
+  const q = $("q").value.trim().toLowerCase(), showHidden = $("showHidden").checked;
+  const match = i => !q || (i.사업명 + " " + i.공고기관 + " " + i.수요기관).toLowerCase().includes(q);
+  const visible = D.items.filter(i => !stateOf(i));
+  const rec = visible.filter(i => i.RADAR === "추천");
+  $("nRec").textContent = rec.length;
+  $("nRef").textContent = visible.length - rec.length;
+  $("nMoved").textContent = Object.values(decisions).filter(d => d.status === "이관").length;
+  $("nHidden").textContent = D.items.length - visible.length;
+  blips(visible);
+
+  const list = (showHidden ? D.items : visible).filter(match);
+  const lane = (kind, label, cls) => {
+    const arr = list.filter(i => i.RADAR === kind); if (!arr.length) return "";
+    const shown = arr.slice(0, limits[kind]);
+    return `<div class="lane ${cls}">${label} · ${arr.length}건</div><div class="cards">${shown.map(card).join("")}</div>`
+      + (arr.length > shown.length ? `<button class="btn more" type="button" data-more="${kind}">더 보기 (${arr.length - shown.length}건 남음)</button>` : "");
+  };
+  $("feed").innerHTML = lane("추천", "추천 · 1억 원 이상", "") + lane("참고", "참고 · 1억 원 미만", "amber")
+    || `<p class="empty">${q ? "검색 결과가 없습니다." : "새로 검토할 공고가 없습니다. 보관된 공고는 “보관된 공고도 보기”로 확인하세요."}</p>`;
+  $("feedCount").textContent = `표시 ${list.length} / 누적 ${D.items.length}`;
+
+  const picked = D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택");
+  $("trayList").innerHTML = picked.map(i => `<li><span><span class="t">${esc(i.사업명)}</span><span class="org">${esc(i.공고기관)} · ${won(i.배정예산)}</span></span><span class="acts"><button class="btn x" data-act="복원" data-id="${esc(i.bidNtceNo)}">취소</button><button class="btn primary" data-act="이관" data-id="${esc(i.bidNtceNo)}">전송</button></span></li>`).join("");
+  $("trayEmpty").hidden = !!picked.length; $("moveAll").hidden = picked.length < 2;
+  $("port").classList.toggle("hot", !!picked.length);
+
+  say(!db ? "대표님, 지금은 보기 전용이라 선택과 제외가 저장되지 않습니다."
+    : picked.length ? `전송 대기 ${picked.length}건. “전송”을 누르시면 DECODER에게 넘기고 제안요청서를 받아 두겠습니다.`
+    : rec.length ? `대표님, 레이더에 추천 공고 ${rec.length}건이 잡혔습니다. 우리 판이다 싶은 건 “선택”, 아닌 건 “제외”로 골라 주세요.`
+    : "지금은 새로 검토할 추천 공고가 없습니다. 다음 스캔은 평일 09:40입니다.");
+
+  const chips = (arr, key) => arr.map((x, n) => `<span class="chip">${esc(x)}${db ? `<button type="button" aria-label="${esc(x)} 삭제" data-del="${key}" data-n="${n}">×</button>` : ""}</span>`).join("")
+    + (db ? `<span class="add"><input type="text" id="add-${key}" placeholder="추가" aria-label="${key === "keywords" ? "키워드" : "기관"} 추가"><button class="btn" type="button" data-add="${key}">추가</button></span>` : "");
+  $("inst").innerHTML = chips(cfg.institutions, "institutions");
+  $("kw").innerHTML = chips(cfg.keywords, "keywords");
+  const b = $("syncBadge"); b.hidden = !db;
+  b.className = "sync " + (cfg.synced ? "done" : "wait");
+  b.textContent = cfg.synced ? "수집기에 반영됨" : "수집기 반영 대기";
+}
+
+// 카드가 전송 포트(선택) 또는 바깥(제외)으로 날아가는 연출
+function fly(id, act) {
+  const el = $("c-" + id); if (!el || calm || !el.animate) return Promise.resolve();
+  const a = el.getBoundingClientRect(), ghost = el.cloneNode(true);
+  Object.assign(ghost.style, {left: a.left + "px", top: a.top + "px", width: a.width + "px"});
+  ghost.classList.add("flying"); ghost.removeAttribute("id"); document.body.appendChild(ghost);
+  el.style.visibility = "hidden";
+  let frames;
+  if (act === "선택") {
+    const p = $("port").getBoundingClientRect();
+    frames = [{transform: "none", opacity: 1}, {transform: `translate(${p.left + p.width / 2 - a.left - a.width / 2}px,${p.top + 40 - a.top}px) scale(.25)`, opacity: .2}];
+  } else frames = [{transform: "none", opacity: 1, filter: "none"}, {transform: "translateY(10px) skewX(-8deg) scale(.96)", opacity: 0, filter: "blur(6px)"}];
+  return ghost.animate(frames, {duration: act === "선택" ? 650 : 420, easing: "cubic-bezier(.5,0,.3,1)"}).finished.then(() => ghost.remove());
+}
+
+// 저장
+const busy = new Set();
+async function decide(id, status) {
+  if (!db || busy.has(id)) return;
+  const i = D.items.find(x => x.bidNtceNo === id); busy.add(id);
+  try {
+    if (status === "선택" || status === "제외") await fly(id, status);
+    const ref = db.doc("decisions/" + id);
+    if (status === "복원") { await ref.delete(); delete decisions[id]; }
+    else {
+      const body = {status, at: new Date().toISOString(), bidNtceNo: i.bidNtceNo, bidNtceOrd: i.bidNtceOrd, 공고번호: i.공고번호, 사업명: i.사업명, 공고기관: i.공고기관, 배정예산: i.배정예산, 입찰마감일시: i.입찰마감일시, 공고URL: i.공고URL, 구분: i.구분};
+      await ref.set(body); decisions[id] = body;
+    }
+    $("dbStatus").textContent = "";
+  } catch (e) { $("dbStatus").textContent = "저장하지 못했습니다. 잠시 후 다시 눌러 주세요."; }
+  busy.delete(id); render();
+}
+async function saveCfg(next) {
+  const prev = cfg; cfg = {...next, synced: false}; render();
+  try { await db.doc("config/radar").set({institutions: cfg.institutions, keywords: cfg.keywords, synced: false, updatedAt: new Date().toISOString()}); }
+  catch (e) { cfg = prev; render(); $("dbStatus").textContent = "기준을 저장하지 못했습니다."; }
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.act) decide(t.dataset.id, t.dataset.act);
+  if (t.dataset.more) { limits[t.dataset.more] += 30; render(); }
+  if (t.dataset.jump) { const c = $("c-" + t.dataset.jump); if (c) { c.scrollIntoView({behavior: calm ? "auto" : "smooth", block: "center"}); c.animate?.([{boxShadow: "0 0 0 2px var(--holo)"}, {boxShadow: "none"}], 1600); } }
+  if (t.dataset.del) { const k = t.dataset.del; saveCfg({...cfg, [k]: cfg[k].filter((_, n) => n !== +t.dataset.n)}); }
+  if (t.dataset.add) { const k = t.dataset.add, v = $("add-" + k).value.trim(); if (v && !cfg[k].includes(v)) saveCfg({...cfg, [k]: [...cfg[k], v]}); }
+  if (t.id === "moveAll") D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택").forEach(i => decide(i.bidNtceNo, "이관"));
+});
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id?.startsWith("add-")) document.querySelector(`[data-add="${e.target.id.slice(4)}"]`)?.click(); });
+$("q").oninput = () => { limits = {추천: 30, 참고: 30}; render(); };
+$("showHidden").onchange = render;
+$("src").textContent = D.note;
+document.body.classList.add("intro");
+render();
+document.querySelectorAll(".intro .card").forEach((c, n) => c.style.animationDelay = Math.min(n, 12) * 45 + "ms");
+setTimeout(() => document.body.classList.remove("intro"), 1400);
+
+// 공유 저장소 연결
+(async () => {
+  db = await window.claude?.use?.("db") ?? null;
+  if (!db) { render(); return; }
+  db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); render(); },
+    () => { $("dbStatus").textContent = "저장소 연결이 끊겼습니다. 새로고침해 주세요."; });
+  db.doc("config/radar").onSnapshot(s => { if (s.exists) { const d = s.data(); cfg = {institutions: d.institutions, keywords: d.keywords, synced: !!d.synced}; } render(); });
+  render();
+})();
+</script>
