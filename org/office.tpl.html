@@ -158,6 +158,11 @@ svg.map{width:100%;height:auto;display:block}
 .pick label:has(input:checked){border-color:var(--holo);background:var(--holo-soft)}
 .pick img{width:26px;height:26px}
 .pick input{accent-color:var(--holo)}
+body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F·개발실 기록·아이디어 회의. 실제 차단은 공유·db 규칙 */
+.enterbar{position:fixed;left:12px;right:12px;bottom:12px;z-index:5;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid var(--holo);background:var(--bg2);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.enterbar img{width:34px;height:34px}.enterbar b{font:700 14px var(--hud);letter-spacing:.06em;flex:1;min-width:0}
+.enterbar[hidden]{display:none}
+@media (min-width:900px){.enterbar{display:none}}
 .devcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--glass2);display:flex;flex-direction:column;gap:6px}
 .devlist{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow-y:auto}
 .verdict{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
@@ -183,7 +188,7 @@ svg.map{width:100%;height:auto;display:block}
 .who h2{margin:0;font:700 26px/1 var(--hud);letter-spacing:.12em;color:var(--holo)}
 .who .r{font-weight:500}
 .st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
-.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
+.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한,.st.tier.PM{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
 .panel ul{margin:0;padding-left:18px;font-size:14px}
 .today{padding:14px 16px}
 .today .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
@@ -216,8 +221,8 @@ svg.map{width:100%;height:auto;display:block}
   </header>
 
   <div class="hero">
-    <div><h1>JARVIS 빌딩</h1><p>3F 개발실 · 2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
-    <button class="btn primary" type="button" id="openMeet">회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span><span>· 🔒 관리자 전용 · 모든 직원 · 일부 기능 제한</span></div>
+    <div><h1>JARVIS 빌딩</h1><p>3F 개발실 · 2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 [입장] 버튼이 나옵니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
+    <span><button class="btn primary" type="button" id="openMeet">회의실 열기</button> <button class="btn" type="button" id="openReq">개발 요청함</button></span><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span><span>· 🔒 관리자 전용 · 모든 직원 · 일부 기능 제한</span></div>
   </div>
 
   <div class="main"><div class="left">
@@ -226,8 +231,8 @@ svg.map{width:100%;height:auto;display:block}
   <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p><div class="floors">__SVG__</div></section>
 
   <section class="glass meet" id="dev" hidden aria-label="3F 개발실">
-    <div class="devhead"><h2 style="margin:0;font:700 18px var(--sans)">3F 개발실</h2><span id="devFaces"></span>
-      <div class="seg" role="group" aria-label="개발실 코너"><button type="button" data-devtab="log">작업 기록</button><button type="button" data-devtab="idea">아이디어 회의</button><button type="button" data-devtab="req">요청함</button></div>
+    <div class="devhead"><h2 style="margin:0;font:700 18px var(--sans)">3F 개발실</h2><span class="adm" id="devFaces"></span>
+      <div class="seg" role="group" aria-label="개발실 코너"><button class="adm" type="button" data-devtab="log">작업 기록</button><button class="adm" type="button" data-devtab="idea">아이디어 회의</button><button type="button" data-devtab="req">요청함</button></div>
       <button class="btn x" type="button" id="closeDev" style="margin-left:auto">닫기</button></div>
     <div id="devLog"><p class="chatnote">프라이데이가 만들고 비전이 실제로 시험한 기록입니다. PR 이 끝날 때마다 JARVIS 가 올립니다.</p><div class="devlist" id="devLogList"></div></div>
     <div id="devIdea" hidden>
@@ -259,6 +264,7 @@ svg.map{width:100%;height:auto;display:block}
 
     <details class="glass roster fold" id="rosterBox"><summary><h2>직원 명단 <span class="chatnote" id="rosterN"></span></h2></summary><div class="team" id="roster"></div></details>
   </div>
+  <div class="enterbar" id="enterBar" hidden aria-live="polite"></div>
   <aside class="side"><section class="glass panel" id="panel" aria-live="polite"></section></aside>
   </div>
 </div>
@@ -284,7 +290,16 @@ if (D.브리핑) {
   $("tCards").innerHTML = D.브리핑.카드.map(c => `<a class="card" href="${esc(c.url)}" target="_blank" rel="noopener"><span class="hudlabel">${esc(c.code)} · ${esc(c.라벨)}</span><b>${esc(c.값)}</b>${c.줄.map(l => `<small>${esc(l)}</small>`).join("")}</a>`).join("");
   $("tLinks").innerHTML = D.브리핑.링크.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join("");
 }
-const staff = D.본부.flatMap(b => b.팀.map(t => ({...t, 본부: b.이름})));
+const staff = D.본부.flatMap(b => b.팀.map(t => ({...t, 본부: b.이름, 본부id: b.id})));
+let admin = false;  // 관리자(대표·본부장·실장) = 이 페이지 편집 권한. 화면 표시용이며 실제 차단은 공유 목록·db 규칙
+const locked = t => t.권한 === "관리자" && !admin;
+// 입장 버튼: 한 번 누르면 정보 + 입장(더블클릭 없음). 관리자 전용 방은 관리자가 아니면 잠김 표시
+function entryBtn(t) {
+  if (!t.page) return "";
+  if (locked(t)) return `<button class="btn" type="button" disabled>🔒 관리자 전용</button>`;
+  return t.page === "#dev" ? `<button class="btn primary" type="button" data-enter="${esc(t.code)}">3F 개발실 입장</button>`
+    : `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 입장 ↗</a>`;
+}
 const cls = s => s === "근무 중" ? "on" : s === "스킬 보유" ? "skill" : "off";
 let sel = "RADAR";
 function show(code) {
@@ -296,15 +311,14 @@ function show(code) {
     <div><span class="st ${cls(t.상태)}">${esc(t.상태)}</span> ${t.권한 ? `<span class="st tier ${esc(t.권한)}">${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}</span>` : ""}</div>
     ${k ? `<div class="kpi">${k.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     <div class="hudlabel">담당 업무</div><ul>${t.업무.map(w => `<li>${esc(w)}</li>`).join("")}</ul>
-    ${t.page === "#dev" ? `<button class="btn primary" type="button" id="devOpen">3F 개발실 들어가기</button>`
-      : t.page ? `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 들어가기 ↗</a>`
+    ${entryBtn(t)}${t.page ? ""
       : t.상태 === "스킬 보유" ? `<p class="chatnote">전용 업무실은 아직 없습니다. JARVIS 채팅에서 요청하면 이 직원의 스킬로 바로 처리합니다.</p>`
       : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}
     ${t.상태 === "근무 중" ? `<p class="chatnote">${esc(t.code)}와 1:1 대화는 업무실에서, 여러 직원과 함께라면 회의실에서 합니다.</p>` : ""}`;
 }
 // ── 회의실(1:N). 1:1 대화는 각 업무실에서. Claude 호출은 본부장님 계정 사용량으로 처리된다
 let sample = null, db = null, uid = null, downloads = null, meetings = [], busy = false, room = "small", shown = null;
-const working = staff.filter(t => t.상태 === "근무 중");
+const working = () => staff.filter(t => t.상태 === "근무 중" && (admin || t.본부id !== "C"));
 function persona(t) {
   return `너는 JARVIS 조직 ${t.본부} ${t.팀}의 ${t.역할} ${t.code}다. 사용자는 우리 회사 본부장이며 "본부장님"이라고 부른다.
 담당 업무: ${t.업무.join(" / ")}
@@ -326,7 +340,7 @@ function setRoom(r) {
 function openMeet(r) { setRoom(r || room); $("meet").hidden = false; drawMeet(); $("meet").scrollIntoView({behavior: "smooth"}); }
 function drawMeet() {
   $("kAt").textContent = `업무 자료 ${D.지식시각} 기준`;
-  if (!$("pick").children.length) $("pick").innerHTML = working.map(t => `<label><input type="checkbox" value="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}">${esc(t.code)}</label>`).join("");
+  if (!$("pick").children.length) $("pick").innerHTML = working().map(t => `<label><input type="checkbox" value="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}">${esc(t.code)}</label>`).join("");
   $("mhist").innerHTML = meetings.slice().reverse().map((m, i) => `<button class="btn" type="button" data-mh="${meetings.length - 1 - i}" style="text-align:left;white-space:normal">[${m.방 === "big" ? "대" : "소"}] ${esc(m.at.slice(0, 16).replace("T", " "))} · ${esc(m.안건.slice(0, 50))} <span class="chatnote">(${esc(m.참석.join(", "))})</span></button>`).join("") || '<p class="chatnote">아직 회의록이 없습니다.</p>';
 }
 const said = m => m.차 === 2 ? `${m.code} (보완·반론)` : m.code;
@@ -474,24 +488,21 @@ async function sendIdea() {
 // 명단: 휴대폰(한 줄 배치)에서만 펼쳐 둔다. PC 는 조감도 이름표로 충분해 접어 둔다
 $("rosterBox").open = matchMedia("(max-width:899px)").matches;
 $("rosterN").textContent = `${staff.length}명`;
-$("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}${t.권한 ? ` · ${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}` : ""}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
-// 조감도 자리: 한 번 = 정보, 두 번(400ms 안) = 업무실 바로 입장. dblclick 대신 직접 재서 휴대폰 두 번 탭도 같이 처리
-let last = {code: "", at: 0};
-function enter(code) {
-  const t = staff.find(s => s.code === code); if (!t) return;
-  if (t.page === "#dev") { show(code); openDev(); } else if (t.page) window.open(t.page, "_blank", "noopener"); else show(code);
-}
-function tap(code) {
-  const now = Date.now(), again = last.code === code && now - last.at < 400;
-  last = again ? {code: "", at: 0} : {code, at: now};
-  again ? enter(code) : show(code);
+$("roster").innerHTML = D.본부.map(b => `<h3${b.id === "C" ? ' class="adm"' : ""}>${esc(b.이름)}</h3>` + b.팀.map(t => `<button${b.id === "C" ? ' class="adm"' : ""} type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}${t.권한 ? ` · ${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}` : ""}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
+// 조감도 자리·명단: 누르면 담당자 정보 + 입장 버튼(휴대폰은 화면 아래 입장 막대)
+function pick(code) {
+  show(code); const t = staff.find(s => s.code === code);
+  $("enterBar").innerHTML = `<img alt="" src="${D.avatars[t.avatar]}"><b>${esc(t.code)}</b>${entryBtn(t) || '<span class="chatnote">전용 업무실 없음</span>'}<button class="btn x" type="button" id="enterClose" aria-label="닫기">×</button>`;
+  $("enterBar").hidden = false;
 }
 document.addEventListener("click", e => {
-  const d = e.target.closest("[data-code]"); if (d) d.classList.contains("desk") ? tap(d.dataset.code) : show(d.dataset.code);
-  const rm = e.target.closest("g.room"); if (rm) rm.dataset.room === "dev" ? openDev("idea") : openMeet(rm.dataset.room);
+  const d = e.target.closest("[data-code]"); if (d) pick(d.dataset.code);
+  const rm = e.target.closest("g.room"); if (rm) rm.dataset.room === "dev" ? openDev(admin ? "idea" : "req") : openMeet(rm.dataset.room);
   const b = e.target.closest("button"); if (!b) return;
   if (b.id === "openMeet") openMeet();
-  if (b.id === "devOpen") openDev();
+  if (b.dataset.enter) openDev(admin ? "log" : "req");
+  if (b.id === "openReq") openDev("req");
+  if (b.id === "enterClose") $("enterBar").hidden = true;
   if (b.id === "closeDev") $("dev").hidden = true;
   if (b.dataset.devtab) devTab(b.dataset.devtab);
   if (b.id === "igo") runIdea();
@@ -504,16 +515,21 @@ document.addEventListener("click", e => {
   if (b.id === "mgo") runMeet();
   if (b.dataset.mh) drawRec({방: "small", ...meetings[+b.dataset.mh]});
 });
-document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.shiftKey ? enter(d.dataset.code) : tap(d.dataset.code); }
-  const rm = e.target.closest?.("g.room"); if (rm && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); rm.dataset.room === "dev" ? openDev("idea") : openMeet(rm.dataset.room); } });
+document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pick(d.dataset.code); }
+  const rm = e.target.closest?.("g.room"); if (rm && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); rm.dataset.room === "dev" ? openDev(admin ? "idea" : "req") : openMeet(rm.dataset.room); } });
 show(sel); setRoom(room);
 ["iPage", "rPage"].forEach(id => $(id).innerHTML = PAGES.map(p => `<option>${esc(p)}</option>`).join(""));
 $("devFaces").innerHTML = ["FRIDAY", "VISION"].map(c => who(c) ? `<img alt="${c}" title="${c}" src="${D.avatars[who(c).avatar]}">` : "").join("");
-devTab("log");
+devTab("req");
 (async () => {
   [sample, db, downloads] = await Promise.all(["sample", "db", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   if (!$("dev").hidden) loadDev();  // 개발실 자료는 사용자 id 와 무관
-  const user = await window.claude?.use?.("user"); uid = await user?.id?.().catch(() => null);
+  const user = await window.claude?.use?.("user");
+  admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
+  document.body.classList.toggle("admin", admin); show(sel); if (admin && dev.tab === "req" && $("dev").hidden) devTab("log");
+  if (!$("enterBar").hidden) pick(sel);  // 판정 전에 눌렀던 입장 막대도 새 권한으로
+  $("pick").innerHTML = ""; if (!$("meet").hidden) drawMeet();  // 참석자 목록도 새 권한으로
+  uid = await user?.id?.().catch(() => null);
   if (!db || !uid) return;
   const snap = await db.collection(`data/users/${uid}`).get().catch(() => null);
   snap?.docs.forEach(d => { if (d.id === "meetings") meetings = d.data().list || []; });
