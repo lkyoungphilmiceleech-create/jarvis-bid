@@ -188,7 +188,7 @@ body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F
 .who h2{margin:0;font:700 26px/1 var(--hud);letter-spacing:.12em;color:var(--holo)}
 .who .r{font-weight:500}
 .st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
-.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
+.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한,.st.tier.PM{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
 .panel ul{margin:0;padding-left:18px;font-size:14px}
 .today{padding:14px 16px}
 .today .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
@@ -231,7 +231,7 @@ body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F
   <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p><div class="floors">__SVG__</div></section>
 
   <section class="glass meet" id="dev" hidden aria-label="3F 개발실">
-    <div class="devhead"><h2 style="margin:0;font:700 18px var(--sans)">3F 개발실</h2><span id="devFaces"></span>
+    <div class="devhead"><h2 style="margin:0;font:700 18px var(--sans)">3F 개발실</h2><span class="adm" id="devFaces"></span>
       <div class="seg" role="group" aria-label="개발실 코너"><button class="adm" type="button" data-devtab="log">작업 기록</button><button class="adm" type="button" data-devtab="idea">아이디어 회의</button><button type="button" data-devtab="req">요청함</button></div>
       <button class="btn x" type="button" id="closeDev" style="margin-left:auto">닫기</button></div>
     <div id="devLog"><p class="chatnote">프라이데이가 만들고 비전이 실제로 시험한 기록입니다. PR 이 끝날 때마다 JARVIS 가 올립니다.</p><div class="devlist" id="devLogList"></div></div>
@@ -527,6 +527,8 @@ devTab("req");
   const user = await window.claude?.use?.("user");
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("admin", admin); show(sel); if (admin && dev.tab === "req" && $("dev").hidden) devTab("log");
+  if (!$("enterBar").hidden) pick(sel);  // 판정 전에 눌렀던 입장 막대도 새 권한으로
+  $("pick").innerHTML = ""; if (!$("meet").hidden) drawMeet();  // 참석자 목록도 새 권한으로
   uid = await user?.id?.().catch(() => null);
   if (!db || !uid) return;
   const snap = await db.collection(`data/users/${uid}`).get().catch(() => null);
