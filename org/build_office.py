@@ -1,4 +1,4 @@
-"""org/org.json + 수집·분석 데이터 → org/office.html (JARVIS 빌딩 2층 조감도). 사용: python org/build_office.py [--knowledge <폴더>]
+"""org/org.json + 수집·분석 데이터 → org/office.html (JARVIS 빌딩 조감도: 3F 개발실·2F·1F). 사용: python org/build_office.py [--knowledge <폴더>]
 --knowledge: 루틴이 ATLAS·NEXUS 페이지 저장소를 ArtifactData out_dir 로 내려받은 폴더(atlas/briefs, atlas/library, nexus/contacts|pipeline|daily|projects). 직원 대화의 업무 자료가 된다.
 아이소메트릭 3D 좌표(X: 오른쪽 아래, Y: 왼쪽 아래, Z: 위)를 화면 좌표로 투영해 SVG를 만든다."""
 import base64, collections, datetime as dt, json, pathlib, sys
@@ -15,6 +15,7 @@ S = 34                      # 1m(격자 한 칸)의 화면 크기
 C, H = 0.866 * S, 0.5 * S   # 아이소메트릭 투영 계수
 W, D, WALL = 14, 9, 3.2     # 층 바닥 가로(X)·세로(Y), 벽 높이
 FLOORS = {"A": 15.5, "B": 0.0}  # 층 바닥 높이(Z): 2F 제안서 준비 본부, 1F 사업 수행 본부 (조감도용으로 띄움)
+W3, D3 = 9, 5.5             # 3F 개발실(작은 층) 바닥
 
 
 def P(x, y, z):
@@ -86,6 +87,32 @@ def hwpx_template():
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def seat(t, x, y, z0, where):
+    """직원 자리 하나: 의자 → 아바타 → 책상 → 모니터 → 이름표."""
+    st = {"근무 중": "on", "스킬 보유": "skill"}.get(t["상태"], "off")
+    cx, cy = x + 0.55, y - 0.95
+    g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]}) — 두 번 누르면 업무실로"><title>{t["code"]} · 두 번 누르면 업무실로</title>']
+    g.append(box(cx, cy, z0, 0.7, 0.7, 0.45, "chair") + box(cx, cy - 0.12, z0 + .45, 0.7, 0.12, 0.8, "chair"))
+    px, py = P(cx + 0.35, cy + 0.35, z0 + 0.45)
+    size = 2.35 * S
+    img = f'<image data-av="{t["avatar"]}" href="{avatar(t["avatar"])}" x="{px - size / 2:.1f}" y="{py - size * .93:.1f}" width="{size:.1f}" height="{size:.1f}"/>'
+    g.append(img if st != "off" else f'<g class="vacant">{img}</g>')
+    g.append(box(x, y, z0, 1.8, 1.0, 0.75, "desk"))
+    g.append(box(x + 0.15, y + 0.15, z0 + 0.75, 0.9, 0.12, 0.62, "mon"))            # 모니터(뒷면이 앞을 봄)
+    g.append(poly([(x + 0.18, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + 1.34), (x + 0.18, y + 0.14, z0 + 1.34)], "glow" if st == "on" else "dark"))
+    g.append(box(x + 1.2, y + 0.45, z0 + 0.75, 0.35, 0.3, 0.08, "paper"))
+    hx, hy = P(cx + 0.35, cy + 0.35, z0 + 0.45)
+    ty = hy - size * .98
+    tw = max(len(t["code"]) * 9 + 26, 70)
+    g.append(f'<g class="nametag {st}" transform="translate({hx:.1f},{ty:.1f})"><rect x="{-tw / 2:.1f}" y="-15" width="{tw:.1f}" height="30" rx="7"/>'
+             f'<circle cx="{-tw / 2 + 10:.1f}" cy="-4" r="3.5"/><text class="plate" x="4" y="-1">{t["code"]}</text><text class="sub" x="0" y="11">{t["상태"]}</text></g>')
+    if st == "on":
+        g.append(f'<g class="typing" transform="translate({hx + tw / 2 + 6:.0f},{ty:.0f})"><rect class="bubbleS" x="-4" y="-12" width="40" height="22" rx="11"/><circle cx="8" cy="-1" r="3"/><circle cx="16" cy="-1" r="3"/><circle cx="24" cy="-1" r="3"/></g>')
+    g.append("</g>")
+    where[t["code"]] = P(x + 0.9, y + 0.5, z0 + 1.0)
+    return "".join(g)
+
+
 def floor(wing, z0, name, label, staff, where):
     items = []  # (깊이, svg) — 깊이가 작은 것(뒤)부터 그린다
     add = lambda depth, s: items.append((depth, s))
@@ -128,28 +155,40 @@ def floor(wing, z0, name, label, staff, where):
         add(8.8 + 0.6, box(8.8, 0.3, z0, 0.9, 0.7, 1.0, "printer"))
     # 자리: 의자 → 직원 → 책상 → 모니터 순
     for t, (x, y) in zip(staff, SEATS[wing]):
-        st = {"근무 중": "on", "스킬 보유": "skill"}.get(t["상태"], "off")
-        cx, cy = x + 0.55, y - 0.95
-        g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]}) — 두 번 누르면 업무실로"><title>{t["code"]} · 두 번 누르면 업무실로</title>']
-        g.append(box(cx, cy, z0, 0.7, 0.7, 0.45, "chair") + box(cx, cy - 0.12, z0 + .45, 0.7, 0.12, 0.8, "chair"))
-        px, py = P(cx + 0.35, cy + 0.35, z0 + 0.45)
-        size = 2.35 * S
-        img = f'<image data-av="{t["avatar"]}" href="{avatar(t["avatar"])}" x="{px - size / 2:.1f}" y="{py - size * .93:.1f}" width="{size:.1f}" height="{size:.1f}"/>'
-        g.append(img if st != "off" else f'<g class="vacant">{img}</g>')
-        g.append(box(x, y, z0, 1.8, 1.0, 0.75, "desk"))
-        g.append(box(x + 0.15, y + 0.15, z0 + 0.75, 0.9, 0.12, 0.62, "mon"))            # 모니터(뒷면이 앞을 봄)
-        g.append(poly([(x + 0.18, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + 1.34), (x + 0.18, y + 0.14, z0 + 1.34)], "glow" if st == "on" else "dark"))
-        g.append(box(x + 1.2, y + 0.45, z0 + 0.75, 0.35, 0.3, 0.08, "paper"))
-        hx, hy = P(cx + 0.35, cy + 0.35, z0 + 0.45)
-        ty = hy - size * .98
-        tw = max(len(t["code"]) * 9 + 26, 70)
-        g.append(f'<g class="nametag {st}" transform="translate({hx:.1f},{ty:.1f})"><rect x="{-tw / 2:.1f}" y="-15" width="{tw:.1f}" height="30" rx="7"/>'
-                 f'<circle cx="{-tw / 2 + 10:.1f}" cy="-4" r="3.5"/><text class="plate" x="4" y="-1">{t["code"]}</text><text class="sub" x="0" y="11">{t["상태"]}</text></g>')
-        if st == "on":
-            g.append(f'<g class="typing" transform="translate({hx + tw / 2 + 6:.0f},{ty:.0f})"><rect class="bubbleS" x="-4" y="-12" width="40" height="22" rx="11"/><circle cx="8" cy="-1" r="3"/><circle cx="16" cy="-1" r="3"/><circle cx="24" cy="-1" r="3"/></g>')
-        g.append("</g>")
-        add(x + y + 1.4, "".join(g))
-        where[t["code"]] = P(x + 0.9, y + 0.5, z0 + 1.0)
+        add(x + y + 1.4, seat(t, x, y, z0, where))
+    return "".join(base) + "".join(s for _, s in sorted(items, key=lambda i: i[0]))
+
+
+def studio(staff, where):
+    """3F 개발실: 프라이데이·비전 자리, 빌드 화면, 유리방(아이디어 회의 = 개발실 열기)."""
+    z0, items, base = 0.0, [], []
+    add = lambda depth, s: items.append((depth, s))
+    base.append(box(0, 0, z0 - 0.5, W3, D3, 0.5, "slab"))
+    base.append(poly([(0, 0, z0), (W3, 0, z0), (W3, D3, z0), (0, D3, z0)], "floor-t"))
+    base.append(poly([(0.4, 1.2, z0 + .01), (5.4, 1.2, z0 + .01), (5.4, 5.1, z0 + .01), (0.4, 5.1, z0 + .01)], "carpet"))
+    base.append(box(-0.3, 0, z0, 0.3, D3, WALL, "wall"))
+    base.append(box(0, -0.3, z0, W3, 0.3, WALL, "wall"))
+    base.append(poly([(0.01, 1.4, z0 + 0.9), (0.01, 3.8, z0 + 0.9), (0.01, 3.8, z0 + 2.7), (0.01, 1.4, z0 + 2.7)], "win"))
+    base.append(poly([(0.5, 0.01, z0 + 0.8), (4.9, 0.01, z0 + 0.8), (4.9, 0.01, z0 + 2.8), (0.5, 0.01, z0 + 2.8)], "screen"))
+    hx, hy = P(0.8, 0.02, z0 + 2.35)
+    base.append(f'<g class="holo" transform="matrix(0.866,0.5,0,1,{hx:.1f},{hy:.1f})"><text x="0" y="0">BUILD · TEST</text>'
+                f'<text class="big" x="0" y="22">만들기 → 시험 → 배포</text></g>')
+    sx, sy = P(0.01, D3 - 0.3, z0 + 3.0)
+    base.append(f'<text class="wallsign" transform="matrix(0.866,-0.5,0,1,{sx:.1f},{sy:.1f})">3F  개발실</text>')
+    mx, my = 5.8, 3.4
+    add(mx + 1.5, box(mx + 0.6, 1.0, z0, 2.0, 1.3, 0.75, "wood"))
+    for cx, cy in [(mx + 0.8, 2.5), (mx + 1.9, 2.5)]:
+        add(cx + cy, box(cx, cy, z0, 0.5, 0.5, 0.45, "chair"))
+    add(20, poly([(mx, my, z0), (W3, my, z0), (W3, my, z0 + WALL), (mx, my, z0 + WALL)], "glasswall"))
+    add(19.5, poly([(mx, 0, z0), (mx, my, z0), (mx, my, z0 + WALL), (mx, 0, z0 + WALL)], "glasswall"))
+    corners = [P(x, y, z) for x in (mx, W3) for y in (0, my) for z in (z0, z0 + WALL)]
+    tx, ty = P(mx + 2.4, my / 2, z0 + WALL + 0.9)
+    add(99, f'<g class="room" data-room="dev" tabindex="0" role="button" aria-label="개발실 열기"><title>아이디어 회의 · 누르면 개발실</title>'
+        f'<polygon class="hit" points="{" ".join(f"{a:.1f},{b:.1f}" for a, b in hull(corners))}"/>'
+        f'<text class="roomtag" x="{tx:.1f}" y="{ty:.1f}">아이디어 회의</text></g>')
+    add(0.6 + 5.0, box(0.3, 4.7, z0, 0.6, 0.6, 0.5, "pot") + f'<circle class="leaf" cx="{P(0.6, 5.0, z0 + 1.2)[0]:.1f}" cy="{P(0.6, 5.0, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>')
+    for t, (x, y) in zip(staff, [(0.9, 2.6), (3.4, 2.6)]):
+        add(x + y + 1.4, seat(t, x, y, z0, where))
     return "".join(base) + "".join(s for _, s in sorted(items, key=lambda i: i[0]))
 
 
@@ -182,7 +221,15 @@ def svg(rec, ncase):
     sx, sy = P(10.9, 0.03, FLOORS["A"] + 2.25)
     out["A"][1].append(f'<g class="holo" transform="matrix(0.866,0.5,0,1,{sx:.1f},{sy:.1f})"><text x="0" y="0">TODAY</text>'
                        f'<text class="big" x="0" y="22">추천 공고 {rec}</text><text x="0" y="40">DECODER 분석 {ncase}건</text></g>')
-    return "".join(f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 {lab}">' + "".join(parts) + "</svg>" for vb, parts, lab in (out["A"], out["B"]))
+    # 3F 개발실(작은 층): PC 에서는 위에 가운데로, 2F·1F 는 그 아래 나란히
+    dev = next(b for b in org["본부"] if b["id"] == "C")
+    x0, y0 = P(0, D3, 0)[0] - 24, P(0, 0, WALL)[1] - 30
+    x1, y1 = P(W3, 0, 0)[0] + 24, P(W3, D3, 0)[1] + 44
+    lx, ly = P(W3, D3, -0.5)
+    c = (f'<svg class="map c" viewBox="{x0:.0f} {y0:.0f} {x1 - x0:.0f} {y1 - y0:.0f}" role="img" aria-label="JARVIS 빌딩 3F 개발실 {len(dev["팀"])}명">'
+         f'<rect class="sky" x="{x0:.0f}" y="{y0:.0f}" width="{x1 - x0:.0f}" height="{y1 - y0:.0f}"/><g class="level">{studio(dev["팀"], where)}</g>'
+         f'<text class="fl" x="{lx + 16:.0f}" y="{ly - 6:.0f}">3F</text><text class="fln" x="{lx + 16:.0f}" y="{ly + 14:.0f}">{dev["이름"]}</text></svg>')
+    return c + "".join(f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 {lab}">' + "".join(parts) + "</svg>" for vb, parts, lab in (out["A"], out["B"]))
 
 
 def docs(folder):
