@@ -15,7 +15,7 @@ S = 34                      # 1m(격자 한 칸)의 화면 크기
 C, H = 0.866 * S, 0.5 * S   # 아이소메트릭 투영 계수
 W, D, WALL = 14, 9, 3.2     # 층 바닥 가로(X)·세로(Y), 벽 높이
 FLOORS = {"A": 15.5, "B": 0.0}  # 층 바닥 높이(Z): 2F 제안서 준비 본부, 1F 사업 수행 본부 (조감도용으로 띄움)
-W3, D3 = 9, 5.5             # 3F 개발실(작은 층) 바닥
+W3, D3 = 10.5, 5.5          # 3F 개발실(작은 층) 바닥
 
 
 def P(x, y, z):
@@ -170,24 +170,21 @@ def studio(staff, where):
     base.append(box(0, -0.3, z0, W3, 0.3, WALL, "wall"))
     base.append(poly([(0.01, 1.4, z0 + 0.9), (0.01, 3.8, z0 + 0.9), (0.01, 3.8, z0 + 2.7), (0.01, 1.4, z0 + 2.7)], "win"))
     base.append(poly([(0.5, 0.01, z0 + 0.8), (4.9, 0.01, z0 + 0.8), (4.9, 0.01, z0 + 2.8), (0.5, 0.01, z0 + 2.8)], "screen"))
-    hx, hy = P(0.8, 0.02, z0 + 2.35)
-    base.append(f'<g class="holo" transform="matrix(0.866,0.5,0,1,{hx:.1f},{hy:.1f})"><text x="0" y="0">BUILD · TEST</text>'
-                f'<text class="big" x="0" y="22">만들기 → 시험 → 배포</text></g>')
     sx, sy = P(0.01, D3 - 0.3, z0 + 3.0)
     base.append(f'<text class="wallsign" transform="matrix(0.866,-0.5,0,1,{sx:.1f},{sy:.1f})">3F  개발실</text>')
-    mx, my = 5.8, 3.4
+    mx, my = 7.3, 3.4  # 유리방은 오른쪽 끝: 비전 자리와 클릭 영역이 겹치지 않게
     add(mx + 1.5, box(mx + 0.6, 1.0, z0, 2.0, 1.3, 0.75, "wood"))
     for cx, cy in [(mx + 0.8, 2.5), (mx + 1.9, 2.5)]:
         add(cx + cy, box(cx, cy, z0, 0.5, 0.5, 0.45, "chair"))
     add(20, poly([(mx, my, z0), (W3, my, z0), (W3, my, z0 + WALL), (mx, my, z0 + WALL)], "glasswall"))
     add(19.5, poly([(mx, 0, z0), (mx, my, z0), (mx, my, z0 + WALL), (mx, 0, z0 + WALL)], "glasswall"))
-    corners = [P(x, y, z) for x in (mx, W3) for y in (0, my) for z in (z0, z0 + WALL)]
+    corners = [P(x, y, z) for x in (mx, W3) for y in (0, my) for z in (z0, z0 + 1.6)]  # 낮게: 비전 이름표·말풍선과 안 겹치게
     tx, ty = P(mx + 2.4, my / 2, z0 + WALL + 0.9)
     add(99, f'<g class="room" data-room="dev" tabindex="0" role="button" aria-label="개발실 열기"><title>아이디어 회의 · 누르면 개발실</title>'
         f'<polygon class="hit" points="{" ".join(f"{a:.1f},{b:.1f}" for a, b in hull(corners))}"/>'
         f'<text class="roomtag" x="{tx:.1f}" y="{ty:.1f}">아이디어 회의</text></g>')
     add(0.6 + 5.0, box(0.3, 4.7, z0, 0.6, 0.6, 0.5, "pot") + f'<circle class="leaf" cx="{P(0.6, 5.0, z0 + 1.2)[0]:.1f}" cy="{P(0.6, 5.0, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>')
-    for t, (x, y) in zip(staff, [(0.9, 2.6), (3.4, 2.6)]):
+    for t, (x, y) in zip(staff, [(0.9, 2.6), (3.6, 2.6)]):
         add(x + y + 1.4, seat(t, x, y, z0, where))
     return "".join(base) + "".join(s for _, s in sorted(items, key=lambda i: i[0]))
 
