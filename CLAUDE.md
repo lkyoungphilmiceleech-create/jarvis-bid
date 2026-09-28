@@ -33,7 +33,7 @@
 ## 담당 (처음 안 — 본부장님과 조정)
 | 영역 | 담당 |
 |---|---|
-| 업무실 화면(`org/*.tpl.html`, `org/avatars/`) | 사내 직원 (+ 개발 조력자) |
+| 업무실 화면(`org/*.tpl.html`, `org/avatars/`) | 사내 직원 (+ 개발 조력자 **프라이데이**, `.claude/agents/page-builder.md`) |
 | 빌드·보고서 스크립트(`org/build_*.py`, `org/*_report.py`), `org/org.json` | JARVIS |
 | 수집(`collect.py`, `.github/workflows/`, `data/`) | JARVIS |
 | 루틴·카톡 알림·아티팩트 배포 | JARVIS (본부장님 계정) |
