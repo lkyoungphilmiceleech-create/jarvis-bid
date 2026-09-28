@@ -87,6 +87,13 @@ def hwpx_template():
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def tier(t):
+    """이름표 둘째 줄: 근무 중이면 권한 등급(관리자 전용·모든 직원·일부 제한), 아니면 상태."""
+    if t["상태"] != "근무 중" or "권한" not in t:
+        return t["상태"]
+    return ("🔒 " if t["권한"] == "관리자" else "") + org["권한설명"].get(t["권한"], t["권한"])
+
+
 def seat(t, x, y, z0, where):
     """직원 자리 하나: 의자 → 아바타 → 책상 → 모니터 → 이름표."""
     st = {"근무 중": "on", "스킬 보유": "skill"}.get(t["상태"], "off")
@@ -105,7 +112,7 @@ def seat(t, x, y, z0, where):
     ty = hy - size * .98
     tw = max(len(t["code"]) * 9 + 26, 70)
     g.append(f'<g class="nametag {st}" transform="translate({hx:.1f},{ty:.1f})"><rect x="{-tw / 2:.1f}" y="-15" width="{tw:.1f}" height="30" rx="7"/>'
-             f'<circle cx="{-tw / 2 + 10:.1f}" cy="-4" r="3.5"/><text class="plate" x="4" y="-1">{t["code"]}</text><text class="sub" x="0" y="11">{t["상태"]}</text></g>')
+             f'<circle cx="{-tw / 2 + 10:.1f}" cy="-4" r="3.5"/><text class="plate" x="4" y="-1">{t["code"]}</text><text class="sub" x="0" y="11">{tier(t)}</text></g>')
     if st == "on":
         g.append(f'<g class="typing" transform="translate({hx + tw / 2 + 6:.0f},{ty:.0f})"><rect class="bubbleS" x="-4" y="-12" width="40" height="22" rx="11"/><circle cx="8" cy="-1" r="3"/><circle cx="16" cy="-1" r="3"/><circle cx="24" cy="-1" r="3"/></g>')
     g.append("</g>")
@@ -307,7 +314,7 @@ def knowledge(kdir):
 
 k, rec, ncase = kpis()
 kdir = pathlib.Path(sys.argv[sys.argv.index("--knowledge") + 1]) if "--knowledge" in sys.argv else None
-data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M"), "브리핑": briefing(kdir), "hwpx": hwpx_template()}
+data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M"), "브리핑": briefing(kdir), "hwpx": hwpx_template(), "권한설명": org["권한설명"]}
 tpl = (root / "office.tpl.html").read_text(encoding="utf-8")
 html = tpl.replace("__SVG__", svg(rec, ncase)).replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 (root / "office.html").write_text(html, encoding="utf-8")
