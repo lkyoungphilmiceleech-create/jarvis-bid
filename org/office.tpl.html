@@ -243,11 +243,11 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const applyMode = m => {
   if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
-  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  document.querySelectorAll(".seg button[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
   try { localStorage.setItem("office-mode", m); } catch {}
 };
 let mode = "system"; try { mode = localStorage.getItem("office-mode") || "system"; } catch {}
-applyMode(mode); document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+applyMode(mode); document.querySelectorAll(".seg button[data-mode]").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
 const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"});
 tick(); setInterval(tick, 1000);
 if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll("animateMotion").forEach(a => a.remove());
@@ -291,6 +291,7 @@ const ROOMS = {
   small: {이름: "소회의실", 규칙: "2~3명 권장 · 한 사람씩 한 번 발언 → JARVIS 종합. 빠른 확인용입니다."},
   big: {이름: "대회의실", 규칙: "4명 이상 권장 · 1차 발언 → 보완·반론 → JARVIS 종합(할 일·담당·기한). 회의록을 HWPX로 받을 수 있습니다."}};
 function setRoom(r) {
+  if (busy) return;  // 회의 중에는 방·보완 라운드를 바꾸지 않는다
   room = r;
   document.querySelectorAll("[data-room]").forEach(x => x.tagName === "BUTTON" && x.setAttribute("aria-pressed", x.dataset.room === r));
   $("mTitle").textContent = ROOMS[r].이름; $("mRule").textContent = ROOMS[r].규칙; $("m2box").hidden = r !== "big";
@@ -307,14 +308,15 @@ function drawRec(rec) {
   $("mlog").innerHTML = [{r: "me", t: rec.안건}, ...rec.발언.map(x => ({r: "ai", by: said(x), t: x.t, code: x.code})), ...(rec.종합 ? [{r: "ai", by: "JARVIS 종합", t: rec.종합, sum: true}] : [])]
     .map(x => bubble(x, staff.find(s => s.code === x.code))).join("");
   $("mlog").scrollTop = $("mlog").scrollHeight;
-  $("mdl").hidden = !(rec.방 === "big" && rec.종합 && downloads); $("mdlNote").textContent = "";
+  $("mdl").hidden = !(rec.방 === "big" && rec.종합 && rec.끝 !== false && downloads);  // 끝: 종합까지 성공한 회의(옛 기록은 표시 없음) $("mdlNote").textContent = "";
 }
 async function runMeet() {
   const q = $("mq").value.trim(), who = [...$("pick").querySelectorAll("input:checked")].map(i => i.value);
   if (!q || busy) return; if (!who.length) { alert("참석자를 한 명 이상 골라 주세요."); return; }
   if (!sample) { alert("이 화면에서는 회의를 열 수 없습니다. claude.ai에서 열어 주세요."); return; }
-  busy = true; $("mgo").disabled = true;
-  const big = room === "big", rec = {at: new Date().toISOString(), 방: room, 안건: q, 참석: who, 발언: [], 종합: ""};
+  busy = true; $("mgo").disabled = true; $("m2").disabled = true;
+  const big = room === "big", second = big && $("m2").checked && who.length > 1;
+  const rec = {at: new Date().toISOString(), 방: room, 안건: q, 참석: who, 발언: [], 종합: "", 끝: false};
   const ask = async (prompt, m) => {
     rec.발언.push(m); drawRec(rec);
     try { const r = await sample(prompt, {cache: false, onText: ({text}) => { m.t = text; drawRec(rec); }}); m.t = r.text; }
@@ -325,19 +327,19 @@ async function runMeet() {
   const log = () => rec.발언.filter(x => x.t !== "…").map(x => `${said(x)}: ${x.t}`).join("\n\n") || "(아직 없음)";
   for (const code of who)
     await ask(`${persona(staff.find(x => x.code === code))}\n\n${head}\n[앞선 발언]\n${log()}\n\n너의 담당 관점에서만 2~5문장으로 발언한다. 앞선 발언을 반복하지 말고, 필요하면 다른 직원 발언에 보태거나 이견을 말한다.`, {code, 차: 1, t: "…"});
-  if (big && $("m2").checked && who.length > 1)
+  if (second)
     for (const code of who)
       await ask(`${persona(staff.find(x => x.code === code))}\n\n${head}\n[지금까지 발언]\n${log()}\n\n보완·반론 차례다. 다른 직원 발언 가운데 네 담당 관점에서 빠졌거나 틀렸거나 위험한 점을 1~3문장으로 짚는다. 보탤 것이 없으면 "보탤 것 없음"이라고만 한다.`, {code, 차: 2, t: "…"});
   const out = big ? `1) 결론 2) 할 일 — 한 줄에 하나씩 "담당 직원 | 할 일 | 기한" 3) 본부장님 결정이 필요한 것 4) 위험 요소` : `1) 결론 2) 할 일(담당 직원·기한) 3) 본부장님 결정이 필요한 것`;
   const s = {r: "ai", t: "…"}; rec.종합 = "…"; drawRec(rec);
-  try { const r = await sample(`너는 회의 사회자 JARVIS다. 사용자는 본부장이며 "본부장님"이라고 부른다.\n${head}\n[발언]\n${log()}\n\n본부장님께 드릴 종합을 한국어 개조식으로 짧게: ${out}. 발언에 없는 사실은 만들지 않는다.`, {cache: false, onText: ({text}) => { rec.종합 = text; drawRec(rec); }}); rec.종합 = r.text; }
+  try { const r = await sample(`너는 회의 사회자 JARVIS다. 사용자는 본부장이며 "본부장님"이라고 부른다.\n${head}\n[발언]\n${log()}\n\n본부장님께 드릴 종합을 한국어 개조식으로 짧게: ${out}. 발언에 없는 사실은 만들지 않는다.`, {cache: false, onText: ({text}) => { rec.종합 = text; drawRec(rec); }}); rec.종합 = r.text; rec.끝 = true; }
   catch (e) { rec.종합 = errText(e); }
   drawRec(rec); meetings.push(rec); meetings = meetings.slice(-20);
   if (db && uid) db.doc(`data/users/${uid}/meetings`).set({list: meetings}).catch(() => {});
-  busy = false; $("mgo").disabled = false; $("mq").value = ""; drawMeet();
+  busy = false; $("mgo").disabled = false; $("m2").disabled = false; $("mq").value = ""; drawRec(rec); drawMeet();
 }
 // 대회의실 회의록 → HWPX(빌드 때 만든 한글 틀의 본문 자리에 문단을 채움). 저장 허용 확장자에 hwpx 가 없어 zip 으로 감싼다
-const xml = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const xml = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 function minutesLines(rec) {
   const kst = new Date(rec.at).toLocaleString("ko-KR", {timeZone: "Asia/Seoul"});
   const part = (title, arr) => arr.length ? [title, ...arr.flatMap(x => String(x.t).split("\n").filter(Boolean).map((l, i) => i ? `   ${l}` : `◦ ${x.code}: ${l}`)), ""] : [];
@@ -371,6 +373,9 @@ async function saveMinutes() {
     $("mdlNote").textContent = "저장했습니다. 압축을 풀면 한글 파일이 나옵니다.";
   } catch (e) { $("mdlNote").textContent = e?.code === "declined" ? "저장을 취소했습니다." : "회의록 파일을 만들지 못했습니다."; }
 }
+// 명단: 휴대폰(한 줄 배치)에서만 펼쳐 둔다. PC 는 조감도 이름표로 충분해 접어 둔다
+$("rosterBox").open = matchMedia("(max-width:899px)").matches;
+$("rosterN").textContent = `${staff.length}명`;
 $("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
 // 조감도 자리: 한 번 = 정보, 두 번(400ms 안) = 업무실 바로 입장. dblclick 대신 직접 재서 휴대폰 두 번 탭도 같이 처리
 let last = {code: "", at: 0};
