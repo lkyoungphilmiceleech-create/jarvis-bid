@@ -339,6 +339,7 @@ const codeOk = c => { const v = invites[c]; return !!v && !v.사용 && new Date(
 const MAIL = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 const PHONE = /^(?=(?:\D*\d){7})[0-9+\-\s()]{7,20}$/; // 숫자 7개 이상
 const grade = () => admin ? "관리자" : members[uid]?.상태 === "승인" ? (members[uid].등급 === "팀장" ? "팀장" : "직원") : ""; // 관리자는 편집 권한으로만
+const PURGE = 30 * 864e5, left = x => Math.max(0, Math.ceil((new Date(x.비활성일) - Date.now() + PURGE) / 864e5));
 const inactive = () => !admin && members[uid]?.상태 === "비활성";
 const need = t => ({관리자: ["관리자"], PM: ["관리자", "팀장"]})[t.권한] || GRADES; // 디자인(PRISM)·전체·제한은 모든 등급
 const needText = t => need(t).length === 3 ? "모든 등급" : need(t).join("·");
@@ -346,7 +347,11 @@ async function loadHr() {
   if (!db || !uid) return;
   const m = await db.collection("members").get().catch(() => null); members = {}; m?.docs.forEach(d => members[d.id] = d.data());
   if (admin) { const [j, v, f] = await Promise.all(["join", "invites", "staffinfo"].map(c => db.collection(c).get().catch(() => null)));
-    joins = (j?.docs || []).map(d => ({id: d.id, ...d.data()})); invites = {}; v?.docs.forEach(d => invites[d.id] = d.data()); info = {}; f?.docs.forEach(d => info[d.id] = d.data()); }
+    joins = (j?.docs || []).map(d => ({id: d.id, ...d.data()})); invites = {}; v?.docs.forEach(d => invites[d.id] = d.data()); info = {}; f?.docs.forEach(d => info[d.id] = d.data());
+    // 비활성 30일 지난 직원의 메일·연락처 삭제(본부장님 결정 2026-09-29). ponytail: 관리자가 사무실을 열 때 지움, 오래 안 열면 늦어짐 → 필요하면 아침 루틴으로
+    for (const [id, x] of Object.entries(members)) if (x.상태 === "비활성") { const t = new Date(x.비활성일);
+      if (isNaN(t)) await db.doc(`members/${id}`).update({비활성일: x.비활성일 = new Date().toISOString()}).catch(() => {}); // 날짜 없는 예전 비활성은 오늘부터 셈
+      else if (Date.now() - t > PURGE && info[id]) await db.doc(`staffinfo/${id}`).delete().then(() => delete info[id], () => {}); } }
   const mine = await db.doc(`join/${uid}`).get().catch(() => null); myJoin = mine?.exists ? mine.data() : null;
   show(sel); if (!$("hr").hidden) drawHr();
 }
@@ -379,7 +384,7 @@ async function drawHr() {
       <div class="chatnote">${ok ? `✅ 초청 코드 확인 (${esc(invites[j.코드]?.메모 || "")})` : `❌ 초청 코드 확인 안 됨 — 없는 코드이거나 이미 썼거나 기한이 지났습니다. 승인할 수 없습니다.`}</div>
       <div class="ask">${sel(j.id, "직원", 1)}<button class="btn primary" type="button" data-hrok="${esc(j.id)}" ${ok ? "" : "disabled"}>승인</button><button class="btn x" type="button" data-hrno="${esc(j.id)}">거절</button></div></div>`; }).join("") || '<p class="chatnote">새 신청이 없습니다.</p>'}
     <div class="hudlabel">사내 직원 ${Object.keys(members).length}명</div>
-    <div class="devlist">${Object.entries(members).sort((a, c) => GRADES.indexOf(a[1].등급) - GRADES.indexOf(c[1].등급)).map(([id, x]) => `<div class="card"><b>${esc(nm(id))}</b> <span class="chatnote">${[em(id), x.부서].filter(Boolean).map(esc).join(" · ")} ${esc(x.직함 || "")}${info[id]?.연락처 ? ` · ☎ ${esc(info[id].연락처)}` : ""}${x.상태 === "비활성" ? " · 비활성" : ""}</span>
+    <div class="devlist">${Object.entries(members).sort((a, c) => GRADES.indexOf(a[1].등급) - GRADES.indexOf(c[1].등급)).map(([id, x]) => `<div class="card"><b>${esc(nm(id))}</b> <span class="chatnote">${[em(id), x.부서].filter(Boolean).map(esc).join(" · ")} ${esc(x.직함 || "")}${info[id]?.연락처 ? ` · ☎ ${esc(info[id].연락처)}` : ""}${x.상태 === "비활성" ? ` · 비활성${info[id] && !isNaN(left(x)) ? ` (연락처 ${left(x)}일 뒤 삭제)` : ""}` : ""}</span>
       <div class="ask">${sel(id, x.등급)}<button class="btn x" type="button" data-hroff="${esc(id)}">${x.상태 === "비활성" ? "다시 활성" : "비활성"}</button></div></div>`).join("") || '<p class="chatnote">아직 등록된 직원이 없습니다.</p>'}</div>
     <details><summary class="chatnote" style="cursor:pointer">페이지 공유 기준표 (공유는 각 페이지 공유 메뉴에서 직접)</summary>
       <table class="shr"><thead><tr><th>업무실</th>${GRADES.map(x => `<th>${x}</th>`).join("")}</tr></thead><tbody>
@@ -589,7 +594,7 @@ document.addEventListener("click", e => {
   if (b.id === "ivCopy") navigator.clipboard?.writeText(`[㈜마이스리치 JARVIS 사무실 초청]\n1) 공유 초대 메일의 링크(또는 ${OFFICE})로 claude.ai 에 로그인해 사무실에 들어오세요.\n2) 위쪽 [👤 직원 등록·등급]에서 초청 코드 ${newCode} 와 부서·직책·연락처를 적어 신청해 주세요.\n코드는 1회용이며 7일 뒤 만료됩니다.`).then(() => hrSay("초청 메시지를 복사했습니다."), () => hrSay("복사하지 못했습니다. 코드를 직접 전달해 주세요."));
   if (b.dataset.ivdel && admin && confirm("이 초청 코드를 취소할까요?")) { if (b.dataset.ivdel === newCode) newCode = ""; hrWrite(() => db.doc(`invites/${b.dataset.ivdel}`).delete(), "초청 코드를 취소했습니다."); }
   if (b.dataset.hrno && admin && confirm("이 등록 신청을 거절할까요?")) hrWrite(() => db.doc(`join/${b.dataset.hrno}`).delete(), "거절했습니다.");
-  if (b.dataset.hroff && admin) { const id = b.dataset.hroff; hrWrite(() => db.doc(`members/${id}`).update({상태: members[id]?.상태 === "비활성" ? "승인" : "비활성"}), "바꿨습니다."); }
+  if (b.dataset.hroff && admin) { const id = b.dataset.hroff; hrWrite(() => db.doc(`members/${id}`).update(members[id]?.상태 === "비활성" ? {상태: "승인", 비활성일: ""} : {상태: "비활성", 비활성일: new Date().toISOString()}), "바꿨습니다. 비활성 30일 뒤 메일·연락처는 지워집니다."); }
   if (b.id === "closeDev") $("dev").hidden = true;
   if (b.dataset.devtab) devTab(b.dataset.devtab);
   if (b.id === "igo") runIdea();
