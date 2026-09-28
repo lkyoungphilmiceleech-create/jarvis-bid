@@ -183,7 +183,7 @@ svg.map{width:100%;height:auto;display:block}
 .who h2{margin:0;font:700 26px/1 var(--hud);letter-spacing:.12em;color:var(--holo)}
 .who .r{font-weight:500}
 .st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
-.st.on{color:var(--go);border-color:var(--go)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
+.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
 .panel ul{margin:0;padding-left:18px;font-size:14px}
 .today{padding:14px 16px}
 .today .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
@@ -217,7 +217,7 @@ svg.map{width:100%;height:auto;display:block}
 
   <div class="hero">
     <div><h1>JARVIS 빌딩</h1><p>3F 개발실 · 2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
-    <button class="btn primary" type="button" id="openMeet">회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
+    <button class="btn primary" type="button" id="openMeet">회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span><span>· 🔒 관리자 전용 · 모든 직원 · 일부 제한</span></div>
   </div>
 
   <div class="main"><div class="left">
@@ -293,7 +293,7 @@ function show(code) {
   document.querySelectorAll(".team button").forEach(b => b.setAttribute("aria-pressed", b.dataset.code === code));
   const k = D.kpi[code];
   $("panel").innerHTML = `<div class="who"><img alt="" src="${D.avatars[t.avatar]}"><div><h2>${esc(t.code)}</h2><div class="r">${esc(t.역할)} · ${esc(t.팀)}</div><div class="chatnote">${esc(t.본부)}</div></div></div>
-    <div><span class="st ${cls(t.상태)}">${esc(t.상태)}</span></div>
+    <div><span class="st ${cls(t.상태)}">${esc(t.상태)}</span> ${t.권한 ? `<span class="st tier ${esc(t.권한)}">${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}</span>` : ""}</div>
     ${k ? `<div class="kpi">${k.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     <div class="hudlabel">담당 업무</div><ul>${t.업무.map(w => `<li>${esc(w)}</li>`).join("")}</ul>
     ${t.page === "#dev" ? `<button class="btn primary" type="button" id="devOpen">3F 개발실 들어가기</button>`
@@ -474,7 +474,7 @@ async function sendIdea() {
 // 명단: 휴대폰(한 줄 배치)에서만 펼쳐 둔다. PC 는 조감도 이름표로 충분해 접어 둔다
 $("rosterBox").open = matchMedia("(max-width:899px)").matches;
 $("rosterN").textContent = `${staff.length}명`;
-$("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
+$("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}${t.권한 ? ` · ${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}` : ""}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
 // 조감도 자리: 한 번 = 정보, 두 번(400ms 안) = 업무실 바로 입장. dblclick 대신 직접 재서 휴대폰 두 번 탭도 같이 처리
 let last = {code: "", at: 0};
 function enter(code) {
