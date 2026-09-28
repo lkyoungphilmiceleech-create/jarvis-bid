@@ -91,7 +91,7 @@ def tier(t):
     """이름표 둘째 줄: 근무 중이면 권한 등급(관리자 전용·모든 직원·일부 제한), 아니면 상태."""
     if t["상태"] != "근무 중" or "권한" not in t:
         return t["상태"]
-    return ("🔒 " if t["권한"] == "관리자" else "") + org["권한설명"][t["권한"]]
+    return ("🔒 " if t["권한"] == "관리자" else "") + org["권한설명"].get(t["권한"], t["권한"])
 
 
 def seat(t, x, y, z0, where):
