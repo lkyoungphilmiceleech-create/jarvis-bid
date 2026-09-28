@@ -296,7 +296,7 @@ function stepsHtml() {
 // ── 사업 건강도: 기간 경과 대비 공정 진척, 예산 집행(전망 대비), 지연
 function health(p = P()) {
   const w = W(), m = money(), d = x => new Date(x + "T00:00:00");
-  const el = p.시작 && p.종료 ? Math.max(0, Math.min(1, (d(today()) - d(p.시작)) / Math.max(864e5, d(p.종료) - d(p.시작)))) : null;
+  const el = p.시작 && p.종료 && p.종료 > p.시작 ? Math.max(0, Math.min(1, (d(today()) - d(p.시작)) / Math.max(864e5, d(p.종료) - d(p.시작)))) : null;
   const prog = w.length ? w.reduce((a, t) => a + (t.상태 === "완료" ? 1 : (t.하위 || []).length ? t.하위.filter(x => x.완료).length / t.하위.length : 0), 0) / w.length : null;
   const late = lateList().length, open = w.reduce((a, t) => a + (t.보고 || []).filter(r => !r.해결).length, 0), gap = el !== null && prog !== null ? prog - el : null;
   return {el, prog, spend: m.전망 ? m.집행 / m.전망 : null, late, open, gap, lv: gap === null && !late ? "–" : gap < -.25 || late >= 5 ? "위험" : gap < -.1 || late ? "주의" : "양호"};
@@ -697,7 +697,7 @@ function budStage() {
 async function budCommit() {
   const out = budParse(), old = B(), p = P();
   out.forEach(r => { const prev = old?.rows?.find(x => x.id === r.id); if (prev?.예정) r.예정 = prev.예정; });
-  budget[cur] = {file: bup.name, v: 2, rows: out}; bup = null; await saveBud();
+  budget[cur] = {file: bup.name, v: 2, rows: out, ...(old?.기준 ? {기준: old.기준} : {})}; bup = null; await saveBud(); // 착수 시 고정한 기준 수익률은 다시 올려도 유지
   if (!num(p.계약금액)) { p.계약금액 = out.reduce((a, r) => a + r.금액, 0); await saveProj(p); }
   draw();
 }
@@ -857,7 +857,7 @@ document.addEventListener("change", async e => {
   if (t.id === "bSheet") { bup.sheet = t.value; bup.auto = true; budGuess(); budStage(); }
   if (t.id === "bHr") { bup.hr = Math.max(0, +t.value - 1); bup.auto = false; budGuess(); budStage(); }
   if (t.dataset.bm) { bup.map[t.dataset.bm] = t.value === "" ? -1 : +t.value; budStage(); }
-  if (t.dataset.bf) { const r = B()?.rows.find(x => x.id === t.dataset.bf); if (r) { r.예정 = num(t.value); await saveBud(); drawTop(); drawBud(); } }
+  if (t.dataset.bf) { const r = B()?.rows.find(x => x.id === t.dataset.bf); if (r) { r.예정 = Math.max(0, num(t.value)); await saveBud(); drawTop(); drawBud(); } }
   if (t.dataset.rchk) { const [i, j] = t.dataset.rchk.split("|").map(Number), x = W()[i], r = x?.보고?.[j]; if (!r) return;
     r.해결 = t.checked; r.해결일 = t.checked ? today() : ""; (x.기록 ||= []).push({at: new Date().toISOString(), 내용: t.checked ? "지연 보고 해결 완료" : "지연 보고 해결 취소"}); await saveWbs(); drawWbs(); }
   if (t.dataset.lf === "rid" && t.value) { const r = RB(cur).find(x => x.id === t.value) || BR().find(x => x.id === t.value); if (r) ["구분", "항목", "내용"].forEach(k => { const el = document.querySelector(`[data-lf="${k}"]`); if (el) el.value = r[k]; }); }
@@ -868,9 +868,9 @@ let keepT; const keep = id => { bFocus = id; clearTimeout(keepT); keepT = setTim
 document.addEventListener("paste", async e => {
   const t = e.target; if (!t.dataset?.bf || !B()) return;
   const lines = (e.clipboardData?.getData("text") || "").replace(/\r?\n$/, "").split(/\r?\n/).map(x => x.split("\t")[0].trim()); if (lines.length < 2) return;
-  e.preventDefault(); const ins = [...document.querySelectorAll("[data-bf]")], i0 = ins.indexOf(t);
-  lines.forEach((v, k) => { const r = ins[i0 + k] && B().rows.find(x => x.id === ins[i0 + k].dataset.bf); if (r) r.예정 = num(v); });
-  keep(ins[Math.min(ins.length - 1, i0 + lines.length - 1)]?.dataset.bf); await saveBud(); drawTop(); drawBud();
+  e.preventDefault(); const rows = B().rows.filter(r => !r.제목행), i0 = rows.findIndex(r => r.id === t.dataset.bf); // 접은 구분도 건너뛰지 않고 표 순서대로
+  lines.forEach((v, k) => { if (rows[i0 + k]) rows[i0 + k].예정 = Math.max(0, num(v)); });
+  keep(rows[Math.min(rows.length - 1, i0 + lines.length - 1)]?.id); await saveBud(); drawTop(); drawBud();
 });
 document.addEventListener("keydown", e => {
   const t = e.target; if (!t.dataset?.bf || !["Enter", "ArrowDown", "ArrowUp"].includes(e.key) || e.isComposing) return;

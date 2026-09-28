@@ -220,7 +220,7 @@ function pillFor(e) {
 
 function render() {
   const keepA = aDirty === cur ? readAssign() : null; // 입력 중인 배정 칸은 다시 그려도 남긴다
-  $("cases").innerHTML = D.cases.map(c => `<button class="case" type="button" data-case="${esc(c.bidNtceNo)}" aria-current="${c.bidNtceNo === cur}"><span>${esc(c.사업명)}${assigns[c.bidNtceNo] ? `<span class="chip">${esc(STEPS[assigns[c.bidNtceNo].단계 ?? 1].split(" · ")[0])}</span>` : ""}</span><span class="hudlabel">${esc(c.analyzedAt)}</span></button>`).join("")
+  $("cases").innerHTML = D.cases.map(c => `<button class="case" type="button" data-case="${esc(c.bidNtceNo)}" aria-current="${c.bidNtceNo === cur}"><span>${esc(c.사업명)}${assigns[c.bidNtceNo] ? `<span class="chip">${esc(STEPS[stepOf(assigns[c.bidNtceNo])].split(" · ")[0])}</span>` : ""}</span><span class="hudlabel">${esc(c.analyzedAt)}</span></button>`).join("")
     || '<p class="empty">아직 분석한 공고가 없습니다. RADAR에서 공고를 DECODER로 전송해 주세요.</p>';
   const c = D.cases.find(x => x.bidNtceNo === cur);
   if (!c) { $("report").innerHTML = '<p class="empty">분석할 공고를 기다리는 중입니다.</p>'; say(`${honor}, RADAR가 공고를 넘겨주면 제안요청서를 바로 해독하겠습니다.`); return; }
@@ -254,9 +254,10 @@ const STEPS = ["선정 · RADAR", "1차 점검 · DECODER", "작성자 배치", 
 const ROLES = [["총괄", "제안 총괄 (PM)"], ["전략", "전략·프로그램 (ORACLE와 함께)"], ["시각화", "제안서 시각화 (QUILL과 함께)"], ["평가", "모의 평가 준비 (TRIBUNAL과 함께)"]];
 let assigns = {}, aDirty = null;
 const A = () => assigns[cur] || {};
+const stepOf = a => { const n = Math.trunc(+(a?.단계 ?? 1)); return n >= 0 && n < STEPS.length ? n : 1; }; // 잘못 저장된 단계 값에도 화면이 깨지지 않게
 const dueOf = c => (c.일정.find(e => e.구분 === "마감" || /제출|마감/.test(e.항목)) || {}).날짜 || "";
 function assignHtml(c) {
-  const a = A(), st = a.단계 ?? 1, w = a.작성자 || {}, d = a.마감 || {};
+  const a = A(), st = stepOf(a), w = a.작성자 || {}, d = a.마감 || {};
   return `<div class="assign"><div class="hudlabel">제안 준비 배정 · DECODER → 작성자</div>
     <div class="flow" aria-label="진행 단계">${STEPS.map((x, i) => `<button type="button" class="${i < st ? "done" : i === st ? "on" : ""}" data-step="${i}" aria-pressed="${i === st}">${i < st ? "✓ " : ""}${esc(x)}</button>`).join("")}</div>
     <div class="af"><label>참여 결정<select data-af="참여">${["검토 중", "참여", "보류", "불참"].map(v => `<option${(a.참여 || "검토 중") === v ? " selected" : ""}>${v}</option>`).join("")}</select></label>
@@ -284,7 +285,8 @@ document.addEventListener("click", async e => {
   if (t.id === "aCopy") { const c = D.cases.find(x => x.bidNtceNo === cur);
     try { await navigator.clipboard.writeText(requestText(c)); $("aNote").textContent = "복사했습니다. 메일·카톡에 붙여 넣어 보내 주세요."; if (db) saveAssign({}, "준비 요청 문안 복사"); }
     catch { $("aNote").textContent = "복사가 막혀 있습니다."; } }
-  if (t.dataset.case) { cur = t.dataset.case; turns = []; lastLine = ""; watchMarks(); render(); drawChat(); loadChat(); }
+  // 공고를 바꾸면 저장 안 한 배정 입력은 버린다(다른 공고에 섞이지 않게)
+  if (t.dataset.case) { cur = t.dataset.case; aDirty = null; turns = []; lastLine = ""; watchMarks(); render(); drawChat(); loadChat(); }
   if (t.id === "pdfBtn") {
     const c = D.cases.find(x => x.bidNtceNo === cur);
     if (!downloads) { $("dlNote").textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
