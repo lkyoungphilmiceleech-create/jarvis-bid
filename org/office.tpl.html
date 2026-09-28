@@ -331,7 +331,12 @@ function show(code) {
 // ── 사내 직원 등록·등급. 로그인은 각자 claude.ai 계정, 등록은 자가 신청 → 관리자 승인.
 // 등급은 화면 표시용이다. 실제 차단은 각 페이지 공유 목록(본부장님이 공유 메뉴에서)과 db 경로 규칙
 const GRADES = ["관리자", "팀장", "직원"];
-let user = null, members = {}, joins = [], myJoin = null, hrMsg = "";
+let user = null, members = {}, joins = [], myJoin = null, hrMsg = "", invites = {}, info = {}, newCode = "";
+const OFFICE = "https://claude.ai/artifact/SjbUn8evVwWawSDft2cySC";
+// 초청 코드: 관리자만 읽는 invites/{코드}(1회용·7일). 직원은 코드를 신청서에 적고, 관리자 화면이 승인 때 대조한다
+const mkCode = () => { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", r = crypto.getRandomValues(new Uint8Array(10)); return [...r].map(x => A[x % A.length]).join(""); };
+const codeOk = c => { const v = invites[c]; return !!v && !v.사용 && new Date(v.만료) > new Date(); };
+const PHONE = /^[0-9+\-\s()]{7,20}$/;
 const grade = () => admin ? "관리자" : members[uid]?.상태 === "승인" ? (members[uid].등급 === "팀장" ? "팀장" : "직원") : ""; // 관리자는 편집 권한으로만
 const inactive = () => !admin && members[uid]?.상태 === "비활성";
 const need = t => ({관리자: ["관리자"], PM: ["관리자", "팀장"]})[t.권한] || GRADES; // 디자인(PRISM)·전체·제한은 모든 등급
@@ -339,7 +344,8 @@ const needText = t => need(t).length === 3 ? "모든 등급" : need(t).join("·"
 async function loadHr() {
   if (!db || !uid) return;
   const m = await db.collection("members").get().catch(() => null); members = {}; m?.docs.forEach(d => members[d.id] = d.data());
-  if (admin) { const j = await db.collection("join").get().catch(() => null); joins = (j?.docs || []).map(d => ({id: d.id, ...d.data()})); }
+  if (admin) { const [j, v, f] = await Promise.all(["join", "invites", "staffinfo"].map(c => db.collection(c).get().catch(() => null)));
+    joins = (j?.docs || []).map(d => ({id: d.id, ...d.data()})); invites = {}; v?.docs.forEach(d => invites[d.id] = d.data()); info = {}; f?.docs.forEach(d => info[d.id] = d.data()); }
   const mine = await db.doc(`join/${uid}`).get().catch(() => null); myJoin = mine?.exists ? mine.data() : null;
   show(sel); if (!$("hr").hidden) drawHr();
 }
@@ -348,25 +354,31 @@ async function drawHr() {
   if (!db || !uid) { b.innerHTML = '<p class="chatnote">claude.ai 에 로그인한 상태로 열어야 직원 등록을 할 수 있습니다.</p>'; return; }
   const ids = [...new Set([uid, ...Object.keys(members), ...joins.map(j => j.id)])];
   const ps = await user?.profiles?.(ids).catch(() => ({})) || {};
-  const nm = id => ps[id]?.name || (id === uid ? "나" : "이름 확인 불가");
+  const nm = id => ps[id]?.name || (id === uid ? "나" : "이름 확인 불가"), em = id => ps[id]?.email || "";
   const g = grade(), mine = members[uid];
   const meCard = `<div class="card"><h3>${esc(nm(uid))}</h3>${admin ? '<p class="chatnote">관리자(이 페이지 편집 권한)입니다.</p>'
     : mine?.상태 === "승인" ? `<p>등급 <b>${esc(mine.등급)}</b> · ${esc(mine.부서 || "")} ${esc(mine.직함 || "")}</p>`
     : mine?.상태 === "비활성" ? '<p class="chatnote">비활성 처리된 계정입니다. 관리자에게 문의해 주세요.</p>'
-    : `<p class="chatnote">${myJoin ? "등록 신청을 보냈습니다. 관리자 승인을 기다리는 중입니다(내용을 고쳐 다시 보낼 수 있습니다)." : "처음 오셨다면 부서·직함을 적어 등록을 신청해 주세요. 관리자가 승인하면 등급이 정해집니다."}</p>
-      <div class="ask"><input id="jDept" maxlength="40" placeholder="부서 (예: 사업1팀)" value="${esc(myJoin?.부서 || "")}"><input id="jTitle" maxlength="40" placeholder="직함 (예: 매니저)" value="${esc(myJoin?.직함 || "")}"><button class="btn primary" type="button" id="jSend">${myJoin ? "다시 보내기" : "등록 신청"}</button></div>`}
-    <p class="chatnote">${esc(hrMsg)}</p></div>
+    : `<p class="chatnote">${myJoin ? "등록 신청을 보냈습니다. 관리자가 초청 코드와 정보를 확인한 뒤 승인합니다(내용을 고쳐 다시 보낼 수 있습니다)." : "초청 메일·메시지로 받은 <b>초청 코드</b>와 부서·직책·연락처를 적어 등록을 신청해 주세요. 성명과 메일은 claude.ai 계정에서 확인합니다. 연락처는 관리자만 봅니다."}</p>
+      <div class="ask" style="flex-wrap:wrap"><input id="jCode" maxlength="12" placeholder="초청 코드" autocomplete="off" value="${esc(myJoin?.코드 || "")}"><input id="jDept" maxlength="40" placeholder="부서 (예: 사업1팀)" value="${esc(myJoin?.부서 || "")}"><input id="jTitle" maxlength="40" placeholder="직책 (예: 매니저)" value="${esc(myJoin?.직함 || "")}"><input id="jPhone" maxlength="20" inputmode="tel" placeholder="연락처 (예: 010-1234-5678)" value="${esc(myJoin?.연락처 || "")}"><button class="btn primary" type="button" id="jSend">${myJoin ? "다시 보내기" : "등록 신청"}</button></div>`}
+    <p class="chatnote" id="hrNote">${esc(hrMsg)}</p></div>
     <p class="chatnote">등급은 팀장·직원 두 가지를 부여합니다. 관리자는 각 페이지의 '편집' 공유로 정해집니다.</p>`;
   if (!admin) { b.innerHTML = meCard + `<p class="chatnote">내 등급: ${esc(inactive() ? "비활성" : g || "미등록")} — 등급에 따라 들어갈 수 있는 업무실이 표시됩니다. 실제 입장은 각 업무실이 공유되어 있어야 합니다.</p>`; return; }
   const pend = joins.filter(j => members[j.id]?.상태 !== "승인");
   const sel = (id, v, pend) => `<select data-hrg="${esc(id)}"${pend ? " data-pend" : ""} aria-label="등급">${GRADES.slice(1).map(x => `<option${x === v ? " selected" : ""}>${x}</option>`).join("")}</select>`;
   const pages = staff.filter(t => t.page && t.page !== "#dev" && t.상태 !== "대기");
+  const live = Object.entries(invites).filter(([c]) => codeOk(c));
   b.innerHTML = meCard + `
+    <div class="hudlabel">초청 코드 (1회용 · 7일)</div>
+    <div class="card"><div class="ask"><input id="ivNote" maxlength="40" placeholder="누구에게 보낼지 메모 (예: 디자인팀 신입)"><button class="btn primary" type="button" id="ivNew">초청 코드 만들기</button></div>
+      ${newCode ? `<p>새 코드 <b style="font:700 18px var(--hud);letter-spacing:.1em">${esc(newCode)}</b> <button class="btn" type="button" id="ivCopy">초청 메시지 복사</button></p><p class="chatnote">복사한 메시지를 메일·카톡으로 보내고, 사무실 공유 메뉴에서 그 사람을 초대(참여자)해 주세요. 두 가지가 모두 있어야 등록할 수 있습니다.</p>` : ""}
+      ${live.map(([c, v]) => `<div class="chatnote">${esc(c)} · ${esc(v.메모 || "")} · ${esc(String(v.만료 || "").slice(0, 10))}까지 <button class="btn x" type="button" data-ivdel="${esc(c)}">취소</button></div>`).join("") || '<p class="chatnote">쓰지 않은 초청 코드가 없습니다.</p>'}</div>
     <div class="hudlabel">등록 신청 ${pend.length}건</div>
-    ${pend.map(j => `<div class="card"><b>${esc(nm(j.id))}</b> <span class="chatnote">${esc(j.부서 || "")} ${esc(j.직함 || "")} · ${esc(String(j.at || "").slice(0, 10))}</span>
-      <div class="ask">${sel(j.id, "직원", 1)}<button class="btn primary" type="button" data-hrok="${esc(j.id)}">승인</button><button class="btn x" type="button" data-hrno="${esc(j.id)}">거절</button></div></div>`).join("") || '<p class="chatnote">새 신청이 없습니다.</p>'}
+    ${pend.map(j => { const ok = codeOk(j.코드); return `<div class="card"><b>${esc(nm(j.id))}</b> <span class="chatnote">${esc(em(j.id))}</span> <span class="chatnote">${esc(j.부서 || "")} ${esc(j.직함 || "")} · ☎ ${esc(j.연락처 || "")} · ${esc(String(j.at || "").slice(0, 10))}</span>
+      <div class="chatnote">${ok ? `✅ 초청 코드 확인 (${esc(invites[j.코드]?.메모 || "")})` : `❌ 초청 코드 확인 안 됨 — 없는 코드이거나 이미 썼거나 기한이 지났습니다. 승인할 수 없습니다.`}</div>
+      <div class="ask">${sel(j.id, "직원", 1)}<button class="btn primary" type="button" data-hrok="${esc(j.id)}" ${ok ? "" : "disabled"}>승인</button><button class="btn x" type="button" data-hrno="${esc(j.id)}">거절</button></div></div>`; }).join("") || '<p class="chatnote">새 신청이 없습니다.</p>'}
     <div class="hudlabel">사내 직원 ${Object.keys(members).length}명</div>
-    <div class="devlist">${Object.entries(members).sort((a, c) => GRADES.indexOf(a[1].등급) - GRADES.indexOf(c[1].등급)).map(([id, x]) => `<div class="card"><b>${esc(nm(id))}</b> <span class="chatnote">${esc(x.부서 || "")} ${esc(x.직함 || "")}${x.상태 === "비활성" ? " · 비활성" : ""}</span>
+    <div class="devlist">${Object.entries(members).sort((a, c) => GRADES.indexOf(a[1].등급) - GRADES.indexOf(c[1].등급)).map(([id, x]) => `<div class="card"><b>${esc(nm(id))}</b> <span class="chatnote">${esc(em(id))} · ${esc(x.부서 || "")} ${esc(x.직함 || "")}${info[id]?.연락처 ? ` · ☎ ${esc(info[id].연락처)}` : ""}${x.상태 === "비활성" ? " · 비활성" : ""}</span>
       <div class="ask">${sel(id, x.등급)}<button class="btn x" type="button" data-hroff="${esc(id)}">${x.상태 === "비활성" ? "다시 활성" : "비활성"}</button></div></div>`).join("") || '<p class="chatnote">아직 등록된 직원이 없습니다.</p>'}</div>
     <details><summary class="chatnote" style="cursor:pointer">페이지 공유 기준표 (공유는 각 페이지 공유 메뉴에서 직접)</summary>
       <table class="shr"><thead><tr><th>업무실</th>${GRADES.map(x => `<th>${x}</th>`).join("")}</tr></thead><tbody>
@@ -374,6 +386,7 @@ async function drawHr() {
       ${pages.map(t => `<tr><td>${esc(t.code)}</td>${GRADES.map(x => `<td>${x === "관리자" ? "편집" : need(t).includes(x) ? "참여자" : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table>
       <p class="chatnote">관리자는 편집, 쓸 수 있는 등급은 참여자로 공유합니다. '—'는 공유하지 않습니다. 연락처·금액이 있는 페이지(NEXUS·관제실)는 공유 전에 저장소 경로를 먼저 나눕니다.</p></details>`;
 }
+const hrSay = m => { hrMsg = m; if ($("hrNote")) $("hrNote").textContent = m; }; // 입력 오류는 문구만 바꿔 적던 칸을 지우지 않는다
 async function hrWrite(fn, ok) { try { await fn(); hrMsg = ok; } catch { hrMsg = "저장하지 못했습니다. 권한을 확인해 주세요."; } await loadHr(); drawHr(); }
 function openHr() { $("hr").hidden = false; $("hr").scrollIntoView({behavior: "smooth"}); drawHr(); }
 // ── 회의실(1:N). 1:1 대화는 각 업무실에서. Claude 호출은 본부장님 계정 사용량으로 처리된다
@@ -557,10 +570,21 @@ document.addEventListener("click", e => {
   if (b.id === "openReq") openDev("req");
   if (b.id === "openHr") openHr();
   if (b.id === "closeHr") $("hr").hidden = true;
-  if (b.id === "jSend") { const 부서 = $("jDept").value.trim(), 직함 = $("jTitle").value.trim(); if (!부서) { hrMsg = "부서를 적어 주세요."; drawHr(); return; }
-    hrWrite(() => db.doc(`join/${uid}`).set({부서, 직함, at: new Date().toISOString()}), "등록 신청을 보냈습니다. 관리자가 승인하면 등급이 정해집니다."); }
+  if (b.id === "jSend") { const 코드 = $("jCode").value.trim().toUpperCase(), 부서 = $("jDept").value.trim(), 직함 = $("jTitle").value.trim(), 연락처 = $("jPhone").value.trim();
+    if (!/^[A-Z0-9]{8,12}$/.test(코드)) { hrSay("초청 메시지로 받은 코드를 넣어 주세요."); return; }
+    if (!부서 || !직함) { hrSay("부서와 직책을 적어 주세요."); return; }
+    if (!PHONE.test(연락처)) { hrSay("연락처를 숫자로 적어 주세요 (예: 010-1234-5678)."); return; }
+    hrWrite(() => db.doc(`join/${uid}`).set({코드, 부서, 직함, 연락처, at: new Date().toISOString()}), "등록 신청을 보냈습니다. 관리자가 승인하면 등급이 정해집니다."); }
   if (b.dataset.hrok && admin) { const id = b.dataset.hrok, j = joins.find(x => x.id === id) || {}, 등급 = document.querySelector(`[data-hrg="${CSS.escape(id)}"]`)?.value || "직원";
-    hrWrite(async () => { await db.doc(`members/${id}`).set({등급, 부서: j.부서 || "", 직함: j.직함 || "", 상태: "승인", 승인일: new Date().toISOString()}); await db.doc(`join/${id}`).delete(); }, "승인했습니다."); }
+    if (!codeOk(j.코드)) { hrSay("초청 코드가 확인되지 않아 승인할 수 없습니다."); return; }
+    hrWrite(async () => { const at = new Date().toISOString();
+      await db.doc(`invites/${j.코드}`).update({사용: id, 사용일: at}); // 먼저 코드를 써 버려 같은 코드로 두 번 승인되지 않게
+      await db.doc(`staffinfo/${id}`).set({연락처: j.연락처 || "", 초청코드: j.코드, 승인일: at}); // 연락처는 관리자만 읽는 경로
+      await db.doc(`members/${id}`).set({등급, 부서: j.부서 || "", 직함: j.직함 || "", 상태: "승인", 승인일: at}); await db.doc(`join/${id}`).delete(); }, "승인했습니다."); }
+  if (b.id === "ivNew" && admin) { const c = mkCode(), 만료 = new Date(Date.now() + 7 * 864e5).toISOString();
+    hrWrite(async () => { await db.doc(`invites/${c}`).set({메모: $("ivNote").value.trim().slice(0, 40), at: new Date().toISOString(), 만료, 사용: ""}); newCode = c; }, "초청 코드를 만들었습니다."); }
+  if (b.id === "ivCopy") navigator.clipboard?.writeText(`[㈜마이스리치 JARVIS 사무실 초청]\n1) 공유 초대 메일의 링크(또는 ${OFFICE})로 claude.ai 에 로그인해 사무실에 들어오세요.\n2) 위쪽 [👤 직원 등록·등급]에서 초청 코드 ${newCode} 와 부서·직책·연락처를 적어 신청해 주세요.\n코드는 1회용이며 7일 뒤 만료됩니다.`).then(() => hrSay("초청 메시지를 복사했습니다."), () => hrSay("복사하지 못했습니다. 코드를 직접 전달해 주세요."));
+  if (b.dataset.ivdel && admin && confirm("이 초청 코드를 취소할까요?")) hrWrite(() => db.doc(`invites/${b.dataset.ivdel}`).delete(), "초청 코드를 취소했습니다.");
   if (b.dataset.hrno && admin && confirm("이 등록 신청을 거절할까요?")) hrWrite(() => db.doc(`join/${b.dataset.hrno}`).delete(), "거절했습니다.");
   if (b.dataset.hroff && admin) { const id = b.dataset.hroff; hrWrite(() => db.doc(`members/${id}`).update({상태: members[id]?.상태 === "비활성" ? "승인" : "비활성"}), "바꿨습니다."); }
   if (b.id === "closeDev") $("dev").hidden = true;
