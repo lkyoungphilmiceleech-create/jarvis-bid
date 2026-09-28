@@ -109,7 +109,7 @@ a{color:var(--holo)}
 
   <section class="glass panel" id="tab-find">
     <div class="row"><h2>레퍼런스 찾기</h2><span class="note">키워드를 넣으면 PRISM이 먼저 내부 자료(우리 작업물·보관 레퍼런스)에서 3개를 고릅니다. 쓸 만한 것이 없다고 판단하면 웹(Behance·Pinterest·Dribbble 등)에서 새로 찾습니다.</span></div>
-    <div class="row"><input id="fq" type="search" placeholder="예) 네온 톤 K-콘텐츠 전시 포스터, 미니멀 부스 그래픽" style="flex:1;min-width:200px"><select id="fk" aria-label="범위"></select><button class="btn primary" type="button" id="fGo">추천 받기</button></div>
+    <div class="row"><input id="fq" type="search" maxlength="200" placeholder="예) 네온 톤 K-콘텐츠 전시 포스터, 미니멀 부스 그래픽" style="flex:1;min-width:200px"><select id="fk" aria-label="범위"></select><button class="btn primary" type="button" id="fGo">추천 받기</button></div>
     <p class="note" id="fMsg"></p>
     <div id="fOut"></div>
     <details class="card"><summary class="note" style="cursor:pointer">최근 찾기 기록</summary><div id="fHist" class="list" style="margin-top:8px"></div></details>
@@ -153,6 +153,7 @@ const FLOW = ["접수", "레퍼런스", "추천", "키비주얼", "목업", "완
 const MG = "Magnific";
 const RK = ["작업물", "레퍼런스"]; // 작업물 = 디자인팀이 만든 디자인, 레퍼런스 = 찾아 둔 참고 자료
 const kindOf = r => r.종류 || "레퍼런스";
+const L = v => Array.isArray(v) ? v.map(String) : v ? [String(v)] : []; // 태그·스타일·색이 문자열로 저장돼도 깨지지 않게
 const imgOf = r => /^[0-9a-f]{32}$/.test(r.파일 || "") ? "/_blob/" + r.파일 : http(r.이미지);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
@@ -229,7 +230,7 @@ function editBrief(b) {
 const refCard = (r, pick, fb) => { const img = imgOf(r), u = http(r.url), ev = r.평가 || {};
   return `<div class="ref${pick ? " pick" : ""}"><div class="ph">${img ? `<span style="position:absolute">${esc(r.출처 || "LINK")}</span><img src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(r.출처 || "LINK")}</div>
     <div class="b"><b>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(r.제목 || "(제목 없음)")}</a>` : esc(r.제목 || "(제목 없음)")}</b>
-    <div class="chips"><span class="tag${kindOf(r) === "작업물" ? " go" : ""}">${esc(kindOf(r))}</span><span class="tag">${esc(r.출처)}</span>${(r.태그 || []).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <div class="chips"><span class="tag${kindOf(r) === "작업물" ? " go" : ""}">${esc(kindOf(r))}</span><span class="tag">${esc(r.출처)}</span>${L(r.태그).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
     ${r.설명 && !pick ? `<div class="note">${esc(String(r.설명).slice(0, 90))}</div>` : ""}
     ${pick ? `<div class="note">${esc(pick)}</div>${fb ? `<div class="row"><button class="btn" type="button" data-up="${esc(r.id)}" aria-label="좋아요">👍 ${+ev.up || 0}</button><button class="btn" type="button" data-down="${esc(r.id)}" aria-label="별로">👎 ${+ev.down || 0}</button></div>` : ""}` : `<div class="row"><span class="note" style="flex:1">${esc(r.추가 || "")}${ev.up || ev.down ? ` · 👍${+ev.up || 0} 👎${+ev.down || 0}` : ""}</span><button class="btn x" type="button" data-rdel="${esc(r.id)}" aria-label="레퍼런스 삭제">×</button></div>`}</div></div>`; };
 function drawRef() {
@@ -241,7 +242,7 @@ function drawRef() {
   if (msg.upNote) $("upNote").textContent = msg.upNote; keep("rReq", opt(briefs.map(b => [b.id, b.제목]), "", "요청 전체"));
   if (msg.rfNote) $("rfNote").textContent = msg.rfNote;
   const q = $("rq").value.toLowerCase(), s = $("rSrc").value, rq = $("rReq").value, rk = $("rKind").value;
-  const rows = refs.filter(r => (!s || r.출처 === s) && (!rk || kindOf(r) === rk) && (!rq || (r.요청 || []).includes(rq)) && (!q || [r.제목, r.출처, r.설명, r.용도, ...(r.태그 || []), ...(r.스타일 || []), ...(r.색 || [])].some(v => String(v || "").toLowerCase().includes(q))))
+  const rows = refs.filter(r => (!s || r.출처 === s) && (!rk || kindOf(r) === rk) && (!rq || (r.요청 || []).includes(rq)) && (!q || [r.제목, r.출처, r.설명, r.용도, ...L(r.태그), ...L(r.스타일), ...L(r.색)].some(v => String(v || "").toLowerCase().includes(q))))
     .sort((a, b) => String(b.at).localeCompare(String(a.at)));
   $("refList").innerHTML = rows.map(r => refCard(r)).join("") || '<p class="empty">보관한 레퍼런스가 없습니다.</p>';
 }
@@ -357,6 +358,10 @@ async function runMk() {
 // 웹 찾기 작업: 대기열(rjobs)에 올리고, 바로 부를 수 있으면(본부장님 계정) 바로 부른다. 아니면 평일 매시 루틴이 대기열을 처리한다
 async function startWeb(job, note) {
   if (!db) { say(note, "이 화면에서는 웹 찾기를 요청할 수 없습니다."); return false; }
+  const td = today(), mine = rjobs.filter(j => String(j.at || "").slice(0, 10) === td || new Date(j.at).toLocaleDateString("sv-SE", {timeZone: "Asia/Seoul"}) === td), cap = +cfg.하루상한 || 10;
+  const same = job.q && rjobs.find(j => j.q === job.q && ["요청", "진행"].includes(j.status));
+  if (same) { say(note, "같은 키워드를 이미 웹에서 찾고 있습니다. 끝나면 여기에 나타납니다."); return same.id; }
+  if (mine.length >= cap) { say(note, `오늘 웹 찾기 요청이 하루 한도(${cap}건)에 닿았습니다. 내일 다시 요청하거나 JARVIS에게 한도 조정을 요청해 주세요.`); return false; } // 본부장님 사용량 보호
   const jid = "R" + Date.now().toString(36);
   try { await db.doc(`rjobs/${jid}`).set({...job, status: "요청", at: new Date().toISOString()}); } catch { say(note, "요청을 저장하지 못했습니다."); return false; }
   const queued = "웹 찾기 대기열에 올렸습니다. 평일 09~18시 매시 5분에 처리하고, 찾는 대로 여기에 나타납니다.";
@@ -374,7 +379,7 @@ async function runFind() {
 
 // ── 레퍼런스 찾기: 내부 자료에서 3개 → 부족하면 웹
 const F = () => finds.find(f => f.id === fcur) || finds[0];
-const refLine = r => [r.id, kindOf(r), r.출처, r.제목, (r.태그 || []).join("/"), (r.스타일 || []).join("/"), (r.색 || []).join("/"), r.용도, String(r.설명 || "").slice(0, 100), `+${+(r.평가 || {}).up || 0}/-${+(r.평가 || {}).down || 0}`].map(v => String(v || "").replace(/\|/g, "/").slice(0, 120)).join("|");
+const refLine = r => [r.id, kindOf(r), r.출처, r.제목, L(r.태그).join("/"), L(r.스타일).join("/"), L(r.색).join("/"), r.용도, String(r.설명 || "").slice(0, 100), `+${+(r.평가 || {}).up || 0}/-${+(r.평가 || {}).down || 0}`].map(v => String(v || "").replace(/\|/g, "/").slice(0, 120)).join("|");
 function drawFind() {
   const k = $("fk").value; $("fk").innerHTML = opt([["", "내부 자료 전체"], ["작업물", "우리 작업물만"], ["레퍼런스", "레퍼런스만"]], k);
   if (msg.fMsg) $("fMsg").textContent = msg.fMsg;
@@ -394,6 +399,7 @@ function drawFind() {
   $("fHist").innerHTML = finds.slice(0, 12).map(x => `<button type="button" class="card click${x.id === f?.id ? " sel" : ""}" data-fh="${esc(x.id)}" style="text-align:left;color:var(--ink);font:inherit"><b>${esc(x.q)}</b><span class="note">${esc(String(x.at || "").slice(0, 10))} · 내부 ${(x.picks || []).length} · 웹 ${(x.웹picks || []).length}</span></button>`).join("") || '<p class="empty">기록이 없습니다.</p>';
 }
 async function recommend() {
+  if (busy.rec) return; // Enter 연타로 추천·웹 세션이 겹치지 않게
   const q = $("fq").value.trim(), k = $("fk").value; if (!q) { say("fMsg", "키워드를 넣어 주세요."); return; }
   if (!db) { say("fMsg", "이 화면에서는 저장소에 연결할 수 없습니다."); return; }
   const pool = refs.filter(r => !k || kindOf(r) === k).sort((a, b) => ((+(b.평가 || {}).up || 0) - (+(b.평가 || {}).down || 0)) - ((+(a.평가 || {}).up || 0) - (+(a.평가 || {}).down || 0)) || String(b.at).localeCompare(String(a.at))).slice(0, 200);
@@ -412,10 +418,10 @@ JSON만 답한다: {"picks":[{"id":"위 ID","이유":"한국어 1문장"}],"충�
     } catch (e) { busy.rec = false; say("fMsg", askErr(e)); drawFind(); return; }
   }
   try { await db.doc(`finds/${fid}`).set(f); } catch { busy.rec = false; say("fMsg", "기록을 저장하지 못했습니다."); drawFind(); return; }
-  finds.unshift({id: fid, ...f}); fcur = fid; busy.rec = false;
+  finds.unshift({id: fid, ...f}); fcur = fid;
   if (f.판정 === "부족") { const jid = await startWeb({kind: "find", fid, q, 검색어: f.검색어 || []}, "fMsg"); if (jid) { await db.doc(`finds/${fid}`).update({rjob: jid}).catch(() => {}); F().rjob = jid; } }
   else say("fMsg", "내부 자료에서 3개를 골랐습니다. 더 넓게 보려면 [웹에서도 찾기]를 누르세요.");
-  drawFind();
+  busy.rec = false; drawFind();
 }
 async function webMore() {
   const f = F(); if (!f || busy.web) return; busy.web = true; setTimeout(() => { busy.web = false; }, 60e3);
@@ -423,13 +429,19 @@ async function webMore() {
   if (jid) { await db.doc(`finds/${f.id}`).update({rjob: jid}).catch(() => {}); f.rjob = jid; } drawFind();
 }
 async function rate(id, up) { // 좋아요·별로는 다음 추천의 기준이 된다
-  const r = refs.find(x => x.id === id); if (!r || !db) return; const ev = {up: +(r.평가 || {}).up || 0, down: +(r.평가 || {}).down || 0}; ev[up ? "up" : "down"]++;
+  const r = refs.find(x => x.id === id); if (!r || !db) return;
+  let done = {}; try { done = JSON.parse(localStorage.getItem("prism-rated") || "{}"); } catch {} if (done[id]) { say("fMsg", "이 자료는 이미 평가하셨습니다."); return; }
+  done[id] = up ? 1 : -1; try { localStorage.setItem("prism-rated", JSON.stringify(done)); } catch {} // ponytail: 브라우저당 1회 — 동시 클릭 시 표가 덮일 수 있음, 필요하면 사람별 문서(votes/{id}/{self})로
+  const ev = {up: +(r.평가 || {}).up || 0, down: +(r.평가 || {}).down || 0}; ev[up ? "up" : "down"]++;
   r.평가 = ev; try { await db.doc(`refs/${id}`).update({평가: ev}); } catch {} draw();
 }
 
 // ── 내부 자료 올리기: 저장 → PRISM이 그림을 보고 태그
 async function upload(files) {
-  if (!assets || !db) return; const kind = $("upKind").value || "작업물", proj = $("upProj").value.trim(); let ok = 0, fail = 0;
+  if (!assets || !db) return;
+  const big = files.filter(f => f.size > 20 * 1024 * 1024).length; files = files.filter(f => f.size <= 20 * 1024 * 1024).slice(0, 20); // 한 번에 20장(분석 호출 20번)까지
+  if (!files.length) { say("upNote", "20MB 이하 이미지만 올릴 수 있습니다."); return; }
+  const kind = $("upKind").value || "작업물", proj = $("upProj").value.trim(); let ok = 0, fail = 0;
   let canSee = false; try { canSee = !!(await sample?.limits?.())?.images; } catch {}
   for (const [i, f] of [...files].entries()) { say("upNote", `${i + 1}/${files.length} ${f.name} 올리는 중…`);
     try { const a = await assets.upload(f); let meta = {};
@@ -438,7 +450,7 @@ JSON만 답한다: {"제목":"짧은 한국어 제목","설명":"무엇을 위�
       const arr = v => Array.isArray(v) ? v.map(String).slice(0, 6) : [];
       await db.collection("refs").add({종류: kind, 파일: a.id, 제목: String(meta.제목 || f.name.replace(/\.[^.]+$/, "")).slice(0, 80), 설명: String(meta.설명 || "").slice(0, 300), 태그: arr(meta.태그), 스타일: arr(meta.스타일), 색: arr(meta.색), 용도: String(meta.용도 || ""), 프로젝트: proj, 출처: "내부", 요청: [], 추가: "업로드", at: new Date().toISOString()}); ok++;
     } catch (e) { fail++; if (e?.code === "quota_exceeded") { say("upNote", "저장 공간이 부족합니다."); return; } } }
-  say("upNote", `${ok}장을 올렸습니다${fail ? ` (${fail}장 실패 — 20MB 이하 이미지인지 확인해 주세요)` : ""}.${canSee ? " PRISM이 태그를 붙였습니다." : " 이 화면에서는 그림 분석을 못 해 파일 이름으로 저장했습니다. 태그는 검색에 쓰이니 필요하면 링크 추가 칸처럼 보강해 주세요."}`);
+  say("upNote", `${ok}장을 올렸습니다${fail ? ` (${fail}장 실패)` : ""}${big ? ` · 20MB 넘는 ${big}장은 뺐습니다` : ""}. 한 번에 20장까지 올립니다.${canSee ? " PRISM이 태그를 붙였습니다." : " 이 화면에서는 그림 분석을 못 해 파일 이름으로 저장했습니다. 태그는 검색에 쓰이니 필요하면 링크 추가 칸처럼 보강해 주세요."}`);
 }
 
 // ── 이벤트
