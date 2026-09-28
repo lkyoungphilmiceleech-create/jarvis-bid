@@ -116,7 +116,7 @@ def seat(t, x, y, z0, where):
     """직원 자리 하나: 의자 → 아바타 → 책상 → 모니터 → 이름표."""
     st = {"근무 중": "on", "스킬 보유": "skill"}.get(t["상태"], "off")
     cx, cy = x + 0.55, y - 0.95
-    g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]}) — 누르면 담당자 정보와 입장 버튼"><title>{t["code"]} · 누르면 담당자 정보와 입장 버튼</title>']
+    g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]}) — 한 번 누르면 담당자 정보, 두 번 누르면 업무실 입장"><title>{t["code"]} · 한 번: 담당자 정보 / 두 번: 업무실 입장</title>']
     g.append(box(cx, cy, z0, 0.7, 0.7, 0.45, "chair") + box(cx, cy - 0.12, z0 + .45, 0.7, 0.12, 0.8, "chair"))
     px, py = P(cx + 0.35, cy + 0.35, z0 + 0.45)
     size = 2.35 * S

@@ -164,10 +164,6 @@ svg.map{width:100%;height:auto;display:block}
 .pick img{width:26px;height:26px}
 .pick input{accent-color:var(--holo)}
 body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F·개발실 기록·아이디어 회의. 실제 차단은 공유·db 규칙 */
-.enterbar{position:fixed;left:12px;right:12px;bottom:12px;z-index:5;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid var(--holo);background:var(--bg2);box-shadow:0 6px 24px rgba(0,0,0,.35)}
-.enterbar img{width:34px;height:34px}.enterbar b{font:700 14px var(--hud);letter-spacing:.06em;flex:1;min-width:0}
-.enterbar[hidden]{display:none}
-@media (min-width:900px){.enterbar{display:none}}
 .devcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--glass2);display:flex;flex-direction:column;gap:6px}
 .devlist{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow-y:auto}
 .verdict{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
@@ -226,7 +222,7 @@ body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F
   </header>
 
   <div class="hero">
-    <div><h1>JARVIS 빌딩</h1><p>3F 개발실 · 2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 [입장] 버튼이 나옵니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
+    <div><h1>JARVIS 빌딩</h1><p>3F 개발실 · 2F 제안서 준비 본부 · 1F 사업 수행 본부 · 아바타를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
     <span><button class="btn primary" type="button" id="openMeet">회의실 열기</button> <button class="btn" type="button" id="openReq">개발 요청함</button></span><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span><span>· 🔒 관리자 전용 · 모든 직원 · 일부 기능 제한</span></div>
   </div>
 
@@ -269,7 +265,6 @@ body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F
 
     <details class="glass roster fold" id="rosterBox"><summary><h2>직원 명단 <span class="chatnote" id="rosterN"></span></h2></summary><div class="team" id="roster"></div></details>
   </div>
-  <div class="enterbar" id="enterBar" hidden aria-live="polite"></div>
   <aside class="side"><section class="glass panel" id="panel" aria-live="polite"></section></aside>
   </div>
 </div>
@@ -298,13 +293,18 @@ if (D.브리핑) {
 const staff = D.본부.flatMap(b => b.팀.map(t => ({...t, 본부: b.이름, 본부id: b.id})));
 let admin = false;  // 관리자(대표·본부장·실장) = 이 페이지 편집 권한. 화면 표시용이며 실제 차단은 공유 목록·db 규칙
 const locked = t => t.권한 === "관리자" && !admin;
-// 입장 버튼: 한 번 누르면 정보 + 입장(더블클릭 없음). 관리자 전용 방은 관리자가 아니면 잠김 표시
-function entryBtn(t) {
-  if (!t.page) return "";
-  if (t.상태 === "대기") return `<button class="btn" type="button" disabled>예비 인력 · 대기</button>`;
-  if (locked(t)) return `<button class="btn" type="button" disabled>🔒 관리자 전용</button>`;
-  return t.page === "#dev" ? `<button class="btn primary" type="button" data-enter="${esc(t.code)}">3F 개발실 입장</button>`
-    : `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 입장 ↗</a>`;
+// 아바타·명단: 한 번 = 담당자 정보, 두 번(더블클릭·두 번 탭, 400ms 안) = 업무실 바로 입장. 관리자 전용 방은 관리자가 아니면 잠김
+const closed = t => !t.page ? "" : t.상태 === "대기" ? "예비 인력이라 업무실이 닫혀 있습니다." : locked(t) ? "🔒 관리자 전용 업무실입니다." : "";
+const entryNote = t => !t.page ? "" : closed(t) ? `<p class="chatnote">${closed(t)}</p>` : `<p class="chatnote">아바타를 <b>두 번</b> 누르면 ${esc(t.code)} ${t.page === "#dev" ? "개발실" : "업무실"}로 들어갑니다.</p>`;
+function enter(code) {
+  const t = staff.find(s => s.code === code); if (!t?.page || closed(t)) { show(code); return; }
+  if (t.page === "#dev") openDev(admin ? "log" : "req"); else window.open(t.page, "_blank", "noopener");
+}
+let last = {code: "", at: 0};
+function tap(code) {
+  const now = Date.now(), again = last.code === code && now - last.at < 400;
+  last = again ? {code: "", at: 0} : {code, at: now};
+  again ? enter(code) : show(code);
 }
 const cls = s => s === "근무 중" ? "on" : s === "스킬 보유" ? "skill" : "off";
 let sel = "RADAR";
@@ -317,7 +317,7 @@ function show(code) {
     <div><span class="st ${cls(t.상태)}">${esc(t.상태)}</span> ${t.권한 ? `<span class="st tier ${esc(t.권한)}">${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}</span>` : ""}</div>
     ${k ? `<div class="kpi">${k.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     <div class="hudlabel">담당 업무</div><ul>${t.업무.map(w => `<li>${esc(w)}</li>`).join("")}</ul>
-    ${entryBtn(t)}${t.page ? ""
+    ${entryNote(t)}${t.page ? ""
       : t.상태 === "스킬 보유" ? `<p class="chatnote">전용 업무실은 아직 없습니다. JARVIS 채팅에서 요청하면 이 직원의 스킬로 바로 처리합니다.</p>`
       : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}
     ${t.상태 === "근무 중" ? `<p class="chatnote">${esc(t.code)}와 1:1 대화는 업무실에서, 여러 직원과 함께라면 회의실에서 합니다.</p>` : ""}`;
@@ -495,20 +495,12 @@ async function sendIdea() {
 $("rosterBox").open = matchMedia("(max-width:899px)").matches;
 $("rosterN").textContent = `${staff.length}명`;
 $("roster").innerHTML = D.본부.map(b => `<h3${b.id === "C" ? ' class="adm"' : ""}>${esc(b.이름)}</h3>` + b.팀.map(t => `<button${b.id === "C" ? ' class="adm"' : ""} type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}${t.권한 ? ` · ${t.권한 === "관리자" ? "🔒 " : ""}${esc(D.권한설명?.[t.권한] || t.권한)}` : ""}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
-// 조감도 자리·명단: 누르면 담당자 정보 + 입장 버튼(휴대폰은 화면 아래 입장 막대)
-function pick(code) {
-  show(code); const t = staff.find(s => s.code === code);
-  $("enterBar").innerHTML = `<img alt="" src="${D.avatars[t.avatar]}"><b>${esc(t.code)}</b>${entryBtn(t) || '<span class="chatnote">전용 업무실 없음</span>'}<button class="btn x" type="button" id="enterClose" aria-label="닫기">×</button>`;
-  $("enterBar").hidden = false;
-}
 document.addEventListener("click", e => {
-  const d = e.target.closest("[data-code]"); if (d) pick(d.dataset.code);
+  const d = e.target.closest("[data-code]"); if (d) tap(d.dataset.code);
   const rm = e.target.closest("g.room"); if (rm) rm.dataset.room === "dev" ? openDev(admin ? "idea" : "req") : openMeet(rm.dataset.room);
   const b = e.target.closest("button"); if (!b) return;
   if (b.id === "openMeet") openMeet();
-  if (b.dataset.enter) openDev(admin ? "log" : "req");
   if (b.id === "openReq") openDev("req");
-  if (b.id === "enterClose") $("enterBar").hidden = true;
   if (b.id === "closeDev") $("dev").hidden = true;
   if (b.dataset.devtab) devTab(b.dataset.devtab);
   if (b.id === "igo") runIdea();
@@ -521,7 +513,7 @@ document.addEventListener("click", e => {
   if (b.id === "mgo") runMeet();
   if (b.dataset.mh) drawRec({방: "small", ...meetings[+b.dataset.mh]});
 });
-document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pick(d.dataset.code); }
+document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); tap(d.dataset.code); }
   const rm = e.target.closest?.("g.room"); if (rm && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); rm.dataset.room === "dev" ? openDev(admin ? "idea" : "req") : openMeet(rm.dataset.room); } });
 show(sel); setRoom(room);
 ["iPage", "rPage"].forEach(id => $(id).innerHTML = PAGES.map(p => `<option>${esc(p)}</option>`).join(""));
@@ -533,7 +525,6 @@ devTab("req");
   const user = await window.claude?.use?.("user");
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("admin", admin); show(sel); if (admin && dev.tab === "req" && $("dev").hidden) devTab("log");
-  if (!$("enterBar").hidden) pick(sel);  // 판정 전에 눌렀던 입장 막대도 새 권한으로
   $("pick").innerHTML = ""; if (!$("meet").hidden) drawMeet();  // 참석자 목록도 새 권한으로
   uid = await user?.id?.().catch(() => null);
   if (!db || !uid) return;
