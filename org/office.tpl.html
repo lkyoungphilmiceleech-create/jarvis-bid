@@ -185,7 +185,8 @@ svg.map{width:100%;height:auto;display:block}
 .kpi b{display:block;font:700 22px var(--hud);color:var(--holo)}
 .kpi span{font-size:12px;color:var(--muted)}
 .roster{padding:18px}
-.roster h2{font:700 15px var(--hud);letter-spacing:.04em;margin:0 0 10px}
+.roster h2{display:inline;font:700 15px var(--hud);letter-spacing:.04em;margin:0}
+.roster[open]>summary{margin-bottom:10px}
 .team{display:flex;flex-direction:column;gap:6px}
 .team button{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer;font:14px var(--sans)}
 .team button[aria-pressed="true"]{border-color:var(--holo);background:var(--holo-soft)}
@@ -222,7 +223,7 @@ svg.map{width:100%;height:auto;display:block}
     <details><summary class="chatnote" style="cursor:pointer">지난 회의록</summary><div id="mhist" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div></details>
   </section>
 
-    <section class="glass roster" aria-label="직원 명단"><h2>직원 명단</h2><div class="team" id="roster"></div></section>
+    <details class="glass roster fold" id="rosterBox"><summary><h2>직원 명단 <span class="chatnote" id="rosterN"></span></h2></summary><div class="team" id="roster"></div></details>
   </div>
   <aside class="side"><section class="glass panel" id="panel" aria-live="polite"></section></aside>
   </div>
@@ -323,6 +324,9 @@ async function runMeet() {
   if (db && uid) db.doc(`data/users/${uid}/meetings`).set({list: meetings}).catch(() => {});
   busy = false; $("mgo").disabled = false; $("mq").value = ""; drawMeet();
 }
+// 명단: 휴대폰(한 줄 배치)에서만 펼쳐 둔다. PC 는 조감도 이름표로 충분해 접어 둔다
+$("rosterBox").open = matchMedia("(max-width:899px)").matches;
+$("rosterN").textContent = `${staff.length}명`;
 $("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
 // 조감도 자리: 한 번 = 정보, 두 번(400ms 안) = 업무실 바로 입장. dblclick 대신 직접 재서 휴대폰 두 번 탭도 같이 처리
 let last = {code: "", at: 0};

@@ -37,14 +37,14 @@
 | 빌드·보고서 스크립트(`org/build_*.py`, `org/*_report.py`), `org/org.json` | JARVIS |
 | 수집(`collect.py`, `.github/workflows/`, `data/`) | JARVIS |
 | 루틴·카톡 알림·아티팩트 배포 | JARVIS (본부장님 계정) |
-| 모든 PR 의 시험 | 검증 조력자 (`.claude/agents/qa-verifier.md`) |
+| 모든 PR 의 시험 | 검증 조력자 **비전** (`.claude/agents/qa-verifier.md`) |
 
 ## 작업 순서
 1. 브랜치: `이름/짧은-설명` (예: `kim/nexus-filter`, `jarvis/radar-score`).
 2. 고친 뒤 빌드: `python org/build_<이름>.py` (필요 패키지 `pip install -r requirements.txt`).
 3. 시험: `npm install` 한 번 → `npm test` (빈 저장소로 페이지를 열어 JS 오류·390px 가로 넘침을 잡습니다). 화면을 바꿨다면 스크린샷을 PR 에 붙입니다.
 4. 커밋 메시지는 한국어로 "무엇을 왜" 한 줄 + 필요하면 본문.
-5. PR 은 `.github/pull_request_template.md` 양식으로. 검증 조력자 시험 결과를 PR 에 남깁니다.
+5. PR 은 `.github/pull_request_template.md` 양식으로. 검증 조력자 비전의 시험 결과를 PR 에 남깁니다.
 6. 작은 변경이면 PR 제목 앞에 `[작은변경]` 을 붙입니다.
 
 ## 작은 변경 자동 병합 (본부장님 승인 생략)
