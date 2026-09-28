@@ -98,6 +98,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .tag.amber{color:var(--amber);border-color:var(--amber)}
 .co{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--glass2)}
 .co h3{margin:0;font-size:15px}
+.co h3,.chips label,.pcard h3{overflow-wrap:anywhere}
 .m{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:10px;align-items:start;border-top:1px dashed var(--line);padding-top:8px}
 .score{font:700 20px var(--hud);color:var(--go);text-align:center}
 .sbar{display:block;height:4px;border-radius:2px;background:var(--line);margin-top:2px}
@@ -1110,6 +1111,7 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button, tr.click"); if (!t || (t.tagName === "TR" && e.target.closest("select, a, input"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.team) showTab(TEAMS.find(T => T[0] === t.dataset.team)[3][0][0]);
+  if (t.dataset.tab || t.dataset.team) msg = {};
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.dataset.proj) { cur = t.dataset.proj; msg = {}; try { localStorage.setItem("nexus-proj", cur); } catch {} drawProj(); }
   if (t.id === "newProj") { if (!db) return; const id = "P" + Date.now().toString(36); projects.push({id, 이름: "", 목적: "바이어", 상태: "준비", 산업: [], companies: [], matches: {}}); cur = id; drawProj(); }
@@ -1124,7 +1126,7 @@ document.addEventListener("click", async e => {
   if (t.id === "coDoc") $("coFile").click();
   if (t.id === "coXok") coXcommit();
   if (t.id === "coXno") { coX = null; drawProj(); }
-  if (t.dataset.smode) { sMode = t.dataset.smode; drawProj(); }
+  if (t.dataset.smode) { sMode = t.dataset.smode; msg = {}; drawProj(); }
   if (t.id === "sGen") genSlots(P());
   if (t.id === "sUp") $("sFile").click();
   if (t.id === "sFill") fillSched(P());
@@ -1203,9 +1205,9 @@ document.addEventListener("keydown", e => { // 시트 칸 이동: 화살표·Ent
 document.addEventListener("paste", e => { // 엑셀·구글 시트에서 복사한 여러 칸을 그 칸부터 채운다
   const t = e.target; if (!t.dataset?.cell) return;
   const txt = (e.clipboardData?.getData("text/plain") || "").replace(/\r/g, "").replace(/\n$/, ""); if (!/[\t\n]/.test(txt)) return;
-  e.preventDefault(); const p = P(), r0 = +t.dataset.r, c0 = +t.dataset.c;
-  txt.split("\n").forEach((line, i) => line.split("\t").forEach((v, j) => { const el = cellAt(r0 + i, c0 + j); if (el) { el.value = v.trim(); setCell(p, el.dataset.cell, el.value); } }));
-  markDup(); saveSoon(p);
+  e.preventDefault(); const p = P(), r0 = +t.dataset.r, c0 = +t.dataset.c; let out = 0;
+  txt.split("\n").forEach((line, i) => line.split("\t").forEach((v, j) => { const el = cellAt(r0 + i, c0 + j); if (el) { el.value = v.trim(); setCell(p, el.dataset.cell, el.value); } else if (v.trim()) out++; }));
+  markDup(); saveSoon(p); if (out) say("sNote", `${out}칸은 표 밖이라 넣지 않았습니다. 시간 줄이나 참가기업을 먼저 늘려 주세요.`);
 });
 const drop = $("drop");
 ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("on"); }));
