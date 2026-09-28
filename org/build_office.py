@@ -95,7 +95,7 @@ def floor(wing, z0, name, label, staff, where):
     for t, (x, y) in zip(staff, SEATS[wing]):
         st = {"근무 중": "on", "스킬 보유": "skill"}.get(t["상태"], "off")
         cx, cy = x + 0.55, y - 0.95
-        g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]})">']
+        g = [f'<g class="desk {st}" data-code="{t["code"]}" tabindex="0" role="button" aria-label="{t["code"]} {t["팀"]} ({t["상태"]}) — 두 번 누르면 업무실로"><title>{t["code"]} · 두 번 누르면 업무실로</title>']
         g.append(box(cx, cy, z0, 0.7, 0.7, 0.45, "chair") + box(cx, cy - 0.12, z0 + .45, 0.7, 0.12, 0.8, "chair"))
         px, py = P(cx + 0.35, cy + 0.35, z0 + 0.45)
         size = 2.35 * S

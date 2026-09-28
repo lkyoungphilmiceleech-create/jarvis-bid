@@ -113,7 +113,7 @@ svg.map{width:100%;height:auto;display:block}
 @keyframes glow{50%{opacity:.6}}
 .wallsign{font:700 15px var(--hud);letter-spacing:.08em;fill:var(--holo)}
 .fl{font:700 26px var(--hud);fill:var(--holo)}.fln{font:600 13px var(--sans);fill:var(--muted)}
-.desk{cursor:pointer;outline:none}
+.desk{cursor:pointer;outline:none;touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .nametag rect{fill:var(--glass);stroke:var(--line)}
 .nametag.on rect{stroke:var(--go)}.nametag.on circle{fill:var(--go)}.nametag.skill circle{fill:var(--holo)}.nametag.off circle{fill:var(--muted)}.nametag.off{opacity:.75}
 .desk .plate{font:700 12px var(--hud);letter-spacing:.06em;fill:var(--ink);text-anchor:middle}
@@ -195,7 +195,7 @@ svg.map{width:100%;height:auto;display:block}
   </header>
 
   <div class="hero">
-    <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 누르면 담당자 정보와 업무실 입구가 열립니다.</p></div>
+    <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다.</p></div>
     <button class="btn primary" type="button" id="openMeet">2F 회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
   </div>
 
@@ -314,8 +314,19 @@ async function runMeet() {
   busy = false; $("mgo").disabled = false; $("mq").value = ""; drawMeet();
 }
 $("roster").innerHTML = D.본부.map(b => `<h3>${esc(b.이름)}</h3>` + b.팀.map(t => `<button type="button" data-code="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}"><span>${esc(t.code)}<small>${esc(t.팀)}</small></span><i class="dot ${cls(t.상태)}" title="${esc(t.상태)}"></i></button>`).join("")).join("");
+// 조감도 자리: 한 번 = 정보, 두 번(400ms 안) = 업무실 바로 입장. dblclick 대신 직접 재서 휴대폰 두 번 탭도 같이 처리
+let last = {code: "", at: 0};
+function enter(code) {
+  const t = staff.find(s => s.code === code); if (!t) return;
+  if (t.page) window.open(t.page, "_blank", "noopener"); else show(code);
+}
+function tap(code) {
+  const now = Date.now(), again = last.code === code && now - last.at < 400;
+  last = again ? {code: "", at: 0} : {code, at: now};
+  again ? enter(code) : show(code);
+}
 document.addEventListener("click", e => {
-  const d = e.target.closest("[data-code]"); if (d) show(d.dataset.code);
+  const d = e.target.closest("[data-code]"); if (d) d.classList.contains("desk") ? tap(d.dataset.code) : show(d.dataset.code);
   const b = e.target.closest("button"); if (!b) return;
   if (b.id === "cgo") sendChat();
   if (b.id === "openMeet") { $("meet").hidden = false; drawMeet(); $("meet").scrollIntoView({behavior: "smooth"}); }
@@ -324,7 +335,7 @@ document.addEventListener("click", e => {
   if (b.dataset.mh) { const m = meetings[+b.dataset.mh]; $("mlog").innerHTML = [{r: "me", t: m.안건}, ...m.발언.map(x => ({r: "ai", by: x.code, t: x.t})), {r: "ai", by: "JARVIS 종합", t: m.종합, sum: true}].map(x => bubble(x, staff.find(s => s.code === x.by))).join(""); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (e.target.id === "cq")) { e.preventDefault(); sendChat(); } });
-document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); show(d.dataset.code); } });
+document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.shiftKey ? enter(d.dataset.code) : tap(d.dataset.code); } });
 show(sel);
 (async () => {
   [sample, db] = await Promise.all(["sample", "db"].map(n => window.claude?.use?.(n) ?? null));
