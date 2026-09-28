@@ -308,7 +308,7 @@ function drawRec(rec) {
   $("mlog").innerHTML = [{r: "me", t: rec.안건}, ...rec.발언.map(x => ({r: "ai", by: said(x), t: x.t, code: x.code})), ...(rec.종합 ? [{r: "ai", by: "JARVIS 종합", t: rec.종합, sum: true}] : [])]
     .map(x => bubble(x, staff.find(s => s.code === x.code))).join("");
   $("mlog").scrollTop = $("mlog").scrollHeight;
-  $("mdl").hidden = !(rec.방 === "big" && rec.종합 && rec.끝 !== false && downloads);  // 끝: 종합까지 성공한 회의(옛 기록은 표시 없음) $("mdlNote").textContent = "";
+  $("mdl").hidden = !(rec.방 === "big" && rec.종합 && rec.끝 !== false && downloads); $("mdlNote").textContent = "";  // 끝: 종합까지 성공한 회의(옛 기록은 표시 없음)
 }
 async function runMeet() {
   const q = $("mq").value.trim(), who = [...$("pick").querySelectorAll("input:checked")].map(i => i.value);
