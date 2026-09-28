@@ -117,7 +117,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 </style>
 <style>
 .pbar{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px}
-.pbar select{min-width:200px}
+.pbar select{min-width:200px;max-width:100%}
+.pbar label{max-width:100%}
 .kp{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .kp div{border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--glass2);min-width:84px}
 .kp b{display:block;font:700 16px var(--hud);font-variant-numeric:tabular-nums;color:var(--holo)}
@@ -268,7 +269,7 @@ function drawTop() {
   const p = P(); if (!p) { $("kp").innerHTML = ""; return; }
   const m = money(), w = W(), done = w.filter(t => t.상태 === "완료").length, late = lateList().length;
   $("kp").innerHTML = [["상태", p.상태 === "종료" ? "완료" : p.상태 || "준비"], ["계약(공급가)", won(m.계약)], ["예산", won(m.예산)], ["집행", won(m.집행)], ["예상 수익률", pct(m.예상수익률), m.예상수익률 < 0 ? "bad" : "hot"], ["공정", w.length ? `${done}/${w.length}` : "–"], ["지연", late, late ? "bad" : ""]]
-    .map(([k, v, c]) => `<div class="${c || ""}"><span class="hudlabel">${k}</span><b>${v}</b></div>`).join("");
+    .map(([k, v, c]) => `<div class="${c || ""}"><span class="hudlabel">${k}</span><b>${esc(v)}</b></div>`).join("");
 }
 function say() {
   const p = P(), n = p ? lateList().length : 0;
@@ -388,7 +389,7 @@ async function loadLists() {
 // ── CHRONOS: 공정 (간트·하위 할 일·지연 경고·지연 보고)
 const AI = D.ai; // [{code, 역할}]
 const who = d => d ? (d.t === "ai" ? `🤖 ${d.id}` : `👤 ${people.find(x => x.id === d.id)?.이름 || "?"}`) : "미배치";
-const effStat = t => t.상태 !== "완료" && t.종료 && t.종료 < today() ? "지연" : (t.상태 || "대기");
+const effStat = t => t.상태 !== "완료" && t.종료 && t.종료 < today() ? "지연" : STAT.includes(t.상태) ? t.상태 : "대기"; // 목록 밖 값은 화면·class 에 넣지 않는다
 const subStat = s => s.완료 ? "완료" : s.마감 && s.마감 < today() ? "지연" : "대기";
 const daysLate = d => Math.round((new Date(today() + "T00:00:00") - new Date(d + "T00:00:00")) / 864e5);
 const WHO = () => [["", "미배치"], ...AI.map(a => ["ai:" + a.code, `🤖 ${a.code} · ${a.역할}`]), ...PP().map(x => ["real:" + x.id, `👤 ${x.이름}${x.직책 ? ` · ${x.직책}` : ""} · ${x.역할 || ""}`])];
@@ -693,7 +694,7 @@ function ledLoad(name, wb) {
     const v = k => m[k] >= 0 ? String(r[m[k]] ?? "").trim() : "", d = ymd(v("지출일")); if (!d) continue;
     let a = num(v("과세")), z = num(v("영세")); const s = num(v("합계")); if (!a && !z) a = s; if (!a && !z) continue;
     const e = {pid: cur, 지출일: d, 구분: v("구분"), 항목: v("항목"), 내용: v("내용"), 지출항목: v("지출항목"), 과세액: a, 외화: v("외화") === "0" ? "" : v("외화"), 영세액: z, 합계: a + z, 부가세: num(v("부가세")), 결제방법: v("결제방법"), 공급업체: v("공급업체"), 비고: v("비고"), rid: "", 원본: name};
-    if (have.has(lkey(e))) { dup++; continue; } have.add(lkey(e)); out.push(e);
+    if (have.has(lkey(e))) { dup++; continue; } out.push(e); // 기존 장부와만 비교 — 한 파일 안의 같은 거래 2건은 둘 다 넣는다
   }
   lup = {pid: cur, name, sheet, rows: out, dup, linked: out.filter(e => ridOf(e, bud)).length}; drawLed();
 }
