@@ -5,7 +5,7 @@ import base64, json, pathlib
 root = pathlib.Path(__file__).resolve().parent
 av = lambda n: "data:image/png;base64," + base64.b64encode((root / f"avatars/{n}.png").read_bytes()).decode()
 org = json.loads((root / "org.json").read_text(encoding="utf-8"))
-ai = [{"code": e["code"], "역할": e["역할"], "업무": e.get("업무", [])} for b in org["본부"] for e in b["팀"] if e.get("상태") == "근무 중"]
+ai = [{"code": e["code"], "역할": e["역할"], "업무": e.get("업무", [])} for b in org["본부"] if b["id"] != "C" for e in b["팀"] if e.get("상태") == "근무 중"]  # C 개발실(프라이데이·비전)은 사업 업무 배치 대상 아님
 keep = ["bidNtceNo", "사업명", "발주기관", "한줄요약", "과업범위", "일정"]
 dec = [{k: a.get(k) for k in keep} for a in (json.loads(p.read_text(encoding="utf-8")) for p in sorted((root.parent / "decoder/analysis").glob("*.json")))]
 html = (root / "pmo.tpl.html").read_text(encoding="utf-8")
