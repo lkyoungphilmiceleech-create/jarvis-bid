@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "python org/build_office.py && python org/build_radar.py && python org/build_decoder.py && python org/build_atlas.py && python org/build_nexus.py && python org/build_pmo.py",
-    "test": "node tests/smoke.js"
+    "test": "python3 tests/test_fit.py && node tests/smoke.js"
   },
   "devDependencies": {
     "playwright": "^1.47.0",

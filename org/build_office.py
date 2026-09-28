@@ -8,6 +8,8 @@ repo = root.parent
 org = json.loads((root / "org.json").read_text(encoding="utf-8"))
 KST = dt.timezone(dt.timedelta(hours=9))
 now = dt.datetime.now(KST)
+sys.path.insert(0, str(repo)); import os; os.environ.setdefault("DATA_GO_KR_KEY", "-")
+from collect import fit
 
 S = 34                      # 1m(격자 한 칸)의 화면 크기
 C, H = 0.866 * S, 0.5 * S   # 아이소메트릭 투영 계수
@@ -175,7 +177,8 @@ def briefing(kdir):
             items[x["bidNtceNo"]] = x
     live = sorted((x for x in items.values() if (not x.get("입찰마감일시") or x["입찰마감일시"][:10] >= now.strftime("%Y-%m-%d")) and (x.get("배정예산") or 10**8) >= 10**8),
                   key=lambda x: str(x.get("입찰마감일시") or "9"))
-    cards = [{"code": "RADAR", "값": str(len(live)), "라벨": "마감 전 추천 공고", "줄": [f"{x['사업명'][:28]} · 마감 {str(x.get('입찰마감일시') or '미정')[5:10]}" for x in live[:3]], "url": page["RADAR"]}]
+    top = sorted(live, key=lambda x: "상중하".index(fit(x)[0]))  # 적합 상부터, 같은 등급은 마감 순
+    cards = [{"code": "RADAR", "값": str(len(live)), "라벨": "마감 전 추천 공고", "줄": [f"[{fit(x)[0]}] {x['사업명'][:26]} · 마감 {str(x.get('입찰마감일시') or '미정')[5:10]}" for x in top[:3]], "url": page["RADAR"]}]
     cases = [json.loads(p.read_text(encoding="utf-8")) for p in (repo / "decoder" / "analysis").glob("*.json")]
     nxt = sorted((e["날짜"], e["항목"], c["사업명"]) for c in cases for e in c["일정"] if len(e["날짜"]) == 10 and e["날짜"] >= now.strftime("%Y-%m-%d"))
     cards.append({"code": "DECODER", "값": str(len(cases)), "라벨": "분석한 공고", "줄": [f"{d[5:]} {i[:22]} ({n[:14]})" for d, i, n in nxt[:3]] or ["다가오는 일정 없음"], "url": page["DECODER"]})
@@ -199,7 +202,7 @@ def knowledge(kdir):
     live = [x for x in items.values() if not x.get("입찰마감일시") or x["입찰마감일시"][:10] >= now.strftime("%Y-%m-%d")]
     live.sort(key=lambda x: -(x.get("배정예산") or 0))
     kn = {"RADAR": f"[마감 전 공고 {len(live)}건, {now:%Y-%m-%d} 기준, 1억 이상=추천]\n" + "\n".join(
-        f"- [{'추천' if (x.get('배정예산') or 10**8) >= 10**8 else '참고'}] {x['사업명']} | {x['공고기관']} | 예산 {(x.get('배정예산') or 0) / 1e8:.1f}억 | 마감 {str(x.get('입찰마감일시'))[:16]}" for x in live[:30])}
+        f"- [{'추천' if (x.get('배정예산') or 10**8) >= 10**8 else '참고'}·적합 {fit(x)[0]}] {x['사업명']} | {x['공고기관']} | 예산 {(x.get('배정예산') or 0) / 1e8:.1f}억 | 마감 {str(x.get('입찰마감일시'))[:16]}" for x in live[:30])}
     cases = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((repo / "decoder" / "analysis").glob("*.json"))]
     kn["DECODER"] = "\n\n".join(
         f"[{c['사업명']}] ({c['bidNtceNo']}, {c['발주기관']}, 분석 {c['analyzedAt']})\n요약: {c['한줄요약']}\n평가: {c['평가']['방식']}\n"
