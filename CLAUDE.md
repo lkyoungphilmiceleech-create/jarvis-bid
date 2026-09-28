@@ -15,6 +15,7 @@
 | ATLAS 리서치 | `org/atlas.tpl.html` + `org/build_atlas.py` (보고서 `org/atlas_report.py`) | https://claude.ai/artifact/TDPhARCLePshYGn4xkh4Zm |
 | NEXUS 매칭 | `org/nexus.tpl.html` + `org/build_nexus.py` | https://claude.ai/artifact/R88TLqegZUoARH6CoxMaJf |
 | CHRONOS·LEDGER 관제실 | `org/pmo.tpl.html` + `org/build_pmo.py` | https://claude.ai/artifact/MpTu46T2Xd74XZYPmVXWD6 |
+| PRISM 디자인 스튜디오 | `org/prism.tpl.html` + `org/build_prism.py` | https://claude.ai/artifact/9hG8VesME61rUXfjjt7AVg |
 | 업무 데스크(BABEL·MAESTRO·SCRIBE) | `org/desk.tpl.html` + `org/build_desk.py` | https://claude.ai/artifact/JmQ3biw4gWxzSct65eCjBF |
 
 - 조직도·직원 정보: `org/org.json` / 아바타: `org/avatars/`
