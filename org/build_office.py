@@ -59,6 +59,33 @@ SEATS = {"A": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (7.0, 6.7), (4.0, 6.7), (1.0,
          "B": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (3.3, 6.7), (0.9, 6.7), (5.7, 6.7), (8.1, 6.7)]}
 
 
+def hull(pts):
+    """볼록 껍질(모노톤 체인) — 회의실 클릭 영역용."""
+    pts = sorted(set(pts))
+    cross = lambda o, a, b: (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    out = []
+    for seq in (pts, pts[::-1]):
+        part = []
+        for p in seq:
+            while len(part) >= 2 and cross(part[-2], part[-1], p) <= 0:
+                part.pop()
+            part.append(p)
+        out += part[:-1]
+    return out
+
+
+def hwpx_template():
+    """회의록 HWPX 틀(본문 자리 __BODY__). 페이지가 내려받을 때 본문 문단을 채운다."""
+    import io, zipfile
+    from hwpx.document import HwpxDocument
+    doc = HwpxDocument.new()
+    doc.add_paragraph("__BODY__")
+    buf = io.BytesIO()
+    doc.save_to_stream(buf)
+    assert "__BODY__" in zipfile.ZipFile(buf).read("Contents/section0.xml").decode()
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 def floor(wing, z0, name, label, staff, where):
     items = []  # (깊이, svg) — 깊이가 작은 것(뒤)부터 그린다
     add = lambda depth, s: items.append((depth, s))
@@ -86,6 +113,12 @@ def floor(wing, z0, name, label, staff, where):
         add(cx + cy, box(cx, cy, z0, 0.5, 0.5, 0.45, "chair"))
     add(20, poly([(mx, 4.3, z0), (W, 4.3, z0), (W, 4.3, z0 + WALL), (mx, 4.3, z0 + WALL)], "glasswall"))
     add(19.5, poly([(mx, 0, z0), (mx, 4.3, z0), (mx, 4.3, z0 + WALL), (mx, 0, z0 + WALL)], "glasswall"))
+    room, kind = ("대회의실", "big") if wing == "A" else ("소회의실", "small")
+    corners = [P(x, y, z) for x in (mx, W) for y in (0, 4.3) for z in (z0, z0 + WALL)]
+    tx, ty = P(mx + 1.8, 2.15, z0 + WALL + 0.3)
+    add(99, f'<g class="room" data-room="{kind}" tabindex="0" role="button" aria-label="{room} 열기"><title>{room} · 누르면 회의 준비</title>'
+        f'<polygon class="hit" points="{" ".join(f"{a:.1f},{b:.1f}" for a, b in hull(corners))}"/>'
+        f'<text class="roomtag" x="{tx:.1f}" y="{ty:.1f}">{room}</text></g>')
     # 라운지: 소파·화분·(1F) 커피바
     add(11 + 7, box(10.8, 6.4, z0, 2.6, 1.0, 0.45, "sofa") + box(10.8, 7.2, z0 + .45, 2.6, 0.2, 0.5, "sofa"))
     add(13.3 + 5.2, box(13.1, 5.0, z0, 0.6, 0.6, 0.5, "pot") + f'<circle class="leaf" cx="{P(13.4, 5.3, z0 + 1.2)[0]:.1f}" cy="{P(13.4, 5.3, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>')
@@ -230,7 +263,7 @@ def knowledge(kdir):
 
 k, rec, ncase = kpis()
 kdir = pathlib.Path(sys.argv[sys.argv.index("--knowledge") + 1]) if "--knowledge" in sys.argv else None
-data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M"), "브리핑": briefing(kdir)}
+data = {"본부": org["본부"], "kpi": k, "지식": knowledge(kdir), "지식시각": now.strftime("%Y-%m-%d %H:%M"), "브리핑": briefing(kdir), "hwpx": hwpx_template()}
 tpl = (root / "office.tpl.html").read_text(encoding="utf-8")
 html = tpl.replace("__SVG__", svg(rec, ncase)).replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 (root / "office.html").write_text(html, encoding="utf-8")
