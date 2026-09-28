@@ -1,0 +1,14 @@
+{
+  "name": "jarvis-bid",
+  "private": true,
+  "scripts": {
+    "build": "python org/build_office.py && python org/build_radar.py && python org/build_decoder.py && python org/build_atlas.py && python org/build_nexus.py && python org/build_pmo.py",
+    "test": "node tests/smoke.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.47.0",
+    "xlsx": "0.18.5",
+    "d3": "7.9.0",
+    "topojson-client": "3.1.0"
+  }
+}
