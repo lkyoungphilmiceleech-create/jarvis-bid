@@ -146,6 +146,8 @@ dialog.pop[open]{animation:popin .25s ease-out}
 .dday.soon{color:var(--amber);border-color:var(--amber)} .dday.over{text-decoration:line-through;color:var(--muted)}
 .tag{font-size:11px;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
 .tag.focus{background:var(--holo);color:var(--holo-ink);border-color:var(--holo)}
+.fit{font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.fit.상{background:var(--go-soft);color:var(--go);border-color:var(--go)} .fit.중{background:var(--amber-soft);color:var(--amber);border-color:var(--amber)}
 .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .why{font-size:12px;padding:2px 8px;border-radius:4px;background:var(--holo-soft)}
 .more{display:block;margin:14px auto 0}
@@ -234,6 +236,7 @@ dialog.pop[open]{animation:popin .25s ease-out}
       <dt>집중 기관</dt><dd id="inst"></dd>
       <dt>과업 키워드</dt><dd id="kw"></dd>
       <dt>금액</dt><dd><span class="chip static">1억 원 이상 → 추천</span><span class="chip static">1억 원 미만 → 참고</span><span class="chip static">금액 미상 → 추천</span></dd>
+      <dt>적합도</dt><dd><span class="chip static">해외·매칭 +3</span><span class="chip static">운영·대행 +1</span><span class="chip static">콘텐츠·스타트업 +1</span><span class="chip static">집중기관 +1</span><span class="chip static">시공·물품·조사 −2</span><span class="chip static">4점↑ 상 · 2~3 중 · 1↓ 하</span></dd>
       <dt>자동 제외</dt><dd><span class="chip static">전기차 충전설비</span><span class="chip static">폐기·철거</span><span class="chip static">금융성 투자</span><span class="chip static">입시·심리 상담</span><span class="chip static">단순 시설관리</span></dd>
     </dl>
     <p class="hint">호칭은 저장 즉시 바뀝니다. 기관·키워드를 고치면 여기에 저장됩니다. 매일 수집에 적용하려면 JARVIS에게 “RADAR 기준 반영해줘”라고 말해 주세요.</p>
@@ -300,7 +303,7 @@ function card(i) {
   const acts = !s ? `<button class="btn x" data-act="제외" data-id="${esc(i.bidNtceNo)}">제외</button><button class="btn go" data-act="선택" data-id="${esc(i.bidNtceNo)}">선택</button>`
     : `<span class="why">${esc(s)}</span>` + (s === "선택" || s === "제외" ? `<button class="btn" data-act="복원" data-id="${esc(i.bidNtceNo)}">복원</button>` : "");
   return `<article class="card${i.RADAR === "참고" ? " ref" : ""}${s ? " gone" : ""}" id="c-${esc(i.bidNtceNo)}">
-    <div class="row"><span class="tag${i.수집사유 === "집중기관" ? " focus" : ""}">${esc(i.수집사유)}</span>${dd}</div>
+    <div class="row"><span><span class="fit ${esc(i.적합도)}" title="${esc((i.적합근거 || []).join(" · "))}">적합 ${esc(i.적합도)}</span> <span class="tag${i.수집사유 === "집중기관" ? " focus" : ""}">${esc(i.수집사유)}</span></span>${dd}</div>
     <div><a href="${esc(i.공고URL)}" target="_blank" rel="noopener">${esc(i.사업명)}</a><div class="org">${esc(i.공고기관)} · 공고 ${esc(i.공고일자)}</div></div>
     <div class="row"><span class="money">${won(i.배정예산)}</span><span class="acts">${acts}</span></div></article>`;
 }
@@ -334,7 +337,7 @@ function render() {
 
   say(!db ? `${honor}, 지금은 보기 전용이라 선택과 제외가 저장되지 않습니다.`
     : picked.length ? `전송 대기 ${picked.length}건. “전송”을 누르시면 DECODER에게 넘기고 제안요청서를 받아 두겠습니다.`
-    : rec.length ? `${honor}, 레이더에 추천 공고 ${rec.length}건이 잡혔습니다. 우리 판이다 싶은 건 “선택”, 아닌 건 “제외”로 골라 주세요.`
+    : rec.length ? `${honor}, 레이더에 추천 공고 ${rec.length}건(적합 상 ${rec.filter(i => i.적합도 === "상").length}건)이 잡혔습니다. 우리 판이다 싶은 건 “선택”, 아닌 건 “제외”로 골라 주세요.`
     : "지금은 새로 검토할 추천 공고가 없습니다. 다음 스캔은 평일 09:40입니다.");
 
   const chips = (arr, key) => arr.map((x, n) => `<span class="chip">${esc(x)}${db ? `<button type="button" aria-label="${esc(x)} 삭제" data-del="${key}" data-n="${n}">×</button>` : ""}</span>`).join("")
@@ -423,7 +426,7 @@ function fillPop() {
   $("popTitle").textContent = i.사업명;
   const rows = [["발주기관", i.공고기관], ["수요기관", i.수요기관 || "-"], ["배정예산", won(i.배정예산) + (i.배정예산 ? ` (${i.배정예산.toLocaleString("ko-KR")}원)` : "")],
     ["입찰 마감", (i.입찰마감일시 || "미정") + (d === null ? "" : d < 0 ? " · 마감" : ` · D-${d || "DAY"}`)], ["공고일", i.공고일자], ["공고번호", i.공고번호],
-    ["구분", `${i.구분} · ${i.수집사유}`], ["RADAR 판단", i.RADAR === "추천" ? "추천 (1억 원 이상 또는 금액 미상)" : "참고 (1억 원 미만)"], ["현재 상태", s]];
+    ["구분", `${i.구분} · ${i.수집사유}`], ["RADAR 판단", i.RADAR === "추천" ? "추천 (1억 원 이상 또는 금액 미상)" : "참고 (1억 원 미만)"], ["적합도", `${i.적합도} · ${(i.적합근거 || []).join(", ") || "해당 키워드 없음"}`], ["현재 상태", s]];
   $("popBody").innerHTML = ""; rows.forEach(([k, v]) => { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; $("popBody").append(dt, dd); });
   $("popLink").href = i.공고URL;
   const st = stateOf(i), id = esc(i.bidNtceNo);
@@ -439,7 +442,7 @@ $("popFeed").onclick = () => { const id = popId; $("pop").close(); jumpTo(id); }
 // ── RADAR 대화 ──
 let sample = null, chatRef = null, turns = [], ctl = null, pending = {};
 const MAX_KEEP = 60, MAX_SEND = 16;
-const row = i => ({id: i.bidNtceNo, 사업명: i.사업명, 기관: i.공고기관, 예산: won(i.배정예산), 마감: i.입찰마감일시 || "미정", 남은일수: daysLeft(i.입찰마감일시), 등급: i.RADAR, 상태: stateOf(i) || "검토대기", 수집: i.수집사유});
+const row = i => ({id: i.bidNtceNo, 사업명: i.사업명, 기관: i.공고기관, 예산: won(i.배정예산), 마감: i.입찰마감일시 || "미정", 남은일수: daysLeft(i.입찰마감일시), 등급: i.RADAR, 적합도: i.적합도, 상태: stateOf(i) || "검토대기", 수집: i.수집사유});
 const TOOLS = [
   {name: "search_notices", description: "수집된 입찰 공고를 조건으로 찾는다. 결과는 최대 15건의 요약(id, 사업명, 기관, 예산, 마감, 남은일수, 등급, 상태)이다. 조건 없이 부르면 검토대기 추천 공고 상위 15건.",
    inputSchema: {type: "object", properties: {
@@ -447,6 +450,7 @@ const TOOLS = [
      minBudgetEok: {type: "number", description: "최소 예산(억 원)"},
      maxDaysLeft: {type: "number", description: "마감까지 남은 최대 일수"},
      grade: {type: "string", enum: ["추천", "참고"]},
+     fit: {type: "string", enum: ["상", "중", "하"], description: "적합도(우리 사업과 맞는 정도)"},
      includeHandled: {type: "boolean", description: "마감·선택·제외·이관된 공고도 포함"}}},
    execute: inp => {
      const words = String(inp.text || "").toLowerCase().split(/\s+/).filter(Boolean);
@@ -455,7 +459,7 @@ const TOOLS = [
        && words.every(w => (i.사업명 + " " + i.공고기관 + " " + i.수요기관).toLowerCase().includes(w))
        && (!min || (i.배정예산 || 0) >= min)
        && (dl == null || (daysLeft(i.입찰마감일시) ?? 999) <= dl && (daysLeft(i.입찰마감일시) ?? -1) >= 0)
-       && (!inp.grade || i.RADAR === inp.grade));
+       && (!inp.grade || i.RADAR === inp.grade) && (!inp.fit || i.적합도 === inp.fit));
      lastRefs = hits.slice(0, 15).map(i => i.bidNtceNo);
      return {total: hits.length, items: hits.slice(0, 15).map(row)};
    }},
@@ -474,7 +478,7 @@ const rules = () => `너는 JARVIS 조직 제안서 준비 본부 입찰 공고 
 - 한국어 존댓말, 핵심만 짧게(보통 3~6줄). 사용자를 "${honor}"이라고 부른다.
 - 공고에 관한 질문은 반드시 search_notices 로 찾은 사실만 말한다. 없는 공고를 지어내지 않는다.
 - 선택·제외·DECODER 전송(이관)·복원 요청은 propose_action 으로 제안만 하고, "아래 확인 버튼을 눌러 주세요"라고 안내한다.
-- 판단 기준: 집중 기관 ${cfg.institutions.join(", ")} / 키워드 ${cfg.keywords.join(", ")} / 1억 이상 추천, 미만 참고.
+- 판단 기준: 집중 기관 ${cfg.institutions.join(", ")} / 키워드 ${cfg.keywords.join(", ")} / 1억 이상 추천, 미만 참고. 적합도 상·중·하는 사업명 키워드로 매긴 우리 사업(해외 진출 지원 행사 운영) 적합 정도다(해외·매칭 +3, 운영형 +1, 콘텐츠·스타트업 +1, 집중기관 +1, 시공·물품·조사 -2; 4점 이상 상, 2~3 중). 추천할 때는 적합도 상을 먼저 권한다.
 - 오늘은 ${new Date().toLocaleDateString("ko-KR", {timeZone: "Asia/Seoul"})}. 현재 검토대기 추천 ${$("nRec").textContent}건, 참고 ${$("nRef").textContent}건, 전송 대기 ${D.items.filter(i => decisions[i.bidNtceNo]?.status === "선택").length}건.
 - 공고 페이지 밖의 일(입찰서 작성 등)은 다른 팀원 몫이라고 짧게 안내한다.`;
 

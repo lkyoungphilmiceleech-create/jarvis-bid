@@ -11,7 +11,7 @@ const MOCK = `(() => { const q = () => ({orderBy: q, limit: q, where: q, onSnaps
 const local = u => { const m = u.match(/cdn\.jsdelivr\.net\/npm\/([^@]+)@[^/]+\/(.+)$/); const f = m && path.join(ROOT, "node_modules", m[1], m[2]); return f && fs.existsSync(f) ? f : null; };
 (async () => {
   const names = process.argv.slice(2).length ? process.argv.slice(2) : PAGES;
-  const browser = await chromium.launch(); let bad = 0;
+  const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || undefined}); let bad = 0;  // 브라우저를 따로 둔 환경: CHROMIUM_PATH=경로 npm test
   for (const name of names) {
     const file = path.join(ROOT, "org", `${name}.html`);
     if (!fs.existsSync(file)) { console.log(`- ${name}: 빌드 파일 없음 (python org/build_${name}.py)`); continue; }
