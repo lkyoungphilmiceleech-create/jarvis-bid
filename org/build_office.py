@@ -56,8 +56,10 @@ def kpis():
 
 
 # 자리 배치(책상 왼쪽 위 모서리 X, Y). 직원은 책상 뒤(Y-0.9)에 앉아 화면 쪽(앞)을 본다.
-SEATS = {"A": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (7.0, 6.7), (4.0, 6.7), (1.0, 6.7)],
-         "B": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (3.3, 6.7), (0.9, 6.7), (5.7, 6.7), (8.1, 6.7)]}
+# 2F 는 방 3개(본부장님 결정 2026-09-28): ① 심사·선정실(뒤) ② 제안 작업실(앞 왼쪽) ③ 리서치 랩(앞 가운데), 가운데 복도 끝(오른쪽)에 대회의실
+ZONES = [("① 심사·선정실 🔒", ["RADAR", "DECODER", "TRIBUNAL"], "z1"), ("② 제안 작업실", ["ORACLE", "QUILL"], "z2"), ("③ 리서치 랩", ["ATLAS"], "z3")]
+SEAT_A = {"RADAR": (1.0, 2.3), "DECODER": (4.0, 2.3), "TRIBUNAL": (7.0, 2.3), "ORACLE": (1.0, 6.7), "QUILL": (4.0, 6.7), "ATLAS": (7.0, 6.7)}
+SEATS = {"B": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (3.3, 6.7), (0.9, 6.7), (5.7, 6.7), (8.1, 6.7)]}
 
 
 def hull(pts):
@@ -127,7 +129,11 @@ def floor(wing, z0, name, label, staff, where):
     # 바닥 슬래브와 층 표시
     base.append(box(0, 0, z0 - 0.5, W, D, 0.5, "slab"))
     base.append(poly([(0, 0, z0), (W, 0, z0), (W, D, z0), (0, D, z0)], "floor-t"))
-    base.append(poly([(0.6, 1.4, z0 + .01), (9.6, 1.4, z0 + .01), (9.6, 8.4, z0 + .01), (0.6, 8.4, z0 + .01)], "carpet"))
+    if wing == "A":  # 방마다 바닥 색을 달리 깐다(복도 y 4.3~5.3 은 맨바닥)
+        for (x0, y0, x1, y1), (_, _, z) in zip([(0.2, 0.3, 10.2, 4.1), (0.2, 5.5, 6.0, 8.8), (6.4, 5.5, 10.2, 8.8)], ZONES):
+            base.append(poly([(x0, y0, z0 + .01), (x1, y0, z0 + .01), (x1, y1, z0 + .01), (x0, y1, z0 + .01)], f"carpet zone {z}"))
+    else:
+        base.append(poly([(0.6, 1.4, z0 + .01), (9.6, 1.4, z0 + .01), (9.6, 8.4, z0 + .01), (0.6, 8.4, z0 + .01)], "carpet"))
     # 뒷벽 2면(창문 포함)
     base.append(box(-0.3, 0, z0, 0.3, D, WALL, "wall"))
     base.append(box(0, -0.3, z0, W, 0.3, WALL, "wall"))
@@ -160,8 +166,23 @@ def floor(wing, z0, name, label, staff, where):
     if wing == "B":
         add(1, box(3.4, 0.2, z0, 3.0, 0.8, 1.0, "wood") + box(3.8, 0.3, z0 + 1.0, 0.5, 0.4, 0.4, "chair") + box(5.2, 0.3, z0 + 1.0, 0.7, 0.5, 0.5, "slab"))
         add(8.8 + 0.6, box(8.8, 0.3, z0, 0.9, 0.7, 1.0, "printer"))
+    if wing == "A":
+        # 방 칸막이: 낮은 유리벽(1.3m, 자리가 가려지지 않게). 깊이는 뒷줄 자리보다 뒤, 앞줄 자리보다 앞이 되게 구간별로 준다
+        hgt = 1.3
+        pane = lambda a, b: poly([a + (z0,), b + (z0,), b + (z0 + hgt,), a + (z0 + hgt,)], "glasswall part")
+        for x0, x1 in [(0, 2.6), (2.6, 5.2), (6.2, 10.4)]:  # ① 앞벽(y 4.3), 문: x 5.2~6.2
+            add(x1 + 4.3 - 0.5, pane((x0, 4.3), (x1, 4.3)))
+        for x0, x1 in [(0, 2.6), (2.6, 4.8), (7.4, 10.4)]:  # ②·③ 뒷벽(y 5.3), 문: x 4.8~6.2(②), 6.2~7.4(③)
+            add(x0 + 5.3 + 1.3, pane((x0, 5.3), (x1, 5.3)))
+        add(13.5, pane((6.2, 5.3), (6.2, 8.0)))  # ②|③ 사이, 문: y 8.0~9.0 (리서치 랩 ↔ 제안 작업실)
+        for (name, codes, z), (x, y, h) in zip(ZONES, [(5.2, 0.0, WALL + 0.35), (3.0, 9.0, 0.1), (8.3, 9.0, 0.1)]):
+            tx, ty = P(x, y, z0 + h)
+            add(98, f'<text class="zonetag {z}" x="{tx:.1f}" y="{ty + (22 if y else 0):.1f}">{name}</text>')
+        seats = [(t, SEAT_A[t["code"]]) for t in staff]
+    else:
+        seats = list(zip(staff, SEATS[wing]))
     # 자리: 의자 → 직원 → 책상 → 모니터 순
-    for t, (x, y) in zip(staff, SEATS[wing]):
+    for t, (x, y) in seats:
         add(x + y + 1.4, seat(t, x, y, z0, where))
     return "".join(base) + "".join(s for _, s in sorted(items, key=lambda i: i[0]))
 
