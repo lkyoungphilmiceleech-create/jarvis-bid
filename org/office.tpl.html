@@ -150,6 +150,9 @@ svg.map{width:100%;height:auto;display:block}
 .ask textarea:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
 .meet{padding:18px;display:flex;flex-direction:column;gap:10px}
 .meet[hidden]{display:none}
+.room{cursor:pointer;outline:none}.room .hit{fill:transparent;stroke:none}
+.room:hover .hit,.room:focus-visible .hit{fill:var(--holo-soft);stroke:var(--holo);stroke-width:1.5}
+.roomtag{font:700 13px var(--sans);fill:var(--holo);text-anchor:middle;paint-order:stroke;stroke:var(--floor);stroke-width:4px}
 .pick{display:flex;flex-wrap:wrap;gap:6px}
 .pick label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;font:13px var(--sans)}
 .pick label:has(input:checked){border-color:var(--holo);background:var(--holo-soft)}
@@ -205,8 +208,8 @@ svg.map{width:100%;height:auto;display:block}
   </header>
 
   <div class="hero">
-    <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다.</p></div>
-    <button class="btn primary" type="button" id="openMeet">2F 회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
+    <div><h1>JARVIS 빌딩</h1><p>2F 제안서 준비 본부 · 1F 사업 수행 본부 · 자리를 한 번 누르면 담당자 정보, 두 번 누르면(더블클릭) 바로 업무실로 들어갑니다. 1:1 대화는 각 업무실에서, 여러 명과는 회의실(유리방을 누르세요)에서 합니다.</p></div>
+    <button class="btn primary" type="button" id="openMeet">회의실 열기</button><div class="legend"><span><i class="dot on"></i>근무 중</span><span><i class="dot skill"></i>스킬 보유(채팅으로 업무)</span><span><i class="dot off"></i>채용 예정</span></div>
   </div>
 
   <div class="main"><div class="left">
@@ -214,12 +217,17 @@ svg.map{width:100%;height:auto;display:block}
 
   <section class="glass floorwrap office" aria-label="JARVIS 빌딩 조감도"><p class="floorhint">조감도를 옆으로 밀어서 볼 수 있습니다.</p><div class="floors">__SVG__</div></section>
 
-  <section class="glass meet" id="meet" hidden aria-label="2F 회의실">
-    <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0;font:700 18px var(--sans)">2F 회의실</h2><span class="chatnote" id="kAt"></span><button class="btn x" type="button" id="closeMeet">닫기</button></div>
+  <section class="glass meet" id="meet" hidden aria-label="회의실">
+    <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0;font:700 18px var(--sans)" id="mTitle">회의실</h2>
+      <div class="seg" role="group" aria-label="회의실 고르기"><button type="button" data-room="small">소회의실</button><button type="button" data-room="big">대회의실</button></div>
+      <span class="chatnote" id="kAt"></span><button class="btn x" type="button" id="closeMeet">닫기</button></div>
+    <p class="chatnote" id="mRule"></p>
+    <label class="chatnote" id="m2box"><input type="checkbox" id="m2" checked> 보완·반론 라운드 (한 바퀴 더 돌아 사용량 약 2배)</label>
     <div class="hudlabel">참석자 (본부장님이 고르면 순서대로 발언하고, 마지막에 JARVIS가 종합합니다)</div>
     <div class="pick" id="pick"></div>
     <div class="clog" id="mlog"></div>
     <div class="ask"><textarea id="mq" placeholder="안건을 적어 주세요. 예) KOREA360 USA 제안 준비 상황 점검"></textarea><button class="btn primary" type="button" id="mgo">회의 시작</button></div>
+    <div><button class="btn" type="button" id="mdl" hidden>회의록 HWPX 받기 (zip)</button> <span class="chatnote" id="mdlNote"></span></div>
     <details><summary class="chatnote" style="cursor:pointer">지난 회의록</summary><div id="mhist" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div></details>
   </section>
 
@@ -235,11 +243,11 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const applyMode = m => {
   if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
-  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  document.querySelectorAll(".seg button[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
   try { localStorage.setItem("office-mode", m); } catch {}
 };
 let mode = "system"; try { mode = localStorage.getItem("office-mode") || "system"; } catch {}
-applyMode(mode); document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
+applyMode(mode); document.querySelectorAll(".seg button[data-mode]").forEach(b => b.onclick = () => applyMode(b.dataset.mode));
 const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"});
 tick(); setInterval(tick, 1000);
 if (matchMedia("(prefers-reduced-motion: reduce)").matches) document.querySelectorAll("animateMotion").forEach(a => a.remove());
@@ -265,13 +273,10 @@ function show(code) {
     ${t.page ? `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 들어가기 ↗</a>`
       : t.상태 === "스킬 보유" ? `<p class="chatnote">전용 업무실은 아직 없습니다. JARVIS 채팅에서 요청하면 이 직원의 스킬로 바로 처리합니다.</p>`
       : `<p class="chatnote">아직 채용 전입니다. JARVIS에게 "${esc(t.code)} 만들자"라고 말씀해 주세요.</p>`}
-    ${t.상태 === "근무 중" ? `<div class="chat"><div class="hudlabel">${esc(t.code)}와 대화</div><div class="clog" id="clog"></div>
-      <div class="ask"><textarea id="cq" placeholder="${esc(t.code)}에게 물어보세요"></textarea><button class="btn primary" type="button" id="cgo">보내기</button></div>
-      <p class="chatnote" id="cnote">업무 자료(${esc(D.지식시각)} 기준)를 바탕으로 답합니다. 대화는 본부장님만 볼 수 있게 저장됩니다.</p></div>` : ""}`;
-  drawChat();
+    ${t.상태 === "근무 중" ? `<p class="chatnote">${esc(t.code)}와 1:1 대화는 업무실에서, 여러 직원과 함께라면 회의실에서 합니다.</p>` : ""}`;
 }
-// ── 대화: 1:1과 회의실. Claude 호출은 본부장님 계정 사용량으로 처리된다
-let sample = null, db = null, uid = null, chats = {}, meetings = [], busy = false;
+// ── 회의실(1:N). 1:1 대화는 각 업무실에서. Claude 호출은 본부장님 계정 사용량으로 처리된다
+let sample = null, db = null, uid = null, downloads = null, meetings = [], busy = false, room = "small", shown = null;
 const working = staff.filter(t => t.상태 === "근무 중");
 function persona(t) {
   return `너는 JARVIS 조직 ${t.본부} ${t.팀}의 ${t.역할} ${t.code}다. 사용자는 우리 회사 본부장이며 "본부장님"이라고 부른다.
@@ -281,48 +286,92 @@ ${D.지식?.[t.code] || "이 화면에 실린 업무 자료가 없다. 일반 �
 규칙: 한국어로 짧고 쉽게, 결론 먼저(3~6문장 또는 개조식). 업무 자료에 있는 사실은 날짜·출처와 함께 말하고, 없는 사실은 지어내지 않는다. 최신 웹 조사·파일 작성·저장 같은 실제 작업이 필요하면 담당 업무실${t.page ? `(${t.page})` : ""}이나 JARVIS 채팅에서 요청하도록 안내한다. 오늘은 ${new Date().toLocaleDateString("ko-KR", {timeZone: "Asia/Seoul"})}.`;
 }
 const bubble = (m, t) => `<div class="msg ${m.r === "me" ? "me" : "ai"}${m.err ? " err" : ""}${m.sum ? " sum" : ""}">${m.r === "me" ? "" : `<div class="by">${t ? `<img alt="" src="${D.avatars[t.avatar]}">` : ""}${esc(m.by || t?.code || "JARVIS")}</div>`}${esc(m.t)}</div>`;
-function drawChat() {
-  const t = staff.find(x => x.code === sel), log = $("clog"); if (!log) return;
-  log.innerHTML = (chats[sel] || []).map(m => bubble(m, t)).join(""); log.scrollTop = log.scrollHeight;
-}
 const errText = e => ({not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 보내 주세요.", prompt_too_large: "대화가 너무 깁니다. 새 대화로 시작해 주세요."}[e?.code] || "답을 받지 못했습니다. 다시 보내 주세요.");
-async function saveChat(code) { if (db && uid) db.doc(`data/users/${uid}/chat_${code}`).set({msgs: (chats[code] || []).slice(-60)}).catch(() => {}); }
-async function sendChat() {
-  const q = $("cq").value.trim(), t = staff.find(x => x.code === sel); if (!q || busy) return;
-  if (!sample) { $("cnote").textContent = "이 화면에서는 대화를 쓸 수 없습니다. claude.ai에서 열어 주세요."; return; }
-  const code = sel, list = chats[code] = chats[code] || [];
-  list.push({r: "me", t: q, at: new Date().toISOString()}); $("cq").value = ""; busy = true; $("cgo").disabled = true;
-  const ai = {r: "ai", t: "…", at: new Date().toISOString()}; list.push(ai); drawChat();
-  const turns = list.slice(-13, -1).map(m => ({role: m.r === "me" ? "user" : "assistant", content: m.t}));
-  try { const r = await sample([{role: "user", content: persona(t)}, {role: "assistant", content: `네, ${t.code}입니다.`}, ...turns], {cache: false, onText: ({text}) => { ai.t = text; if (sel === code) drawChat(); }}); ai.t = r.text; }
-  catch (e) { ai.t = (e?.text ? e.text + "\n\n" : "") + errText(e); ai.err = true; }
-  busy = false; if ($("cgo")) $("cgo").disabled = false; if (sel === code) drawChat(); saveChat(code);
+const ROOMS = {
+  small: {이름: "소회의실", 규칙: "2~3명 권장 · 한 사람씩 한 번 발언 → JARVIS 종합. 빠른 확인용입니다."},
+  big: {이름: "대회의실", 규칙: "4명 이상 권장 · 1차 발언 → 보완·반론 → JARVIS 종합(할 일·담당·기한). 회의록을 HWPX로 받을 수 있습니다."}};
+function setRoom(r) {
+  if (busy) return;  // 회의 중에는 방·보완 라운드를 바꾸지 않는다
+  room = r;
+  document.querySelectorAll("[data-room]").forEach(x => x.tagName === "BUTTON" && x.setAttribute("aria-pressed", x.dataset.room === r));
+  $("mTitle").textContent = ROOMS[r].이름; $("mRule").textContent = ROOMS[r].규칙; $("m2box").hidden = r !== "big";
 }
+function openMeet(r) { setRoom(r || room); $("meet").hidden = false; drawMeet(); $("meet").scrollIntoView({behavior: "smooth"}); }
 function drawMeet() {
   $("kAt").textContent = `업무 자료 ${D.지식시각} 기준`;
   if (!$("pick").children.length) $("pick").innerHTML = working.map(t => `<label><input type="checkbox" value="${esc(t.code)}"><img alt="" src="${D.avatars[t.avatar]}">${esc(t.code)}</label>`).join("");
-  $("mhist").innerHTML = meetings.slice().reverse().map((m, i) => `<button class="btn" type="button" data-mh="${meetings.length - 1 - i}" style="text-align:left;white-space:normal">${esc(m.at.slice(0, 16).replace("T", " "))} · ${esc(m.안건.slice(0, 50))} <span class="chatnote">(${esc(m.참석.join(", "))})</span></button>`).join("") || '<p class="chatnote">아직 회의록이 없습니다.</p>';
+  $("mhist").innerHTML = meetings.slice().reverse().map((m, i) => `<button class="btn" type="button" data-mh="${meetings.length - 1 - i}" style="text-align:left;white-space:normal">[${m.방 === "big" ? "대" : "소"}] ${esc(m.at.slice(0, 16).replace("T", " "))} · ${esc(m.안건.slice(0, 50))} <span class="chatnote">(${esc(m.참석.join(", "))})</span></button>`).join("") || '<p class="chatnote">아직 회의록이 없습니다.</p>';
+}
+const said = m => m.차 === 2 ? `${m.code} (보완·반론)` : m.code;
+function drawRec(rec) {
+  shown = rec;
+  $("mlog").innerHTML = [{r: "me", t: rec.안건}, ...rec.발언.map(x => ({r: "ai", by: said(x), t: x.t, code: x.code})), ...(rec.종합 ? [{r: "ai", by: "JARVIS 종합", t: rec.종합, sum: true}] : [])]
+    .map(x => bubble(x, staff.find(s => s.code === x.code))).join("");
+  $("mlog").scrollTop = $("mlog").scrollHeight;
+  $("mdl").hidden = !(rec.방 === "big" && rec.종합 && rec.끝 !== false && downloads); $("mdlNote").textContent = "";  // 끝: 종합까지 성공한 회의(옛 기록은 표시 없음)
 }
 async function runMeet() {
   const q = $("mq").value.trim(), who = [...$("pick").querySelectorAll("input:checked")].map(i => i.value);
   if (!q || busy) return; if (!who.length) { alert("참석자를 한 명 이상 골라 주세요."); return; }
   if (!sample) { alert("이 화면에서는 회의를 열 수 없습니다. claude.ai에서 열어 주세요."); return; }
-  busy = true; $("mgo").disabled = true;
-  const rec = {at: new Date().toISOString(), 안건: q, 참석: who, 발언: [], 종합: ""}, log = [{r: "me", t: q}];
-  const draw = () => { $("mlog").innerHTML = log.map(m => bubble(m, staff.find(x => x.code === m.by))).join(""); $("mlog").scrollTop = $("mlog").scrollHeight; };
-  for (const code of who) {
-    const t = staff.find(x => x.code === code), m = {r: "ai", by: code, t: "…"}; log.push(m); draw();
-    const before = rec.발언.map(s => `${s.code}: ${s.t}`).join("\n\n") || "(아직 없음)";
-    try { const r = await sample(`${persona(t)}\n\n[회의] 본부장님이 연 회의다. 참석: ${who.join(", ")}.\n안건: ${q}\n[앞선 발언]\n${before}\n\n너의 담당 관점에서만 2~5문장으로 발언한다. 앞선 발언을 반복하지 말고, 필요하면 다른 직원 발언에 보태거나 이견을 말한다.`, {cache: false, onText: ({text}) => { m.t = text; draw(); }}); m.t = r.text; }
+  busy = true; $("mgo").disabled = true; $("m2").disabled = true;
+  const big = room === "big", second = big && $("m2").checked && who.length > 1;
+  const rec = {at: new Date().toISOString(), 방: room, 안건: q, 참석: who, 발언: [], 종합: "", 끝: false};
+  const ask = async (prompt, m) => {
+    rec.발언.push(m); drawRec(rec);
+    try { const r = await sample(prompt, {cache: false, onText: ({text}) => { m.t = text; drawRec(rec); }}); m.t = r.text; }
     catch (e) { m.t = errText(e); m.err = true; }
-    rec.발언.push({code, t: m.t}); draw();
-  }
-  const s = {r: "ai", by: "JARVIS 종합", t: "…", sum: true}; log.push(s); draw();
-  try { const r = await sample(`너는 회의 사회자 JARVIS다. 사용자는 본부장이며 "본부장님"이라고 부른다.\n안건: ${q}\n[발언]\n${rec.발언.map(x => `${x.code}: ${x.t}`).join("\n\n")}\n\n본부장님께 드릴 종합을 한국어 개조식으로 짧게: 1) 결론 2) 할 일(담당 직원·기한) 3) 본부장님 결정이 필요한 것. 발언에 없는 사실은 만들지 않는다.`, {cache: false, onText: ({text}) => { s.t = text; draw(); }}); s.t = r.text; }
-  catch (e) { s.t = errText(e); s.err = true; }
-  draw(); rec.종합 = s.t; meetings.push(rec); meetings = meetings.slice(-20);
+    drawRec(rec);
+  };
+  const head = `[회의] 본부장님이 연 ${ROOMS[room].이름} 회의다. 참석: ${who.join(", ")}.\n안건: ${q}`;
+  const log = () => rec.발언.filter(x => x.t !== "…").map(x => `${said(x)}: ${x.t}`).join("\n\n") || "(아직 없음)";
+  for (const code of who)
+    await ask(`${persona(staff.find(x => x.code === code))}\n\n${head}\n[앞선 발언]\n${log()}\n\n너의 담당 관점에서만 2~5문장으로 발언한다. 앞선 발언을 반복하지 말고, 필요하면 다른 직원 발언에 보태거나 이견을 말한다.`, {code, 차: 1, t: "…"});
+  if (second)
+    for (const code of who)
+      await ask(`${persona(staff.find(x => x.code === code))}\n\n${head}\n[지금까지 발언]\n${log()}\n\n보완·반론 차례다. 다른 직원 발언 가운데 네 담당 관점에서 빠졌거나 틀렸거나 위험한 점을 1~3문장으로 짚는다. 보탤 것이 없으면 "보탤 것 없음"이라고만 한다.`, {code, 차: 2, t: "…"});
+  const out = big ? `1) 결론 2) 할 일 — 한 줄에 하나씩 "담당 직원 | 할 일 | 기한" 3) 본부장님 결정이 필요한 것 4) 위험 요소` : `1) 결론 2) 할 일(담당 직원·기한) 3) 본부장님 결정이 필요한 것`;
+  const s = {r: "ai", t: "…"}; rec.종합 = "…"; drawRec(rec);
+  try { const r = await sample(`너는 회의 사회자 JARVIS다. 사용자는 본부장이며 "본부장님"이라고 부른다.\n${head}\n[발언]\n${log()}\n\n본부장님께 드릴 종합을 한국어 개조식으로 짧게: ${out}. 발언에 없는 사실은 만들지 않는다.`, {cache: false, onText: ({text}) => { rec.종합 = text; drawRec(rec); }}); rec.종합 = r.text; rec.끝 = true; }
+  catch (e) { rec.종합 = errText(e); }
+  drawRec(rec); meetings.push(rec); meetings = meetings.slice(-20);
   if (db && uid) db.doc(`data/users/${uid}/meetings`).set({list: meetings}).catch(() => {});
-  busy = false; $("mgo").disabled = false; $("mq").value = ""; drawMeet();
+  busy = false; $("mgo").disabled = false; $("m2").disabled = false; $("mq").value = ""; drawRec(rec); drawMeet();
+}
+// 대회의실 회의록 → HWPX(빌드 때 만든 한글 틀의 본문 자리에 문단을 채움). 저장 허용 확장자에 hwpx 가 없어 zip 으로 감싼다
+const xml = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+function minutesLines(rec) {
+  const kst = new Date(rec.at).toLocaleString("ko-KR", {timeZone: "Asia/Seoul"});
+  const part = (title, arr) => arr.length ? [title, ...arr.flatMap(x => String(x.t).split("\n").filter(Boolean).map((l, i) => i ? `   ${l}` : `◦ ${x.code}: ${l}`)), ""] : [];
+  return [`「JARVIS ${ROOMS[rec.방]?.이름 || "회의실"} 회의록」`, "", `일시: ${kst}`, `안건: ${rec.안건}`, `참석: ${rec.참석.join(", ")} (사회: JARVIS)`, "",
+    ...part("1. 1차 발언", rec.발언.filter(x => x.차 !== 2)), ...part("2. 보완·반론", rec.발언.filter(x => x.차 === 2)),
+    "3. JARVIS 종합", ...String(rec.종합).split("\n").filter(Boolean), "",
+    "※ AI 직원 회의 결과입니다. 수치·사실은 담당 업무실에서 확인한 뒤 사용하십시오."];
+}
+async function jszip() {
+  if (!window.JSZip) await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"; sc.onload = ok; sc.onerror = no; document.head.append(sc); });
+  return window.JSZip;
+}
+async function minutesHwpx(rec) {
+  const Z = await jszip(), tpl = await Z.loadAsync(Uint8Array.from(atob(D.hwpx), c => c.charCodeAt(0)));
+  const sec = await tpl.file("Contents/section0.xml").async("string");
+  const paras = minutesLines(rec).map((l, i) => `<hp:p id="${1000 + i}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${l ? `<hp:t>${xml(l)}</hp:t>` : "<hp:t/>"}</hp:run></hp:p>`).join("");
+  const body = sec.replace(/<hp:p [^>]*><hp:run charPrIDRef="0"><hp:t>__BODY__<\/hp:t><\/hp:run><\/hp:p>/, () => paras);
+  if (body === sec) throw new Error("template");
+  tpl.file("Contents/section0.xml", body);
+  tpl.file("mimetype", "application/hwp+zip", {compression: "STORE"});
+  return tpl.generateAsync({type: "uint8array", compression: "DEFLATE", mimeType: "application/hwp+zip"});
+}
+async function saveMinutes() {
+  const rec = shown; if (!rec || !downloads) return;
+  const name = `JARVIS_${ROOMS[rec.방].이름}_회의록_${rec.at.slice(0, 10)}`;
+  $("mdlNote").textContent = "만드는 중…";
+  try {
+    const hwpx = await minutesHwpx(rec), Z = await jszip(), outer = new Z();
+    outer.file(`${name}.hwpx`, hwpx);
+    await downloads.save({filename: `${name}.zip`, data: await outer.generateAsync({type: "blob"})});
+    $("mdlNote").textContent = "저장했습니다. 압축을 풀면 한글 파일이 나옵니다.";
+  } catch (e) { $("mdlNote").textContent = e?.code === "declined" ? "저장을 취소했습니다." : "회의록 파일을 만들지 못했습니다."; }
 }
 // 명단: 휴대폰(한 줄 배치)에서만 펼쳐 둔다. PC 는 조감도 이름표로 충분해 접어 둔다
 $("rosterBox").open = matchMedia("(max-width:899px)").matches;
@@ -341,22 +390,24 @@ function tap(code) {
 }
 document.addEventListener("click", e => {
   const d = e.target.closest("[data-code]"); if (d) d.classList.contains("desk") ? tap(d.dataset.code) : show(d.dataset.code);
+  const rm = e.target.closest("g.room"); if (rm) openMeet(rm.dataset.room);
   const b = e.target.closest("button"); if (!b) return;
-  if (b.id === "cgo") sendChat();
-  if (b.id === "openMeet") { $("meet").hidden = false; drawMeet(); $("meet").scrollIntoView({behavior: "smooth"}); }
+  if (b.id === "openMeet") openMeet();
+  if (b.dataset.room) setRoom(b.dataset.room);
+  if (b.id === "mdl") saveMinutes();
   if (b.id === "closeMeet") $("meet").hidden = true;
   if (b.id === "mgo") runMeet();
-  if (b.dataset.mh) { const m = meetings[+b.dataset.mh]; $("mlog").innerHTML = [{r: "me", t: m.안건}, ...m.발언.map(x => ({r: "ai", by: x.code, t: x.t})), {r: "ai", by: "JARVIS 종합", t: m.종합, sum: true}].map(x => bubble(x, staff.find(s => s.code === x.by))).join(""); }
+  if (b.dataset.mh) drawRec({방: "small", ...meetings[+b.dataset.mh]});
 });
-document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (e.target.id === "cq")) { e.preventDefault(); sendChat(); } });
-document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.shiftKey ? enter(d.dataset.code) : tap(d.dataset.code); } });
-show(sel);
+document.addEventListener("keydown", e => { const d = e.target.closest?.(".desk"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.shiftKey ? enter(d.dataset.code) : tap(d.dataset.code); }
+  const rm = e.target.closest?.("g.room"); if (rm && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openMeet(rm.dataset.room); } });
+show(sel); setRoom(room);
 (async () => {
-  [sample, db] = await Promise.all(["sample", "db"].map(n => window.claude?.use?.(n) ?? null));
+  [sample, db, downloads] = await Promise.all(["sample", "db", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   const user = await window.claude?.use?.("user"); uid = await user?.id?.().catch(() => null);
   if (!db || !uid) return;
   const snap = await db.collection(`data/users/${uid}`).get().catch(() => null);
-  snap?.docs.forEach(d => { if (d.id.startsWith("chat_")) chats[d.id.slice(5)] = d.data().msgs || []; if (d.id === "meetings") meetings = d.data().list || []; });
-  drawChat(); if (!$("meet").hidden) drawMeet();
+  snap?.docs.forEach(d => { if (d.id === "meetings") meetings = d.data().list || []; });
+  if (!$("meet").hidden) drawMeet();
 })();
 </script>
