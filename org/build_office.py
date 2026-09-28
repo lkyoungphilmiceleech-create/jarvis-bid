@@ -56,10 +56,26 @@ def kpis():
 
 
 # 자리 배치(책상 왼쪽 위 모서리 X, Y). 직원은 책상 뒤(Y-0.9)에 앉아 화면 쪽(앞)을 본다.
-# 2F 는 방 3개(본부장님 결정 2026-09-28): ① 심사·선정실(뒤) ② 제안 작업실(앞 왼쪽) ③ 리서치 랩(앞 가운데), 가운데 복도 끝(오른쪽)에 대회의실
-ZONES = [("① 심사·선정실 🔒", ["RADAR", "DECODER", "TRIBUNAL"], "z1"), ("② 제안 작업실", ["ORACLE", "QUILL"], "z2"), ("③ 리서치 랩", ["ATLAS"], "z3")]
-SEAT_A = {"RADAR": (1.0, 2.3), "DECODER": (4.0, 2.3), "TRIBUNAL": (7.0, 2.3), "ORACLE": (1.0, 6.7), "QUILL": (4.0, 6.7), "ATLAS": (7.0, 6.7)}
-SEATS = {"B": [(1.0, 2.3), (4.0, 2.3), (7.0, 2.3), (3.3, 6.7), (0.9, 6.7), (5.7, 6.7), (8.1, 6.7)]}
+# 층마다 방(본부장님 결정 2026-09-28): 뒷줄(y 0~4.3)·복도(y 4.3~5.3)·앞줄(y 5.3~9), 복도 끝(오른쪽 뒤)에 회의실.
+# zones: (방 이름, 바닥 사각형, 색, 이름 위치 x·y·높이) / panes: 낮은 유리 칸막이(시작, 끝, 그리는 깊이 — 뒷줄 자리보다 뒤·앞줄 자리보다 앞)
+# spare: 아바타 없는 보조 책상(누르면 그 직원) — NEXUS 3개 팀
+LAYOUT = {
+    "A": {"zones": [("① 심사·선정실 🔒", (0.2, 0.3, 10.2, 4.1), "z1", (5.2, 0.0, WALL + 0.35)), ("② 제안 작업실", (0.2, 5.5, 6.0, 8.8), "z2", (3.0, 9.0, 0.1)),
+                    ("③ 리서치 랩 · 독립", (6.4, 5.5, 10.2, 8.8), "z3", (8.3, 9.0, 0.1))],
+          "panes": [((0, 4.3), (2.6, 4.3), 6.4), ((2.6, 4.3), (5.2, 4.3), 9.0), ((6.2, 4.3), (10.4, 4.3), 14.2),       # ① 앞벽, 문 x 5.2~6.2
+                    ((0, 5.3), (2.6, 5.3), 6.6), ((2.6, 5.3), (4.8, 5.3), 9.2), ((7.4, 5.3), (10.4, 5.3), 14.0),       # ②·③ 뒷벽, 문 x 4.8~7.4
+                    ((6.2, 5.3), (6.2, 8.0), 13.5)],                                                                 # ②|③, 문 y 8~9
+          "seats": {"RADAR": (1.0, 2.3), "DECODER": (4.0, 2.3), "TRIBUNAL": (7.0, 2.3), "ORACLE": (1.0, 6.7), "QUILL": (4.0, 6.7), "ATLAS": (7.0, 6.7)},
+          "spare": []},
+    "B": {"zones": [("① 관제실 🔒", (0.2, 0.3, 5.8, 4.1), "z1", (3.0, 0.0, WALL + 0.35)), ("② 디자인 스튜디오", (6.2, 0.3, 10.2, 4.1), "z4", (8.3, 0.0, WALL + 0.35)),
+                    ("③ 네트워크 센터", (0.2, 5.5, 8.0, 8.8), "z3", (4.1, 9.0, 0.1)), ("④ 산출물실", (8.4, 5.5, 13.8, 8.8), "z2", (11.1, 9.0, 0.1))],
+          "panes": [((0, 4.3), (2.8, 4.3), 6.6), ((3.6, 4.3), (6.0, 4.3), 9.8), ((6.0, 4.3), (8.9, 4.3), 12.7),       # ①·② 앞벽, 문 x 2.8~3.6·8.9~10.4
+                    ((6.0, 0), (6.0, 4.3), 9.0),                                                                     # ①|②
+                    ((0, 5.3), (2.4, 5.3), 6.6), ((3.3, 5.3), (5.7, 5.3), 9.9), ((5.7, 5.3), (8.2, 5.3), 12.3),       # ③ 뒷벽, 문 x 2.4~3.3
+                    ((9.2, 5.3), (14.0, 5.3), 15.8), ((8.2, 5.3), (8.2, 8.0), 15.0)],                                 # ④ 뒷벽(문 x 8.2~9.2), ③|④(문 y 8~9)
+          "seats": {"CHRONOS": (0.8, 2.3), "LEDGER": (3.8, 2.3), "PRISM": (7.2, 2.3), "NEXUS": (3.3, 6.7), "SCRIBE": (9.6, 6.7)},
+          "spare": [("NEXUS", 0.6, 6.7, "글로벌 네트워크"), ("NEXUS", 3.3, 6.7, "참가기업 관리"), ("NEXUS", 6.0, 6.7, "비즈매칭")]},
+}
 
 
 def hull(pts):
@@ -129,11 +145,9 @@ def floor(wing, z0, name, label, staff, where):
     # 바닥 슬래브와 층 표시
     base.append(box(0, 0, z0 - 0.5, W, D, 0.5, "slab"))
     base.append(poly([(0, 0, z0), (W, 0, z0), (W, D, z0), (0, D, z0)], "floor-t"))
-    if wing == "A":  # 방마다 바닥 색을 달리 깐다(복도 y 4.3~5.3 은 맨바닥)
-        for (x0, y0, x1, y1), (_, _, z) in zip([(0.2, 0.3, 10.2, 4.1), (0.2, 5.5, 6.0, 8.8), (6.4, 5.5, 10.2, 8.8)], ZONES):
-            base.append(poly([(x0, y0, z0 + .01), (x1, y0, z0 + .01), (x1, y1, z0 + .01), (x0, y1, z0 + .01)], f"carpet zone {z}"))
-    else:
-        base.append(poly([(0.6, 1.4, z0 + .01), (9.6, 1.4, z0 + .01), (9.6, 8.4, z0 + .01), (0.6, 8.4, z0 + .01)], "carpet"))
+    lay = LAYOUT[wing]
+    for _, (x0, y0, x1, y1), z, _ in lay["zones"]:  # 방마다 바닥 색을 달리 깐다(복도는 맨바닥)
+        base.append(poly([(x0, y0, z0 + .01), (x1, y0, z0 + .01), (x1, y1, z0 + .01), (x0, y1, z0 + .01)], f"carpet zone {z}"))
     # 뒷벽 2면(창문 포함)
     base.append(box(-0.3, 0, z0, 0.3, D, WALL, "wall"))
     base.append(box(0, -0.3, z0, W, 0.3, WALL, "wall"))
@@ -159,30 +173,30 @@ def floor(wing, z0, name, label, staff, where):
     add(99, f'<g class="room" data-room="{kind}" tabindex="0" role="button" aria-label="{room} 열기"><title>{room} · 누르면 회의 준비</title>'
         f'<polygon class="hit" points="{" ".join(f"{a:.1f},{b:.1f}" for a, b in hull(corners))}"/>'
         f'<text class="roomtag" x="{tx:.1f}" y="{ty:.1f}">{room}</text></g>')
-    # 라운지: 소파·화분·(1F) 커피바
-    add(11 + 7, box(10.8, 6.4, z0, 2.6, 1.0, 0.45, "sofa") + box(10.8, 7.2, z0 + .45, 2.6, 0.2, 0.5, "sofa"))
-    add(13.3 + 5.2, box(13.1, 5.0, z0, 0.6, 0.6, 0.5, "pot") + f'<circle class="leaf" cx="{P(13.4, 5.3, z0 + 1.2)[0]:.1f}" cy="{P(13.4, 5.3, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>')
-    add(0.6 + 8.4, box(0.3, 8.1, z0, 0.6, 0.6, 0.5, "pot") + f'<circle class="leaf" cx="{P(0.6, 8.4, z0 + 1.2)[0]:.1f}" cy="{P(0.6, 8.4, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>')
-    if wing == "B":
-        add(1, box(3.4, 0.2, z0, 3.0, 0.8, 1.0, "wood") + box(3.8, 0.3, z0 + 1.0, 0.5, 0.4, 0.4, "chair") + box(5.2, 0.3, z0 + 1.0, 0.7, 0.5, 0.5, "slab"))
-        add(8.8 + 0.6, box(8.8, 0.3, z0, 0.9, 0.7, 1.0, "printer"))
-    if wing == "A":
-        # 방 칸막이: 낮은 유리벽(1.3m, 자리가 가려지지 않게). 깊이는 뒷줄 자리보다 뒤, 앞줄 자리보다 앞이 되게 구간별로 준다
-        hgt = 1.3
-        pane = lambda a, b: poly([a + (z0,), b + (z0,), b + (z0 + hgt,), a + (z0 + hgt,)], "glasswall part")
-        for x0, x1 in [(0, 2.6), (2.6, 5.2), (6.2, 10.4)]:  # ① 앞벽(y 4.3), 문: x 5.2~6.2
-            add(x1 + 4.3 - 0.5, pane((x0, 4.3), (x1, 4.3)))
-        for x0, x1 in [(0, 2.6), (2.6, 4.8), (7.4, 10.4)]:  # ②·③ 뒷벽(y 5.3), 문: x 4.8~6.2(②), 6.2~7.4(③)
-            add(x0 + 5.3 + 1.3, pane((x0, 5.3), (x1, 5.3)))
-        add(13.5, pane((6.2, 5.3), (6.2, 8.0)))  # ②|③ 사이, 문: y 8.0~9.0 (리서치 랩 ↔ 제안 작업실)
-        for (name, codes, z), (x, y, h) in zip(ZONES, [(5.2, 0.0, WALL + 0.35), (3.0, 9.0, 0.1), (8.3, 9.0, 0.1)]):
-            tx, ty = P(x, y, z0 + h)
-            add(98, f'<text class="zonetag {z}" x="{tx:.1f}" y="{ty + (22 if y else 0):.1f}">{name}</text>')
-        seats = [(t, SEAT_A[t["code"]]) for t in staff]
-    else:
-        seats = list(zip(staff, SEATS[wing]))
+    leaf = lambda x, y: f'<circle class="leaf" cx="{P(x, y, z0 + 1.2)[0]:.1f}" cy="{P(x, y, z0 + 1.2)[1]:.1f}" r="{S * .45:.1f}"/>'
+    if wing == "A":  # 앞 왼쪽 화분, 복도 끝 라운지
+        add(0.6 + 8.4, box(0.3, 8.1, z0, 0.6, 0.6, 0.5, "pot") + leaf(0.6, 8.4))
+        add(11 + 7, box(10.8, 6.4, z0, 2.6, 1.0, 0.45, "sofa") + box(10.8, 7.2, z0 + .45, 2.6, 0.2, 0.5, "sofa"))
+        add(13.3 + 5.2, box(13.1, 5.0, z0, 0.6, 0.6, 0.5, "pot") + leaf(13.4, 5.3))
+    else:  # ④ 산출물실: 프린터·결과물 테이블
+        add(12.6 + 5.9 + 0.6, box(12.6, 5.9, z0, 0.9, 0.7, 1.0, "printer"))
+        add(11.8 + 7.4 + 1, box(11.8, 7.4, z0, 1.9, 0.9, 0.75, "wood") + box(12.0, 7.55, z0 + .75, 0.6, 0.45, 0.12, "paper") + box(12.9, 7.6, z0 + .75, 0.6, 0.45, 0.2, "paper"))
+    # 방 칸막이: 낮은 유리벽(1.3m, 자리가 가려지지 않게)과 방 이름
+    pane = lambda a, b: poly([a + (z0,), b + (z0,), b + (z0 + 1.3,), a + (z0 + 1.3,)], "glasswall part")
+    for a, b, depth in lay["panes"]:
+        add(depth, pane(a, b))
+    for name, _, z, (x, y, h) in lay["zones"]:
+        tx, ty = P(x, y, z0 + h)
+        add(98, f'<text class="zonetag {z}" x="{tx:.1f}" y="{ty + (22 if y else 0):.1f}">{name}</text>')
+    # 보조 책상(아바타 없음, 누르면 그 직원)과 책상 앞 팀 이름
+    for code, x, y, team in lay["spare"]:
+        g = "" if (x, y) == lay["seats"][code] else box(x, y, z0, 1.8, 1.0, 0.75, "desk") + box(x + 0.15, y + 0.15, z0 + 0.75, 0.9, 0.12, 0.62, "mon") + \
+            poly([(x + 0.18, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + .8), (x + 1.02, y + 0.14, z0 + 1.34), (x + 0.18, y + 0.14, z0 + 1.34)], "glow")
+        tx, ty = P(x + 0.9, y + 1.6, z0)
+        add(x + y + 1.5, f'<g class="desk on" data-code="{code}" aria-hidden="true">{g}<text class="desktag" x="{tx:.1f}" y="{ty:.1f}">{team}</text></g>')
     # 자리: 의자 → 직원 → 책상 → 모니터 순
-    for t, (x, y) in seats:
+    for t in staff:
+        x, y = lay["seats"][t["code"]]
         add(x + y + 1.4, seat(t, x, y, z0, where))
     return "".join(base) + "".join(s for _, s in sorted(items, key=lambda i: i[0]))
 
@@ -254,7 +268,9 @@ def svg(rec, ncase):
     c = (f'<svg class="map c adm" viewBox="{x0:.0f} {y0:.0f} {x1 - x0:.0f} {y1 - y0:.0f}" role="img" aria-label="JARVIS 빌딩 3F 개발실 {len(dev["팀"])}명">'
          f'<rect class="sky" x="{x0:.0f}" y="{y0:.0f}" width="{x1 - x0:.0f}" height="{y1 - y0:.0f}"/><g class="level">{studio(dev["팀"], where)}</g>'
          f'<text class="fl" x="{lx + 16:.0f}" y="{ly - 6:.0f}">3F</text><text class="fln" x="{lx + 16:.0f}" y="{ly + 14:.0f}">{dev["이름"]}</text></svg>')
-    return c + "".join(f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 {lab}">' + "".join(parts) + "</svg>" for vb, parts, lab in (out["A"], out["B"]))
+    # 건물에 자리가 없는 예비 인력(R)도 명단·회의 창에서 얼굴이 보이게 숨은 그림으로 싣는다
+    rest = "".join(f'<image data-av="{t["avatar"]}" href="{avatar(t["avatar"])}"/>' for x in org["본부"] if x["id"] not in ("A", "B", "C") for t in x["팀"])
+    return c + "".join(f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 {lab}">' + "".join(parts) + "</svg>" for vb, parts, lab in (out["A"], out["B"])) + (f'<svg hidden aria-hidden="true">{rest}</svg>' if rest else "")
 
 
 def docs(folder):
