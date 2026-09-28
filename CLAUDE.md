@@ -39,6 +39,14 @@
 | 루틴·카톡 알림·아티팩트 배포 | JARVIS (본부장님 계정) |
 | 모든 PR 의 시험 | 검증 조력자 **비전** (`.claude/agents/qa-verifier.md`) |
 
+## 직원 참여(게더타운형) 방향 — 본부장님 결정(2026-09-28), 오픈은 추후
+- AI 직원(아바타)은 NPC 처럼 회사를 돕고, 실제 직원이 로그인(claude.ai 계정)해 함께 일하는 공간으로 키운다. 건물은 **입체(아이소메트릭) 유지**.
+- 관리자 = 대표·본부장·실장 3명(직함 기준, 늘어날 수 있음) = 페이지 공유 '편집' 등급. 이름·이메일은 저장소에 적지 않는다.
+- 직원 공개 등급(`org/org.json` 의 `권한`): 관리자 전용 = RADAR·DECODER·TRIBUNAL / 모든 직원 = ORACLE·QUILL·ATLAS·PRISM·BABEL·SCRIBE·MAESTRO / 일부 기능 제한 = NEXUS·CHRONOS / LEDGER = 관리자·담당 PM 만.
+- 3F 개발실(작업 기록·아이디어 회의)은 관리자만, 직원에게는 '개발 요청함'만.
+- 입장은 더블클릭이 아니라 [입장] 버튼.
+- 화면의 잠금 표시는 보안이 아니다. 실제 차단은 페이지 공유 목록과 db 경로 규칙으로 하며, 공유를 열기 전에 반드시 연락처·금액 경로를 먼저 분리한다.
+
 ## 작업 순서
 1. 브랜치: `이름/짧은-설명` (예: `kim/nexus-filter`, `jarvis/radar-score`).
 2. 고친 뒤 빌드: `python org/build_<이름>.py` (필요 패키지 `pip install -r requirements.txt`).
