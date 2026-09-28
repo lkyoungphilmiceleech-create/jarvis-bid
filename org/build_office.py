@@ -121,37 +121,35 @@ def floor(wing, z0, name, label, staff, where):
 
 
 def svg(rec, ncase):
-    where, parts = {}, []
-    # 하늘과 땅 그림자
-    x0, y0 = P(0, D, 0)[0] - 60, P(0, 0, FLOORS["A"] + WALL)[1] - 70
-    x1, y1 = P(W, 0, 0)[0] + 60, P(W, D, 0)[1] + 50
-    parts.append('<defs><linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient></defs>')
-    parts.append(f'<rect class="sky" x="{x0:.0f}" y="{y0:.0f}" width="{x1 - x0:.0f}" height="{y1 - y0:.0f}"/>')
-    gx, gy = P(W / 2, D / 2, -0.6)
-    parts.append(f'<ellipse class="ground" cx="{gx:.0f}" cy="{gy + 40:.0f}" rx="{(W + D) * C * .62:.0f}" ry="{(W + D) * H * .7:.0f}"/>')
-    # 층을 잇는 기둥(엘리베이터 코어) 점선
-    for (cx, cy) in [(0, 0), (W, 0), (0, D), (W, D)]:
-        a, b = P(cx, cy, 0), P(cx, cy, FLOORS["A"] - 0.5)
-        parts.append(f'<line class="core" x1="{a[0]:.0f}" y1="{a[1]:.0f}" x2="{b[0]:.0f}" y2="{b[1]:.0f}"/>')
+    """층마다 따로 그린 SVG 2장(2F, 1F). PC 는 나란히, 휴대폰은 위아래로 놓는다(배치는 CSS)."""
+    where, out = {}, {}
     names = {b["id"]: b["이름"] for b in org["본부"]}
-    for wing, label in [("B", "1F"), ("A", "2F")]:
+    for wing, label in [("A", "2F"), ("B", "1F")]:
+        z, parts = FLOORS[wing], []
+        x0, y0 = P(0, D, z)[0] - 24, P(0, 0, z + WALL)[1] - 30
+        x1, y1 = P(W, 0, z)[0] + 24, P(W, D, z)[1] + 44
+        if wing == "A":  # 하늘 그라데이션은 문서 전체에서 한 번만 정의
+            parts.append('<defs><linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sky1)"/><stop offset="1" stop-color="var(--sky2)"/></linearGradient></defs>')
+        parts.append(f'<rect class="sky" x="{x0:.0f}" y="{y0:.0f}" width="{x1 - x0:.0f}" height="{y1 - y0:.0f}"/>')
+        gx, gy = P(W / 2, D / 2, z - 0.6)
+        parts.append(f'<ellipse class="ground" cx="{gx:.0f}" cy="{gy + 24:.0f}" rx="{(W + D) * C * .46:.0f}" ry="{(W + D) * H * .56:.0f}"/>')
         staff = next(b["팀"] for b in org["본부"] if b["id"] == wing)
-        parts.append(f'<g class="level">{floor(wing, FLOORS[wing], names[wing], f"{label}  {names[wing]}", staff, where)}</g>')
-        lx, ly = P(W, D, FLOORS[wing] - 0.5)
+        parts.append(f'<g class="level">{floor(wing, z, names[wing], f"{label}  {names[wing]}", staff, where)}</g>')
+        lx, ly = P(W, D, z - 0.5)
         parts.append(f'<text class="fl" x="{lx + 16:.0f}" y="{ly - 6:.0f}">{label}</text><text class="fln" x="{lx + 16:.0f}" y="{ly + 14:.0f}">{names[wing]}</text>')
+        out[wing] = (f"{x0:.0f} {y0:.0f} {x1 - x0:.0f} {y1 - y0:.0f}", parts, f"{label} {names[wing]} {len(staff)}명")
     # 업무 흐름(2F): RADAR→DECODER 가동, 이후 예정
     flow = [where[c] for c in org["흐름"]]
     live = f"M{flow[0][0]:.0f},{flow[0][1]:.0f} L{flow[1][0]:.0f},{flow[1][1]:.0f}"
     later = "M" + " L".join(f"{a:.0f},{b:.0f}" for a, b in flow[1:])
-    parts.append(f'<path class="flow later" d="{later}"/><path class="flow" d="{live}"/>'
-                 f'<g><rect class="env" x="-9" y="-6" width="18" height="12" rx="2"/><path d="M-9,-6 L0,1 L9,-6" fill="none" stroke="#6a4a08" stroke-width="1.2"/>'
-                 f'<animateMotion dur="3.2s" repeatCount="indefinite" path="{live}"/></g>')
+    out["A"][1].append(f'<path class="flow later" d="{later}"/><path class="flow" d="{live}"/>'
+                       f'<g><rect class="env" x="-9" y="-6" width="18" height="12" rx="2"/><path d="M-9,-6 L0,1 L9,-6" fill="none" stroke="#6a4a08" stroke-width="1.2"/>'
+                       f'<animateMotion dur="3.2s" repeatCount="indefinite" path="{live}"/></g>')
     # 2F 상황판 글자(벽면 위)
     sx, sy = P(10.9, 0.03, FLOORS["A"] + 2.25)
-    parts.append(f'<g class="holo" transform="matrix(0.866,0.5,0,1,{sx:.1f},{sy:.1f})"><text x="0" y="0">TODAY</text>'
-                 f'<text class="big" x="0" y="22">추천 공고 {rec}</text><text x="0" y="40">DECODER 분석 {ncase}건</text></g>')
-    vb = f"{x0:.0f} {y0:.0f} {x1 - x0:.0f} {y1 - y0:.0f}"
-    return f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 조감도: 2층 제안서 준비 본부 6명, 1층 사업 수행 본부 5명">' + "".join(parts) + "</svg>"
+    out["A"][1].append(f'<g class="holo" transform="matrix(0.866,0.5,0,1,{sx:.1f},{sy:.1f})"><text x="0" y="0">TODAY</text>'
+                       f'<text class="big" x="0" y="22">추천 공고 {rec}</text><text x="0" y="40">DECODER 분석 {ncase}건</text></g>')
+    return "".join(f'<svg class="map" viewBox="{vb}" role="img" aria-label="JARVIS 빌딩 {lab}">' + "".join(parts) + "</svg>" for vb, parts, lab in (out["A"], out["B"]))
 
 
 def docs(folder):
