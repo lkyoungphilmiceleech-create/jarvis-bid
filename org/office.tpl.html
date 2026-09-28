@@ -155,16 +155,16 @@ svg.map{width:100%;height:auto;display:block}
 .pick label:has(input:checked){border-color:var(--holo);background:var(--holo-soft)}
 .pick img{width:26px;height:26px}
 .pick input{accent-color:var(--holo)}
-/* PC(1100px~): 왼쪽 = 브리핑·두 층 나란히·명단, 오른쪽 = 담당자 창 고정. 휴대폰은 한 줄로 위아래 */
+/* PC(900px~): 왼쪽 = 브리핑·두 층 나란히·명단, 오른쪽 = 담당자 창 고정. 휴대폰은 한 줄로 위아래 */
 .main{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .left{display:flex;flex-direction:column;gap:18px;min-width:0}
 .floors{display:grid;grid-template-columns:minmax(0,1fr)}
-@media (min-width:1100px){
-  .main{grid-template-columns:minmax(0,1fr) 380px}
+@media (min-width:900px){
+  .main{grid-template-columns:minmax(0,1fr) clamp(320px,28vw,400px)}
   .side{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow-y:auto}
-  .floors{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 }
-@media (max-width:1099px){.left{display:contents}.roster{order:2}} /* 한 줄일 때 담당자 창을 조감도 바로 아래로 */
+@media (min-width:1280px){.floors{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}} /* 두 층 나란히는 넓은 화면에서만 — 좁으면 아바타가 너무 작다 */
+@media (max-width:899px){.left{display:contents}.roster{order:2}} /* 한 줄일 때 담당자 창을 조감도 바로 아래로 */
 @media (min-width:821px){.roster .team{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.roster .team h3{grid-column:1/-1}}
 .panel{padding:18px;display:flex;flex-direction:column;gap:10px}
 .who{display:flex;gap:14px;align-items:center}
