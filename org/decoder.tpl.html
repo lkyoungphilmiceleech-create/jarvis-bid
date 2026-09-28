@@ -131,6 +131,17 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .pgbar b{display:block;height:100%;background:var(--amber)}
 .row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.assign{border:1px solid var(--holo);border-radius:12px;padding:12px 14px;margin:12px 0;display:flex;flex-direction:column;gap:8px;background:var(--holo-soft)}
+.flow{display:flex;flex-wrap:wrap;gap:4px}
+.flow button{border:1px solid var(--line);background:var(--glass2);color:var(--muted);border-radius:999px;padding:3px 10px;font:500 12px var(--sans);cursor:pointer}
+.flow button.done{color:var(--go);border-color:var(--go)}
+.flow button.on{color:var(--holo-ink);background:var(--holo);border-color:var(--holo)}
+.af{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.af label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.af input,.af select{font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:0;box-sizing:border-box}
+.af .two{display:flex;gap:4px}.af .two input{flex:1;width:0}
+.assign p{margin:0}
+.chip{display:inline-block;margin-left:6px;border:1px solid var(--holo);color:var(--holo);border-radius:999px;padding:0 7px;font-size:10.5px}
 </style>
 
 <div class="wrap">
@@ -168,6 +179,7 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 <script>
 const D = __DATA__;
 const $ = id => document.getElementById(id);
+const kst = s => s ? new Date(s).toLocaleString("sv-SE", {timeZone: "Asia/Seoul"}).slice(0, 16) : ""; // 저장은 UTC(ISO), 화면은 한국 시간
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const today = () => new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"})).setHours(0, 0, 0, 0);
@@ -207,7 +219,8 @@ function pillFor(e) {
 }
 
 function render() {
-  $("cases").innerHTML = D.cases.map(c => `<button class="case" type="button" data-case="${esc(c.bidNtceNo)}" aria-current="${c.bidNtceNo === cur}"><span>${esc(c.사업명)}</span><span class="hudlabel">${esc(c.analyzedAt)}</span></button>`).join("")
+  const keepA = aDirty === cur ? readAssign() : null; // 입력 중인 배정 칸은 다시 그려도 남긴다
+  $("cases").innerHTML = D.cases.map(c => `<button class="case" type="button" data-case="${esc(c.bidNtceNo)}" aria-current="${c.bidNtceNo === cur}"><span>${esc(c.사업명)}${assigns[c.bidNtceNo] ? `<span class="chip">${esc(STEPS[stepOf(assigns[c.bidNtceNo])].split(" · ")[0])}</span>` : ""}</span><span class="hudlabel">${esc(c.analyzedAt)}</span></button>`).join("")
     || '<p class="empty">아직 분석한 공고가 없습니다. RADAR에서 공고를 DECODER로 전송해 주세요.</p>';
   const c = D.cases.find(x => x.bidNtceNo === cur);
   if (!c) { $("report").innerHTML = '<p class="empty">분석할 공고를 기다리는 중입니다.</p>'; say(`${honor}, RADAR가 공고를 넘겨주면 제안요청서를 바로 해독하겠습니다.`); return; }
@@ -220,6 +233,7 @@ function render() {
     <div class="hudlabel">CASE FILE · ${esc(c.bidNtceNo)} · ${esc(c.발주기관)}</div>
     <h2>${esc(c.사업명)}</h2>
     <p class="lead">${esc(c.한줄요약)}</p>
+    ${assignHtml(c)}
     <div class="dl"><span class="hudlabel">보고서</span>${c.hwpx ? `<a class="btn" href="${esc(c.hwpx)}" target="_blank" rel="noopener">HWPX 받기 ↗</a>` : ""}${c.pdf ? `<button class="btn" type="button" id="pdfBtn">PDF 받기</button>` : ""}<span class="chatnote" id="dlNote"></span></div>
     ${sec("info", "사업 개요", "", `<dl class="kv">${c.개요.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`, true)}
     ${sec("tl", "공정 일정", c.일정.length + "건", `<ol class="tl">${c.일정.map(e => `<li><span class="d">${esc(e.날짜.slice(5))}${e.끝 ? "~" + esc(e.끝.slice(5)) : ""}</span>${pillFor(e)}<span>${esc(e.항목)}${e.비고 ? `<span class="note">${esc(e.비고)}</span>` : ""}</span></li>`).join("")}</ol>`, true)}
@@ -232,11 +246,47 @@ function render() {
     ${sec("hint", "ORACLE(전략팀)에게 넘길 힌트", c.전략힌트.length + "건", `<ul class="hint">${c.전략힌트.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`, false)}
     <p class="chatnote">출처: ${c.sources.map(esc).join(", ")} · 분석 ${esc(c.analyst)} · ${esc(c.analyzedAt)}</p>`;
   requestAnimationFrame(() => document.querySelectorAll(".sbar b").forEach(b => b.style.width = b.dataset.w + "%"));
+  if (keepA) document.querySelectorAll("[data-af]").forEach(el => { const v = el.dataset.af.split(".").reduce((x, k) => x?.[k], keepA); if (v !== undefined) el.value = v; });
+}
+
+// ── 제안 배정: 1차 점검 뒤 DECODER 가 작성자를 배치하고 준비를 요청한다 (RADAR → DECODER → ORACLE → QUILL → TRIBUNAL)
+const STEPS = ["선정 · RADAR", "1차 점검 · DECODER", "작성자 배치", "환경분석·전략·프로그램 · ORACLE", "시각화 · QUILL", "모의 평가 · TRIBUNAL", "수정 반영", "제출"];
+const ROLES = [["총괄", "제안 총괄 (PM)"], ["전략", "전략·프로그램 (ORACLE와 함께)"], ["시각화", "제안서 시각화 (QUILL과 함께)"], ["평가", "모의 평가 준비 (TRIBUNAL과 함께)"]];
+let assigns = {}, aDirty = null;
+const A = () => assigns[cur] || {};
+const stepOf = a => { const n = Math.trunc(+(a?.단계 ?? 1)); return n >= 0 && n < STEPS.length ? n : 1; }; // 잘못 저장된 단계 값에도 화면이 깨지지 않게
+const dueOf = c => (c.일정.find(e => e.구분 === "마감" || /제출|마감/.test(e.항목)) || {}).날짜 || "";
+function assignHtml(c) {
+  const a = A(), st = stepOf(a), w = a.작성자 || {}, d = a.마감 || {};
+  return `<div class="assign"><div class="hudlabel">제안 준비 배정 · DECODER → 작성자</div>
+    <div class="flow" aria-label="진행 단계">${STEPS.map((x, i) => `<button type="button" class="${i < st ? "done" : i === st ? "on" : ""}" data-step="${i}" aria-pressed="${i === st}">${i < st ? "✓ " : ""}${esc(x)}</button>`).join("")}</div>
+    <div class="af"><label>참여 결정<select data-af="참여">${["검토 중", "참여", "보류", "불참"].map(v => `<option${(a.참여 || "검토 중") === v ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>초안 마감<input type="date" data-af="마감.초안" value="${esc(d.초안)}"></label><label>모의 평가일<input type="date" data-af="마감.평가" value="${esc(d.평가)}"></label><label>제출 마감<input type="date" data-af="마감.제출" value="${esc(d.제출 || dueOf(c))}"></label>
+      ${ROLES.map(([k, l]) => `<label>${l}<span class="two"><input data-af="작성자.${k}.이름" placeholder="이름" value="${esc(w[k]?.이름)}"><input type="email" data-af="작성자.${k}.이메일" placeholder="이메일" value="${esc(w[k]?.이메일)}"></span></label>`).join("")}</div>
+    <div class="row2"><button class="btn primary" type="button" id="aSave"${db ? "" : " disabled"}>배정 저장</button><button class="btn" type="button" id="aCopy">준비 요청 문안 복사</button><span class="chatnote" id="aNote">${db ? "단계 버튼을 누르면 그 단계로 바뀝니다." : "claude.ai에서 열면 배정을 저장할 수 있습니다."}</span></div>
+    ${(a.기록 || []).slice(-4).reverse().map(r => `<p class="chatnote">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</div>`;
+}
+function readAssign() { const o = {}; document.querySelectorAll("[data-af]").forEach(el => { const ks = el.dataset.af.split("."); let x = o; ks.slice(0, -1).forEach(k => x = x[k] ||= {}); x[ks.at(-1)] = el.value.trim(); }); return o; }
+async function saveAssign(extra, note) {
+  const a = {...A(), ...readAssign(), ...extra, updatedAt: new Date().toISOString()};
+  a.기록 = [...(A().기록 || []), {at: new Date().toISOString(), 내용: note}].slice(-30);
+  assigns[cur] = a; aDirty = null; if (!db) { render(); return; }
+  try { await db.doc("assign/" + cur).set(a); render(); $("aNote").textContent = "저장했습니다."; } catch { render(); $("aNote").textContent = "저장하지 못했습니다."; }
+}
+function requestText(c) {
+  const a = {...A(), ...readAssign()}, w = a.작성자 || {}, d = a.마감 || {};
+  return `[제안 준비 요청] ${c.사업명}\n발주: ${c.발주기관} · 공고 ${c.bidNtceNo}\n\n■ 일정: 초안 ${d.초안 || "-"} / 모의 평가 ${d.평가 || "-"} / 제출 ${d.제출 || "-"}\n■ 담당\n${ROLES.map(([k, l]) => `- ${l}: ${w[k]?.이름 || "미정"}`).join("\n")}\n\n■ 한 줄 요약: ${c.한줄요약}\n■ 배점 핵심: ${c.평가.항목.slice().sort((x, y) => y.배점 - x.배점).slice(0, 3).map(s => `${s.항목}(${s.배점}점)`).join(", ")}\n■ 과업 영역: ${c.과업범위.map(s => s.영역).join(", ")}\n■ 전략 힌트\n${c.전략힌트.map(t => `- ${t}`).join("\n")}\n\n자세한 분석은 DECODER 분석실을 봐 주세요. — JARVIS DECODER (본부장님 대리)`;
 }
 
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
-  if (t.dataset.case) { cur = t.dataset.case; turns = []; lastLine = ""; watchMarks(); render(); drawChat(); loadChat(); }
+  if (t.dataset.step !== undefined) saveAssign({단계: +t.dataset.step}, `단계: ${STEPS[+t.dataset.step]}`);
+  if (t.id === "aSave") saveAssign({}, "배정 저장");
+  if (t.id === "aCopy") { const c = D.cases.find(x => x.bidNtceNo === cur);
+    try { await navigator.clipboard.writeText(requestText(c)); $("aNote").textContent = "복사했습니다. 메일·카톡에 붙여 넣어 보내 주세요."; if (db) saveAssign({}, "준비 요청 문안 복사"); }
+    catch { $("aNote").textContent = "복사가 막혀 있습니다."; } }
+  // 공고를 바꾸면 저장 안 한 배정 입력은 버린다(다른 공고에 섞이지 않게)
+  if (t.dataset.case) { cur = t.dataset.case; aDirty = null; turns = []; lastLine = ""; watchMarks(); render(); drawChat(); loadChat(); }
   if (t.id === "pdfBtn") {
     const c = D.cases.find(x => x.bidNtceNo === cur);
     if (!downloads) { $("dlNote").textContent = "이 화면에서는 파일 저장을 쓸 수 없습니다."; return; }
@@ -253,7 +303,9 @@ document.addEventListener("click", async e => {
 let markBusy = Promise.resolve();
 const folds = {};
 document.addEventListener("toggle", e => { const k = e.target.dataset?.sec; if (k) folds[k] = e.target.open; }, true);
+document.addEventListener("input", e => { if (e.target.dataset?.af) aDirty = cur; });
 document.addEventListener("change", e => {
+  if (e.target.dataset?.af) aDirty = cur;
   const kind = e.target.dataset?.mark; if (!kind) return;
   marks[kind][e.target.dataset.i] = e.target.checked; render();
   const r = markRef();
@@ -306,6 +358,7 @@ render();
 (async () => {
   [db, sample, downloads] = await Promise.all(["db", "sample", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   watchMarks(); render();
+  db?.collection("assign").onSnapshot(s => { assigns = {}; s.docs.forEach(d => assigns[d.id] = d.data()); render(); });
   if (sample) { $("chat").hidden = false; const user = await window.claude.use("user"); uid = await user?.id?.(); loadChat(); }
   db?.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; lastLine = ""; render(); } });
 })();
