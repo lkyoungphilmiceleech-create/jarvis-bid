@@ -126,7 +126,7 @@ a{color:var(--holo)}
   </section>
 
   <section class="glass panel" id="tab-work" hidden>
-    <div class="row"><label class="note">요청 <select id="wReq"></select></label></div>
+    <div class="row"><label class="note" style="flex:1;min-width:0;display:flex;gap:6px;align-items:center">요청 <select id="wReq" style="flex:1;min-width:0;width:100%"></select></label></div>
     <div id="work"></div>
   </section>
 </div>
@@ -336,6 +336,7 @@ async function runMk() {
 async function runFind() {
   const b = B(); if (!db || !mcp) { say("fNote", "이 화면에서는 수집 작업을 시작할 수 없습니다."); return; }
   if (!cfg.trigger) { say("fNote", "레퍼런스 수집 작업이 아직 연결되지 않았습니다. JARVIS에게 연결을 요청해 주세요. 그동안은 직접 추가로 모을 수 있습니다."); return; }
+  if (busy.find) return;
   if (!confirm(`'${b.제목}' 레퍼런스를 웹에서 찾을까요? 10~20분 걸리고 본부장님 Claude 사용량이 쓰입니다.`)) return;
   if (busy.find) return; busy.find = true; setTimeout(() => { busy.find = false; }, 60e3); drawWork(); // 스냅샷이 오기 전 두 번 눌러 세션이 두 번 도는 것을 막는다
   const jid = "R" + Date.now().toString(36);
