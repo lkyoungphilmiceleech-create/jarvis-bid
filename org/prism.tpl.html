@@ -54,6 +54,7 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:10px}
 .form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .form .wide{grid-column:1/-1}
+select{max-width:100%}
 input,select,textarea{font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0;box-sizing:border-box}
 textarea{min-height:70px;resize:vertical}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -119,7 +120,7 @@ a{color:var(--holo)}
       <label>제목<input id="rfTitle"></label>
       <label>태그 (쉼표로)<input id="rfTags" placeholder="미니멀, 네온, 타이포"></label>
       <label>연결할 요청<select id="rfReq"></select></label></div>
-      <div class="row"><button class="btn primary" type="button" id="rfAdd">보관</button><label class="btn" id="rfUpWrap" hidden>이미지 파일 올리기<input type="file" id="rfFile" accept="image/*" hidden></label><span class="note" id="rfNote"></span></div></div>
+      <div class="row"><button class="btn primary" type="button" id="rfAdd">보관</button><span class="note" id="rfNote"></span></div></div>
     <div class="row"><input id="rq" type="search" placeholder="제목·태그·출처 검색" style="flex:1;min-width:180px"><select id="rSrc" aria-label="출처"></select><select id="rReq" aria-label="요청"></select></div>
     <div class="refs" id="refList"></div>
   </section>
@@ -149,16 +150,19 @@ const applyTheme = m => { if (m === "system") delete document.documentElement.da
   document.querySelectorAll("[data-theme-m]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeM === m)); try { localStorage.setItem("prism-theme", m); } catch {} };
 let th = "system"; try { th = localStorage.getItem("prism-theme") || "system"; } catch {} applyTheme(th);
 
-let db = null, sample = null, mcp = null, assets = null, tab = "req", cur = null, rf = "진행", cfg = {};
+let db = null, sample = null, mcp = null, tab = "req", cur = null, rf = "진행", cfg = {};
 let briefs = [], refs = [], rjobs = [], busy = {}, msg = {};
 try { tab = localStorage.getItem("prism-tab") || "req"; cur = localStorage.getItem("prism-cur"); } catch {}
 const B = () => briefs.find(b => b.id === cur);
 const say = (id, m) => { msg[id] = m; if ($(id)) $(id).textContent = m; };
 const askErr = e => ({no: "이 화면에서는 PRISM(Claude)에게 일을 맡길 수 없습니다. claude.ai에서 열어 주세요.", not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 눌러 주세요."}[e?.code] || "PRISM이 답을 만들지 못했습니다. 다시 눌러 주세요.");
 const mcpErr = e => ({needs_reauth: "연결이 만료되었습니다. claude.ai 설정 → 커넥터에서 다시 연결해 주세요.", server_not_connected: "커넥터가 연결돼 있지 않습니다. claude.ai 설정 → 커넥터에서 추가해 주세요.", not_in_manifest: "이 페이지에 허용되지 않은 도구입니다.", tool_error: "도구가 요청을 거절했습니다.", server_unavailable: "잠시 응답하지 않습니다. 잠시 후 다시 눌러 주세요."}[e?.code] || "작업에 실패했습니다" + (e?.message ? `: ${e.message}` : "."));
-async function save(b) { if (!db) return false; const {id, ...r} = b; r.updatedAt = new Date().toISOString(); try { await db.doc(`briefs/${id}`).set(r); return true; } catch { return false; } }
+// 요청 문서는 바뀐 칸만 쓴다 — 생성이 몇 분 걸리는 동안 다른 사람이 고친 칸을 덮지 않게
+async function put(id, f) { if (!db) return false; const L = latest(id); Object.assign(L, f); try { await db.doc(`briefs/${id}`).update({...f, updatedAt: new Date().toISOString()}); return true; } catch { return false; } }
+const latest = id => briefs.find(b => b.id === id) || {};
+const nextState = (id, s) => FLOW.indexOf(s) > stepOf(latest(id)) ? s : latest(id).상태 || "접수";
+const addGens = (id, gens, s) => { const m = new Map((latest(id).시안 || []).map(g => [g.id, g])); gens.forEach(g => m.set(g.id, {...m.get(g.id), ...g})); return put(id, {시안: [...m.values()], 상태: nextState(id, s)}); };
 const stepOf = b => Math.max(0, FLOW.indexOf(b.상태 || "접수"));
-const bump = (b, s) => { if (FLOW.indexOf(s) > stepOf(b)) b.상태 = s; };
 
 // ── 상단
 function drawHero() {
@@ -196,8 +200,11 @@ function editBrief(b) {
     <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn x" value="del">삭제</button>'}<button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { const v = $("dlg").returnValue; if (!v || v === "cancel" || !db) return;
     if (v === "del") { if (!confirm(`'${b.제목}' 요청을 삭제할까요? 만든 시안 기록도 함께 지워집니다.`)) return; db.doc(`briefs/${b.id}`).delete().catch(() => {}); briefs = briefs.filter(x => x.id !== b.id); if (cur === b.id) cur = null; draw(); return; }
-    $("dlgForm").querySelectorAll("[data-bf]").forEach(el => b[el.dataset.bf] = el.value.trim()); b.종류 = [...$("dlgForm").querySelectorAll("[data-kind]:checked")].map(el => el.dataset.kind);
-    if (!b.제목) return; if (isNew) { b.at = new Date().toISOString(); briefs.push(b); } await save(b); cur = b.id; draw(); };
+    const f = {}; $("dlgForm").querySelectorAll("[data-bf]").forEach(el => f[el.dataset.bf] = el.value.trim()); f.종류 = [...$("dlgForm").querySelectorAll("[data-kind]:checked")].map(el => el.dataset.kind);
+    if (!f.제목) return;
+    if (isNew) { const {id, ...r} = {...b, ...f, at: new Date().toISOString(), updatedAt: new Date().toISOString()}; try { await db.doc(`briefs/${id}`).set(r); briefs.push({id, ...r}); } catch { return; } }
+    else await put(b.id, f);
+    cur = b.id; draw(); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
 
@@ -211,7 +218,6 @@ function drawRef() {
   const reqOpts = briefs.filter(b => b.상태 !== "완료").map(b => [b.id, b.제목]);
   const keep = (id, html) => { const v = $(id).value; $(id).innerHTML = html; if ([...$(id).options].some(o => o.value === v)) $(id).value = v; };
   keep("rfReq", opt(reqOpts, cur, "연결 안 함")); keep("rSrc", opt(["Pinterest", "Behance", "기타", "업로드"], "", "출처 전체")); keep("rReq", opt(briefs.map(b => [b.id, b.제목]), "", "요청 전체"));
-  $("rfUpWrap").hidden = !assets;
   if (msg.rfNote) $("rfNote").textContent = msg.rfNote;
   const q = $("rq").value.toLowerCase(), s = $("rSrc").value, rq = $("rReq").value;
   const rows = refs.filter(r => (!s || r.출처 === s) && (!rq || (r.요청 || []).includes(rq)) && (!q || [r.제목, r.출처, ...(r.태그 || [])].some(v => String(v || "").toLowerCase().includes(q))))
@@ -239,7 +245,7 @@ function drawWork() {
     <div class="flow">${FLOW.map((f, i) => `<span class="${i <= stepOf(b) ? "done" : ""}">${f}</span>`).join("")}</div>
     <p class="note">${esc([(b.종류 || []).join(", "), b.톤].filter(Boolean).join(" · "))}</p>${b.설명 ? `<p class="note" style="white-space:pre-wrap">${esc(b.설명)}</p>` : ""}</div>
 
-  <div class="card"><div class="row"><h3 style="flex:1">① 레퍼런스 ${mine.length}개</h3><button class="btn" type="button" id="rFind" ${jobLive ? "disabled" : ""}>${jobLive ? "찾는 중…" : "웹에서 레퍼런스 찾기"}</button><button class="btn" type="button" data-tab="ref">직접 추가</button></div>
+  <div class="card"><div class="row"><h3 style="flex:1">① 레퍼런스 ${mine.length}개</h3><button class="btn" type="button" id="rFind" ${jobLive || busy.find ? "disabled" : ""}>${jobLive || busy.find ? "찾는 중…" : "웹에서 레퍼런스 찾기"}</button><button class="btn" type="button" data-tab="ref">직접 추가</button></div>
     <p class="note" id="fNote">${esc(msg.fNote || (job ? `최근 수집: ${job.status}${job.진행 ? ` · ${job.진행}` : ""}${job.요약 ? ` — ${job.요약}` : ""}${job.오류 ? ` — ${job.오류}` : ""}` : "요청의 종류·톤·설명으로 Pinterest·Behance 공개 자료를 찾아 이 요청에 연결합니다(10~20분, 휴대폰으로 알림). 레퍼런스가 이미 있으면 바로 ②로 가셔도 됩니다."))}</p>
     ${mine.length ? `<div class="refs">${mine.slice(0, 12).map(r => refCard(r)).join("")}</div>` : ""}</div>
 
@@ -251,7 +257,7 @@ function drawWork() {
   <div class="card"><div class="row"><h3 style="flex:1">③ 1차 키비주얼</h3></div>
     <div class="form"><label class="wide">프롬프트 (영문 권장, 고쳐도 됩니다)<textarea id="kvP">${esc(kv.prompt || b.추천?.prompt || "")}</textarea></label>
       <label>비율<select id="kvR">${opt(["16:9", "1:1", "4:5", "2:3", "9:16", "21:9"], kv.ratio || "16:9")}</select></label><label>장수<select id="kvN">${opt(["1", "2", "4"], "2")}</select></label></div>
-    <div class="row"><button class="btn primary" type="button" id="kvGo" ${busy.kv ? "disabled" : ""}>${busy.kv ? "만드는 중…" : "Magnific으로 키비주얼 만들기"}</button><span class="note" id="kNote">${esc(msg.kNote || "만든 이미지 중 하나를 [키비주얼로 선택]하면 목업의 기준이 됩니다. 생성 비용은 Magnific 크레딧에서 나갑니다.")}</span></div>
+    <div class="row"><button class="btn primary" type="button" id="kvGo" ${busy.kv ? "disabled" : ""}>${busy.kv ? "만드는 중…" : "Magnific으로 키비주얼 만들기"}</button>${pending(b).length ? `<button class="btn" type="button" id="kvWait" ${busy.wait || busy.kv || busy.mk ? "disabled" : ""}>처리 중 ${pending(b).length}장 결과 이어 받기</button>` : ""}<span class="note" id="kNote">${esc(msg.kNote || "만든 이미지 중 하나를 [키비주얼로 선택]하면 목업의 기준이 됩니다. 생성 비용은 Magnific 크레딧에서 나갑니다.")}</span></div>
     ${gens.filter(g => g.종류 === "키비주얼").length ? `<div class="gen">${gens.filter(g => g.종류 === "키비주얼").map(g => fig(g, kv.id === g.id)).join("")}</div>` : ""}</div>
 
   <div class="card"><div class="row"><h3 style="flex:1">④ 홍보물 목업</h3></div>
@@ -270,10 +276,13 @@ function idsOf(p) { const s = new Set(); walk(p, o => { const v = o.identifier |
 function itemsOf(p) { const m = {}; walk(p, o => { const id = o.identifier || o.creationIdentifier || (typeof o.id === "string" ? o.id : ""); if (!id) return;
   const x = m[id] ||= {id}; ["url", "previewUrl", "thumbnailUrl", "webUrl", "status", "state"].forEach(k => { if (typeof o[k] === "string" && !x[k]) x[k] = o[k]; }); }); return Object.values(m); }
 const DONE = /complet|succe|done|ready|finish/i, FAIL = /fail|error|cancel/i;
-async function magnific(prompt, ratio, count, refId) {
+async function mgStart(prompt, ratio, count, refId) {
   const input = {prompt, aspectRatio: ratio, count}; if (refId) input.references = [{type: "image", identifier: refId}];
-  const r = await mcp.callTool(MG, "images_generate", input), ids = idsOf(r.payload);
-  if (!ids.length) throw {message: "생성 결과를 읽지 못했습니다"};
+  const ids = idsOf((await mcp.callTool(MG, "images_generate", input)).payload);
+  if (!ids.length) throw {message: "생성 결과를 읽지 못했습니다. Magnific에서 확인해 주세요"};
+  return ids;
+}
+async function mgWait(ids) { // 받은 식별자는 먼저 '처리 중'으로 저장해 두므로, 창을 닫아도 [결과 이어 받기]로 다시 받는다
   let got = {};
   for (let i = 0; i < 12; i++) { // ponytail: 최대 약 5분 대기 — 더 걸리면 원본 링크로 나중에 확인
     const w = await mcp.callTool(MG, "creations_wait", {identifiers: ids, timeoutSeconds: 25});
@@ -281,6 +290,13 @@ async function magnific(prompt, ratio, count, refId) {
     if (ids.every(id => got[id] && (got[id].url || FAIL.test(got[id].status || got[id].state || "") || DONE.test(got[id].status || got[id].state || "") && got[id].previewUrl))) break;
   }
   return ids.map(id => ({id, url: got[id]?.url || "", preview: got[id]?.previewUrl || got[id]?.thumbnailUrl || "", web: got[id]?.webUrl || "", 상태: got[id]?.status || got[id]?.state || "처리 중"}));
+}
+const pending = b => (b.시안 || []).filter(g => !g.url && !g.preview && !FAIL.test(g.상태 || ""));
+async function resume() {
+  const b = B(), ids = pending(b).map(g => g.id); if (!ids.length || !mcp) return;
+  busy.wait = true; drawWork(); say("kNote", "Magnific에서 결과를 받는 중…");
+  try { await addGens(b.id, await mgWait(ids), "키비주얼"); say("kNote", pending(latest(b.id)).length ? "아직 처리 중인 시안이 있습니다. 잠시 뒤 다시 받아 주세요." : "결과를 모두 받았습니다."); } catch (e) { say("kNote", mcpErr(e)); }
+  busy.wait = false; drawWork();
 }
 async function runPick() {
   const b = B(); if (!sample) { say("pNote", askErr({code: "no"})); return; }
@@ -292,16 +308,16 @@ async function runPick() {
 ${pool.map(x => [x.id, x.출처, String(x.제목 || "").slice(0, 80), (x.태그 || []).join("/")].join("|")).join("\n")}
 할 일: 요청에 가장 맞는 레퍼런스 3개를 후보 ID에서만 고르고, 디자인 방향과 이미지 생성 프롬프트를 쓴다. 레퍼런스를 베끼지 말고 방향만 참고한다. 로고·문구는 이미지에 넣지 않는다(나중에 편집).
 JSON만 답한다: {"picks":[{"id":"후보 ID","이유":"한국어 1문장"}],"방향":"한국어 개조식 — 컨셉 한 줄 / 색(HEX 3~5개) / 서체 느낌 / 구도 / 무드·조명 / 피할 것","prompt":"영문 이미지 생성 프롬프트 (key visual, no text, no logo, 60~120 words)"}`, {modelTier: "default"});
-    const ok = new Set(pool.map(x => x.id)); b.추천 = {picks: (r.picks || []).filter(p => ok.has(p.id)).slice(0, 3).map(p => ({id: p.id, 이유: String(p.이유 || "")})), 방향: String(r.방향 || ""), prompt: String(r.prompt || ""), at: new Date().toISOString()};
-    bump(b, "추천"); await save(b); say("pNote", "추천을 마쳤습니다. 방향을 확인하고 ③에서 키비주얼을 만들어 보세요.");
+    const ok = new Set(pool.map(x => x.id)); await put(b.id, {상태: nextState(b.id, "추천"), 추천: {picks: (r.picks || []).filter(p => ok.has(p.id)).slice(0, 3).map(p => ({id: p.id, 이유: String(p.이유 || "")})), 방향: String(r.방향 || ""), prompt: String(r.prompt || ""), at: new Date().toISOString()}}); say("pNote", "추천을 마쳤습니다. 방향을 확인하고 ③에서 키비주얼을 만들어 보세요.");
   } catch (e) { say("pNote", askErr(e)); }
   busy.pick = false; drawWork();
 }
 async function runKv() {
   const b = B(), p = $("kvP").value.trim(); if (!p) { say("kNote", "프롬프트를 넣어 주세요."); return; }
   if (!mcp) { say("kNote", "이 화면에서는 Magnific을 쓸 수 없습니다. claude.ai에서 열어 주세요."); return; }
-  const ratio = $("kvR").value, n = +$("kvN").value; busy.kv = true; b.kv = {...(b.kv || {}), prompt: p, ratio}; drawWork(); say("kNote", "Magnific이 만드는 중입니다(1~3분)…");
-  try { const out = await magnific(p, ratio, n); b.시안 = [...(b.시안 || []), ...out.map(o => ({...o, 종류: "키비주얼", at: new Date().toISOString()}))]; bump(b, "키비주얼"); await save(b);
+  const ratio = $("kvR").value, n = +$("kvN").value; busy.kv = true; await put(b.id, {kv: {...(latest(b.id).kv || {}), prompt: p, ratio}}); drawWork(); say("kNote", "Magnific이 만드는 중입니다(1~3분)…");
+  try { const ids = await mgStart(p, ratio, n), at = new Date().toISOString(); await addGens(b.id, ids.map(id => ({id, 종류: "키비주얼", 상태: "처리 중", at})), "키비주얼");
+    const out = await mgWait(ids); await addGens(b.id, out, "키비주얼");
     say("kNote", out.some(o => o.url || o.preview) ? "만들었습니다. 마음에 드는 시안을 [키비주얼로 선택]해 주세요." : "요청은 들어갔지만 아직 결과가 없습니다. 잠시 뒤 [원본]이나 Magnific에서 확인해 주세요."); }
   catch (e) { say("kNote", mcpErr(e)); }
   busy.kv = false; drawWork();
@@ -309,10 +325,11 @@ async function runKv() {
 async function runMk() {
   const b = B(), kinds = [...document.querySelectorAll("[data-mk]:checked")].map(el => el.dataset.mk); if (!kinds.length) { say("mNote", "목업 종류를 골라 주세요."); return; }
   if (!mcp) { say("mNote", "이 화면에서는 Magnific을 쓸 수 없습니다."); return; }
-  busy.mk = true; drawWork();
+  busy.mk = true; drawWork(); const kv = latest(b.id).kv || {};
   for (const k of kinds) { say("mNote", `${k} 목업 만드는 중…`);
-    try { const out = await magnific(`Promotional ${k === "포스터" ? "poster" : k === "웹 배너" ? "wide web banner" : k === "SNS 카드" ? "social media card" : k === "리플렛" ? "tri-fold leaflet cover" : k === "부스 그래픽" ? "exhibition booth backwall graphic" : "promotional graphic"} mockup based on the reference key visual — keep its colors, composition language and key elements, leave clean empty areas for title text and logos, no text, no logo. ${b.kv.prompt || ""}`.slice(0, 1500), RATIO[k] || "1:1", 1, b.kv.id);
-      b.시안 = [...(b.시안 || []), ...out.map(o => ({...o, 종류: k, at: new Date().toISOString()}))]; bump(b, "목업"); await save(b); drawWork(); }
+    try { const out = await mgStart(`Promotional ${k === "포스터" ? "poster" : k === "웹 배너" ? "wide web banner" : k === "SNS 카드" ? "social media card" : k === "리플렛" ? "tri-fold leaflet cover" : k === "부스 그래픽" ? "exhibition booth backwall graphic" : "promotional graphic"} mockup based on the reference key visual — keep its colors, composition language and key elements, leave clean empty areas for title text and logos, no text, no logo. ${kv.prompt || ""}`.slice(0, 1500), RATIO[k] || "1:1", 1, kv.id);
+      await addGens(b.id, out.map(id => ({id, 종류: k, 상태: "처리 중", at: new Date().toISOString()})), "목업"); drawWork();
+      await addGens(b.id, await mgWait(out), "목업"); drawWork(); }
     catch (e) { say("mNote", `${k}: ${mcpErr(e)}`); busy.mk = false; drawWork(); return; } }
   say("mNote", "목업을 만들었습니다. 원본 링크에서 내려받거나 Magnific에서 이어서 편집할 수 있습니다."); busy.mk = false; drawWork();
 }
@@ -320,6 +337,7 @@ async function runFind() {
   const b = B(); if (!db || !mcp) { say("fNote", "이 화면에서는 수집 작업을 시작할 수 없습니다."); return; }
   if (!cfg.trigger) { say("fNote", "레퍼런스 수집 작업이 아직 연결되지 않았습니다. JARVIS에게 연결을 요청해 주세요. 그동안은 직접 추가로 모을 수 있습니다."); return; }
   if (!confirm(`'${b.제목}' 레퍼런스를 웹에서 찾을까요? 10~20분 걸리고 본부장님 Claude 사용량이 쓰입니다.`)) return;
+  if (busy.find) return; busy.find = true; setTimeout(() => { busy.find = false; }, 60e3); drawWork(); // 스냅샷이 오기 전 두 번 눌러 세션이 두 번 도는 것을 막는다
   const jid = "R" + Date.now().toString(36);
   try { await db.doc(`rjobs/${jid}`).set({bid: b.id, 제목: b.제목, status: "요청", at: new Date().toISOString()}); } catch { say("fNote", "작업을 저장하지 못했습니다."); return; }
   try { await mcp.callTool("Claude Code Remote", "fire_trigger", {trigger_id: cfg.trigger, text: `jobId: ${jid}`}); say("fNote", "수집을 시작했습니다. 찾는 대로 이 요청에 연결됩니다."); }
@@ -343,22 +361,21 @@ document.addEventListener("click", async e => {
   if (t.id === "rPick") runPick();
   if (t.id === "kvGo") runKv();
   if (t.id === "mkGo") runMk();
-  if (t.dataset.kv) { const b = B(); b.kv = {...(b.kv || {}), id: t.dataset.kv}; await save(b); drawWork(); }
-  if (t.dataset.gdel) { const b = B(); b.시안 = (b.시안 || []).filter(g => g.id !== t.dataset.gdel); if (b.kv?.id === t.dataset.gdel) b.kv.id = ""; await save(b); drawWork(); }
-  if (t.id === "done") { const b = B(); b.상태 = "완료"; await save(b); drawWork(); }
+  if (t.id === "kvWait") resume();
+  if (t.dataset.kv) { await put(cur, {kv: {...(latest(cur).kv || {}), id: t.dataset.kv}}); drawWork(); }
+  if (t.dataset.gdel) { const L = latest(cur), f = {시안: (L.시안 || []).filter(g => g.id !== t.dataset.gdel)}; if (L.kv?.id === t.dataset.gdel) f.kv = {...L.kv, id: ""}; await put(cur, f); drawWork(); }
+  if (t.id === "done") { await put(cur, {상태: "완료"}); drawWork(); }
 });
 document.addEventListener("change", async e => { const t = e.target;
   if (t.id === "wReq") { cur = t.value; msg = {}; try { localStorage.setItem("prism-cur", cur); } catch {} drawWork(); }
   if (["rSrc", "rReq"].includes(t.id)) drawRef();
-  if (t.id === "rfFile" && t.files[0]) { const f = t.files[0]; t.value = ""; if (!assets) return; say("rfNote", "올리는 중…");
-    try { const a = await assets.upload(f); await addRef(a.url); } catch (e) { say("rfNote", e?.code === "quota_exceeded" ? "저장 공간이 부족합니다." : "올리지 못했습니다(이미지 20MB 이하)."); } }
 });
 $("rq").addEventListener("input", drawRef);
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.closest(".ph")) t.remove(); }, true); // 미리보기를 못 불러오면 출처 글자만 남긴다
 
 showTab(tab);
 (async () => {
-  [db, sample, mcp, assets] = await Promise.all(["db", "sample", "mcp", "assets"].map(n => window.claude?.use?.(n) ?? null));
+  [db, sample, mcp] = await Promise.all(["db", "sample", "mcp"].map(n => Promise.resolve(window.claude?.use?.(n)).catch(() => null).then(x => x ?? null)));
   if (!db) { drawHero(); return; }
   const busyDlg = () => $("dlg").open || ["kvP", "rfUrl", "rfImg", "rfTitle", "rfTags"].includes(document.activeElement?.id);
   db.collection("briefs").onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
