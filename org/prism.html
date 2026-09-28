@@ -154,7 +154,7 @@ const MG = "Magnific";
 const RK = ["작업물", "레퍼런스"]; // 작업물 = 디자인팀이 만든 디자인, 레퍼런스 = 찾아 둔 참고 자료
 const kindOf = r => r.종류 || "레퍼런스";
 const L = v => Array.isArray(v) ? v.map(String) : v ? [String(v)] : []; // 태그·스타일·색이 문자열로 저장돼도 깨지지 않게
-const imgOf = r => /^[0-9a-f]{32}$/.test(r.파일 || "") ? "/_blob/" + r.파일 : http(r.이미지);
+const imgOf = r => /^[A-Za-z0-9_-]{16,64}$/.test(r.파일 || "") ? "/_blob/" + r.파일 : http(r.이미지);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const http = u => /^https?:\/\//i.test(u || "") ? u : "";
