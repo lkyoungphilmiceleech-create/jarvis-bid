@@ -6,7 +6,7 @@
   color-scheme:dark;
   --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
   --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--amber-soft:rgba(245,185,66,.14);
-  --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --go:#4BE3A0;--go-soft:rgba(75,227,160,.14);--stop:#FF7A7A;--violet:#B18CFF;--grid:rgba(56,213,240,.07);
   --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
   --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
 }
@@ -14,13 +14,13 @@
   color-scheme:light;
   --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
   --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
-  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--violet:#6B45C9;--grid:rgba(10,127,160,.08);
 }
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
   color-scheme:light;
   --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
   --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--amber-soft:rgba(165,106,6,.1);
-  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+  --go:#127A4E;--go-soft:rgba(18,122,78,.1);--stop:#B3332B;--violet:#6B45C9;--grid:rgba(10,127,160,.08);}}
 body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
   background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
 .wrap{max-width:1480px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
@@ -97,10 +97,10 @@ svg.map{width:100%;height:auto;display:block}
 .core{stroke:var(--line);stroke-width:2;stroke-dasharray:4 6}
 .slab-t{fill:var(--slab-t)}.slab-l{fill:var(--slab-l)}.slab-r{fill:var(--slab-r)}
 .floor-t{fill:var(--floor)}.carpet{fill:var(--carpet);opacity:.8}
-.zone.z1{fill:color-mix(in srgb,var(--carpet) 62%,var(--amber))}.zone.z2{fill:color-mix(in srgb,var(--carpet) 66%,var(--holo))}.zone.z3{fill:color-mix(in srgb,var(--carpet) 66%,var(--go))}.zone.z4{fill:color-mix(in srgb,var(--carpet) 66%,#b18cff)}
+.zone.z1{fill:color-mix(in srgb,var(--carpet) 62%,var(--amber))}.zone.z2{fill:color-mix(in srgb,var(--carpet) 66%,var(--holo))}.zone.z3{fill:color-mix(in srgb,var(--carpet) 66%,var(--go))}.zone.z4{fill:color-mix(in srgb,var(--carpet) 66%,var(--violet))}
 .part{pointer-events:none;stroke-opacity:.8;stroke-width:1.6;fill-opacity:.14}
 .zonetag{font:700 13px var(--sans);text-anchor:middle;paint-order:stroke;stroke:var(--floor);stroke-width:4px;pointer-events:none}
-.zonetag.z1{fill:var(--amber)}.zonetag.z2{fill:var(--holo)}.zonetag.z3{fill:var(--go)}.zonetag.z4{fill:#9a6cf0}
+.zonetag.z1{fill:var(--amber)}.zonetag.z2{fill:var(--holo)}.zonetag.z3{fill:var(--go)}.zonetag.z4{fill:var(--violet)}
 .desktag{font:600 10.5px var(--sans);fill:var(--ink);text-anchor:middle;paint-order:stroke;stroke:var(--floor);stroke-width:3px}
 .wall-t{fill:var(--wall-t)}.wall-l{fill:var(--wall-l)}.wall-r{fill:var(--wall-r)}
 .win{fill:var(--win);opacity:var(--winop)}.mullion{fill:var(--wall-t)}
@@ -193,7 +193,7 @@ body:not(.admin) .adm{display:none!important} /* 관리자(편집 권한)만: 3F
 .who h2{margin:0;font:700 26px/1 var(--hud);letter-spacing:.12em;color:var(--holo)}
 .who .r{font-weight:500}
 .st{font:700 11px var(--sans);padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
-.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한,.st.tier.PM{color:var(--holo);border-color:var(--holo)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
+.st.on{color:var(--go);border-color:var(--go)}.st.tier.관리자{color:var(--amber);border-color:var(--amber)}.st.tier.제한,.st.tier.PM{color:var(--holo);border-color:var(--holo)}.st.tier.디자인{color:var(--violet);border-color:var(--violet)}.st.skill{color:var(--holo);border-color:var(--holo)}.st.off{color:var(--muted)}
 .panel ul{margin:0;padding-left:18px;font-size:14px}
 .today{padding:14px 16px}
 .today .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
@@ -301,6 +301,7 @@ const locked = t => t.권한 === "관리자" && !admin;
 // 입장 버튼: 한 번 누르면 정보 + 입장(더블클릭 없음). 관리자 전용 방은 관리자가 아니면 잠김 표시
 function entryBtn(t) {
   if (!t.page) return "";
+  if (t.상태 === "대기") return `<button class="btn" type="button" disabled>예비 인력 · 대기</button>`;
   if (locked(t)) return `<button class="btn" type="button" disabled>🔒 관리자 전용</button>`;
   return t.page === "#dev" ? `<button class="btn primary" type="button" data-enter="${esc(t.code)}">3F 개발실 입장</button>`
     : `<a class="btn primary" href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.code)} 업무실 입장 ↗</a>`;
