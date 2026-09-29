@@ -111,11 +111,11 @@ const okMail = v => /^[^\s@"<>]+@[^\s@"<>]+\.[^\s@"<>]+$/.test(v), okTel = v => 
 const telA = (v, l) => v && okTel(v) ? `<a href="tel:${esc(v.replace(/[^\d+]/g, ""))}">${l}</a>` : "";
 const mailA = (v, l) => v && okMail(v) ? `<a href="mailto:${esc(v)}">${l}</a>` : "";
 
-let db = null, downloads = null, admin = false, proj = null, saved = null, ctRows = [], ctDirty = false, ctMsg = "";
+let db = null, downloads = null, admin = false, proj = null, saved = null, ctRows = [], ctDirty = false, ctMsg = "", base = null; // base: 편집을 시작할 때 본 저장 시각
 function drawHead() { const n = proj?.이름 || "프로젝트 이름 미지정"; $("ttl").textContent = `참가기업 연락처 — ${n}`; }
 function draw() {
   if (!db) { $("box").innerHTML = '<p class="empty">이 화면에서는 저장소에 연결할 수 없습니다. 공유받은 claude.ai 페이지에서 열어 주세요.</p>'; return; }
-  if (!ctDirty) ctRows = JSON.parse(JSON.stringify(saved?.rows || []));
+  if (!ctDirty) { ctRows = JSON.parse(JSON.stringify(saved?.rows || [])); base = saved?.updatedAt ?? null; }
   const u = saved?.updatedAt;
   $("box").innerHTML = `<div class="row"><h2>참가기업 연락처</h2><span class="note">${ctRows.length}곳${u ? ` · 저장 ${esc(kst(u))}` : ""}</span><span style="flex:1"></span>
       <button class="btn" type="button" id="ctAdd">+ 행 추가</button><button class="btn" type="button" id="ctPick">엑셀 올리기</button><input type="file" id="ctFile" accept=".xlsx,.xls,.csv" hidden>${admin && downloads ? '<button class="btn adm" type="button" id="ctXlsx">엑셀 저장</button>' : ""}<button class="btn primary" type="button" id="ctSave">저장</button></div>
@@ -132,6 +132,7 @@ function ctAddRows(aoa) {
 async function ctSave() {
   if (!db) return;
   const rows = ctRows.map(r => ({id: r.id || "C" + Date.now().toString(36), ...Object.fromEntries(CT.map(k => [k, String(r[k] ?? "").trim()]))})).filter(r => CT.some(k => r[k]));
+  if ((saved?.updatedAt ?? null) !== base && !confirm("편집하는 동안 다른 사람이 연락처를 저장했습니다. 내 표로 덮어쓸까요?\n(취소하면 내 변경을 버리고 최신 내용을 불러옵니다)")) { ctDirty = false; ctMsg = "최신 내용을 불러왔습니다."; draw(); return; }
   const noName = rows.filter(r => !r.기업명).length; if (noName) { alert(`기업명이 빈 행이 ${noName}개 있습니다. 기업명을 채우거나 행을 지운 뒤 저장해 주세요.`); return; }
   const bad = rows.filter(r => (r.이메일 && !okMail(r.이메일)) || [r.모바일, r.대표번호].some(v => v && !okTel(v))).map(r => r.기업명), d = {rows, updatedAt: new Date().toISOString()};
   try { await db.doc("contacts/list").set(d); saved = d; ctDirty = false; ctMsg = `${rows.length}곳을 저장했습니다.` + (bad.length ? ` 이메일·전화 형식을 확인해 주세요: ${bad.slice(0, 5).join(", ")}${bad.length > 5 ? " 외" : ""}` : ""); }
