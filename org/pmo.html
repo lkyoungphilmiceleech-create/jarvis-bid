@@ -108,6 +108,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .steps span.on{border-color:var(--holo);color:var(--holo)}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--bg2);color:var(--ink);max-width:760px;width:calc(100% - 32px);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.55)}
+dialog.side form{display:flex;flex-direction:column;gap:8px}dialog.side h3{margin:6px 0 0;font-size:14px}dialog.side .drop{padding:12px}
+.fl{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+dialog.side{margin:0 0 0 auto;height:100%;max-height:100%;max-width:560px;width:100%;box-sizing:border-box;border-radius:0;border-width:0 0 0 1px;overflow:auto}
 @media (max-width:860px){.geo{grid-template-columns:1fr}}
 .chk{flex-direction:row!important;align-items:center;gap:3px;white-space:nowrap;color:var(--ink)!important}
 .co.disc{border-color:var(--holo);box-shadow:0 0 18px var(--holo-soft)}
@@ -179,7 +182,10 @@ tr.hi td{background:var(--go-soft)!important;box-shadow:inset 0 1px var(--go),in
 .wt tr.grp td{background:var(--glass2);font-size:12px;font-weight:700;padding:5px 8px}
 .wt tr.late td{color:var(--stop)}.wt tr.late td:first-child{box-shadow:inset 3px 0 var(--stop)}.wt tr.late [data-wi$="|종료"]{color:var(--stop);font-weight:700}
 .wt tr.done td{opacity:.5}
-.wt .ops{white-space:nowrap}.wt .ops .btn{padding:2px 6px;font-size:12px}
+.wt .nm{display:flex;align-items:center;gap:2px}.wt .nm input{flex:1}.wt .op{padding:1px 6px;font-size:11px}
+.wt .hd{cursor:grab;touch-action:none;user-select:none;color:var(--muted);padding:0 6px 0 2px;letter-spacing:-2px}
+.wt tr.drag{opacity:.6}.wt tr.dropb td{box-shadow:inset 0 2px var(--holo)}.wt tr.dropa td{box-shadow:inset 0 -2px var(--holo)}
+body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
 .saved{font-size:12px;color:var(--go)}
 .wt .mw{display:block;font-size:12px;padding-left:6px}
 .wt th.tlh{min-width:58px;text-align:center;border-left:1px dashed var(--line)}.wt th.now{color:var(--amber)}
@@ -266,7 +272,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 
 const STAT = ["대기", "요청", "진행", "검토", "완료", "지연"];
 const TAX = ["과세", "영세"];
-let db = null, sample = null, mcp = null, downloads = null, admin = null; // admin: null=확인 전, false=팀장(공정·지표만)
+let db = null, sample = null, mcp = null, downloads = null, assets = null, admin = null; // admin: null=확인 전, false=팀장(공정·지표만)
 let projects = [], people = [], staff = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "list"; // 첫 화면은 프로젝트 목록(마지막으로 본 탭이 있으면 그 탭)
 try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "list"; } catch {}
 const P = () => projects.find(p => p.id === cur);
@@ -385,7 +391,10 @@ function drawLs() {
 // ── 저장
 async function put(path, data, note) { if (!db || !admin) return false; try { await db.doc(path).set(data); if (note) note.textContent = "저장했습니다."; return true; } catch { if (note) note.textContent = "저장하지 못했습니다."; return false; } }
 const saveProj = (p, note) => { const {id, ...r} = p; r.updatedAt = new Date().toISOString(); return put(`pm/${id}`, r, note); };
-const saveWbs = () => put(`wbs/${cur}`, {items: W(), updatedAt: new Date().toISOString()});
+// 로컬 수정 보호: 저장이 반영되기 전에 온 옛 스냅샷이 방금 고친 값을 되돌리고, 그 옛 값이 다음 저장에 실려 덮어쓰던 문제(인라인 수정이 반영 안 됨) 방지
+const wPend = {}; // pid → {t: 마지막 로컬 수정, s: 마지막 저장, j: 저장한 items}
+const wTouch = () => { if (cur) (wPend[cur] ||= {}).t = Date.now(); };
+const saveWbs = () => { const pd = wPend[cur] ||= {}; pd.t = pd.s = Date.now(); pd.j = sj(W()); return put(`wbs/${cur}`, {items: W(), updatedAt: new Date().toISOString()}); };
 const saveBud = () => put(`budget/${cur}`, {...B(), updatedAt: new Date().toISOString()});
 
 // ── 파일 읽기 (PDF·DOCX·HWPX·엑셀·사진). 원본 파일은 저장하지 않고 읽기만 한다
@@ -436,7 +445,7 @@ function drawSet() {
   $("tab-set").innerHTML = `<h2>프로젝트 설정</h2>
     <div class="co"><h3>착수 흐름 — 계약이 끝나면 차례대로</h3>${stepsHtml()}</div>
     <div class="co"><h3>문서로 채우기 — CHRONOS</h3><p class="note">착수보고서·계약서·산출내역서를 올리면 CHRONOS가 읽고 프로젝트명·계약 금액·계약일·계약 종료일·상태를 뽑아 아래 칸에 넣습니다. 확인 후 [저장]을 눌러 주세요. 원본 파일은 저장하지 않습니다.</p>
-      <div class="drop" id="docDrop">HWPX·PDF·DOCX·PPTX·엑셀(XLSX·XLS·CSV)·사진을 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="docPick">파일 선택</button><input type="file" id="docFile" multiple hidden accept=".hwpx,.hwp,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,image/*"><br><span class="note">HWP(구형)는 읽을 수 없어 HWPX 나 PDF 로 저장해 올려 주세요.</span></div><p class="note" id="xNote"></p>
+      ${dropBox("doc", "HWPX·PDF·DOCX·PPTX·엑셀(XLSX·XLS·CSV)·사진", ".hwpx,.hwp,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,image/*", true, "HWP(구형)는 읽을 수 없어 HWPX 나 PDF 로 저장해 올려 주세요.")}<p class="note" id="xNote"></p>
       <div id="xOut">${xres?.pid === p.id ? extHtml(xres) : ""}</div></div>
     <div class="form">
     <label>프로젝트 코드<input data-pf="코드" placeholder="예) 2026-KOCCA-01" value="${esc(p.코드)}"></label><label>프로젝트명<input data-pf="이름" value="${esc(p.이름)}"></label><label>발주처<input data-pf="발주처" value="${esc(p.발주처)}"></label>
@@ -496,69 +505,80 @@ function lateList() {
   });
   return out;
 }
-// 타임라인: 오늘이 든 주(월요일)·달부터 끝까지만. 기간 3개월 이하면 주, 길면 월(wScale 로 바꿈). 일 단위는 두지 않는다
+// 타임라인: 오늘이 든 주(월요일)부터 끝까지, 주 단위만
 const d8 = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const wkL = d => `${d.getMonth() + 1}월 ${Math.ceil(d.getDate() / 7)}주`;
 const mon = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
 const mw = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? wkL(mon(new Date(v + "T00:00:00"))) : ""; // 타임라인 머리와 같은 주(월요일 기준)
-let wScale = "auto";
 function periods(w) {
-  const end = [P()?.종료, ...w.map(t => t.종료)].filter(Boolean).sort().pop() || today(), d0 = new Date(today() + "T00:00:00"), e = new Date(end + "T00:00:00");
-  const sc = wScale !== "auto" ? wScale : (e - d0) / 864e5 <= 92 ? "주" : "월", out = [], d = sc === "주" ? mon(d0) : new Date(d0.getFullYear(), d0.getMonth(), 1);
-  while ((!out.length || d <= e) && out.length < (sc === "주" ? 60 : 36)) { const st = new Date(d); if (sc === "주") d.setDate(d.getDate() + 7); else d.setMonth(d.getMonth() + 1);
-    out.push({s: d8(st), e: d8(new Date(d.getTime() - 864e5)), l: sc === "주" ? wkL(st) : `${String(st.getFullYear()).slice(2)}.${st.getMonth() + 1}`}); }
-  return {sc, ps: out};
+  const end = [P()?.종료, ...w.map(t => t.종료)].filter(Boolean).sort().pop() || today(), e = new Date(end + "T00:00:00"), out = [], d = mon(new Date(today() + "T00:00:00"));
+  while ((!out.length || d <= e) && out.length < 80) { const st = new Date(d); d.setDate(d.getDate() + 7); out.push({s: d8(st), e: d8(new Date(d.getTime() - 864e5)), l: wkL(st)}); }
+  return {ps: out};
 }
+const inP = (a, b, x) => !!(a || b) && (a || b) <= x.e && (b || a) >= x.s;
 const tlHead = ps => ps.map((x, k) => `<th class="tlh${k ? "" : " now"}">${x.l}</th>`).join("");
-const tlCells = (t, ps) => ps.map(x => `<td class="tl${(t.시작 || t.종료) && (t.시작 || t.종료) <= x.e && (t.종료 || t.시작) >= x.s ? " on " + effStat(t) : ""}"></td>`).join("");
-// 공정일정: 표(구분·항목·과업내용·담당자·시작일·마감일·진행 내용 + 오른쪽 타임라인), 표 안에서 바로 고치면 자동 저장
+const tlCells = (t, ps) => ps.map(x => `<td class="tl${inP(t.시작, t.종료, x) ? " on " + effStat(t) : ""}"></td>`).join("");
+// 공정일정: 표(항목·담당자·시작일·마감일·진행 내용 + 오른쪽 간트). 항목을 누르면 오른쪽 세부 패널, 표 안에서 바로 고치면 자동 저장
 const STG = ["착수", "준비", "실행", "사후·정산"];
-let wStg = "실행", wT, wSaved = "", wRe = false; // wRe: 입력 중이라 미룬 다시 그리기
+let wStg = "실행", wT, wSaved = "", wRe = false, wCal = false, drag = null; // wRe: 입력 중이라 미룬 다시 그리기
 const wMark = m => { wSaved = m; if ($("wSaved")) $("wSaved").textContent = m; };
-const wSave = (ms = 600) => { clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
+const wSave = (ms = 600) => { wTouch(); clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
 const nid = () => "T" + String(W().reduce((m, x) => Math.max(m, +String(x.id).slice(1) || 0), 0) + 1).padStart(3, "0");
 const wFind = k => { const j = k.lastIndexOf("|"), id = k.slice(0, j); return [W().find(x => x.id === id), k.slice(j + 1)]; };
 function wPut(t, k, v) { if (k === "담당") t.담당 = pw(v); else t[k] = v; if (k === "상태") { if (v === "완료") t.완료일 ||= today(); else delete t.완료일; } }
-const scBtn = sc => `<button class="btn" type="button" id="wSc" title="눈금 바꾸기: 자동 → 주 → 월">눈금: ${sc}${wScale === "auto" ? " (자동)" : ""}</button>`;
 function wTable(w) {
-  const dis = admin ? "" : " disabled", keys = [...new Set([...STG, ...w.map(t => t.단계 || "")])], {ps} = periods(w), dt = (t, k, l) => `<td><b class="mw">${esc(mw(t[k]))}</b><input type="date" data-wi="${esc(`${t.id}|${k}`)}" value="${esc(t[k])}" aria-label="${l}"${dis}></td>`;
-  return `<div class="wt"><table><thead><tr><th style="min-width:96px">구분</th><th style="min-width:170px">항목 (작업)</th><th style="min-width:180px">과업내용 (산출물·하위 할 일)</th><th style="min-width:150px">담당자</th><th style="min-width:124px">시작일</th><th style="min-width:124px">마감일</th><th style="min-width:170px">진행 내용</th><th></th>${tlHead(ps)}</tr></thead><tbody>${keys.map(g => {
-    const ts = w.map((t, i) => ({t, i})).filter(x => (x.t.단계 || "") === g); if (!ts.length) return "";
-    const nl2 = ts.filter(x => effStat(x.t) === "지연").length;
-    return `<tr class="grp"><td colspan="8">${esc(g || "(구분 없음)")} · 작업 ${ts.length} · 완료 ${ts.filter(x => x.t.상태 === "완료").length}${nl2 ? ` · <span class="err">지연 ${nl2}</span>` : ""}</td><td colspan="${ps.length}"></td></tr>` + ts.map(({t, i}, k) => {
-      const st = effStat(t), sub = t.하위 || [], f = x => esc(`${t.id}|${x}`);
-      return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><select data-wi="${f("단계")}" aria-label="구분"${dis}>${opt([...new Set([...STG, g].filter(Boolean))], g, g ? undefined : "(구분 없음)")}</select></td>
-        <td><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}></td>
-        <td><input data-wi="${f("산출물")}" value="${esc(t.산출물)}" placeholder="산출물" aria-label="과업내용"${dis}>${sub.length ? `<div class="note">하위 ${sub.filter(s => s.완료).length}/${sub.length}: ${esc(sub.slice(0, 3).map(s => s.할일).join(", "))}${sub.length > 3 ? " …" : ""}</div>` : ""}</td>
-        <td><select data-wi="${f("담당")}" aria-label="담당자"${dis}>${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}${admin ? '<option value="+add">+ 인력 배치…</option>' : ""}</select></td>
-        ${dt(t, "시작", "시작일")}${dt(t, "종료", "마감일")}
-        <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>
-        <td class="ops"><button class="btn" type="button" data-t="${i}">상세</button><span class="adm"> <button class="btn" type="button" data-wmv="${f("-1")}" aria-label="위로"${k ? "" : " disabled"}>↑</button><button class="btn" type="button" data-wmv="${f("1")}" aria-label="아래로"${k < ts.length - 1 ? "" : " disabled"}>↓</button> <button class="btn x" type="button" data-wdel="${esc(t.id)}" aria-label="삭제">✕</button></span></td>${tlCells(t, ps)}</tr>`; }).join(""); }).join("")}</tbody></table></div>`;
+  const dis = admin ? "" : " disabled", {ps} = periods(w), dt = (t, k, l) => `<td><b class="mw">${esc(mw(t[k]))}</b><input type="date" data-wi="${esc(`${t.id}|${k}`)}" value="${esc(t[k])}" aria-label="${l}"${dis}></td>`;
+  let prev; // 단계는 드래그로 섞일 수 있어 배열 순서대로 그리고, 단계가 바뀌는 곳에 머리 줄을 둔다
+  return `<div class="wt"><table><thead><tr><th style="min-width:250px">항목</th><th style="min-width:150px">담당자</th><th style="min-width:124px">시작일</th><th style="min-width:124px">마감일</th><th style="min-width:200px">진행 내용</th>${tlHead(ps)}</tr></thead><tbody>${w.map((t, i) => {
+    const g = t.단계 || "", st = effStat(t), sub = t.하위 || [], f = x => esc(`${t.id}|${x}`); let h = "";
+    if (g !== prev) { prev = g; let n = i; while (w[n] && (w[n].단계 || "") === g) n++; const run = w.slice(i, n), nl = run.filter(x => effStat(x) === "지연").length;
+      h = `<tr class="grp"><td colspan="5">${esc(g || "(구분 없음)")} · 작업 ${run.length} · 완료 ${run.filter(x => x.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</td><td colspan="${ps.length}"></td></tr>`; }
+    return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${i}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button></div></td>
+      <td><select data-wi="${f("담당")}" aria-label="담당자"${dis}>${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}${admin ? '<option value="+add">+ 인력 배치…</option>' : ""}</select></td>
+      ${dt(t, "시작", "시작일")}${dt(t, "종료", "마감일")}
+      <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>${tlCells(t, ps)}</tr>`; }).join("")}</tbody></table></div>`;
 }
 function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const p = P(); if (!p) { $("tab-wbs").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
+  if (drag && !force) return; // 끄는 중에는 다시 그리지 않는다(놓을 때 그림)
   // 글자 칸 입력(한글 조합 포함) 중에는 다시 그리지 않는다 — 조합 중 글자가 두 번 들어가지 않게. 포커스가 빠질 때 다시 그림
   const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { if (admin) { const [t, k] = wFind(fa.dataset.wi); if (t) wPut(t, k, fa.value); } wRe = true; return; } // 늦게 온 스냅샷이 입력 중인 값을 옛 값으로 되돌리지 않게
   const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
   if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
   const w = W(), late = lateList(), reps = w.flatMap((t, i) => (t.보고 || []).map((r, j) => ({t, i, j, r})));
   $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span><span style="flex:1"></span>
-      <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span>${scBtn(periods(w).sc)}<button class="btn" type="button" id="wbsCsv">엑셀 저장</button></div>
+      <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span><button class="btn" type="button" id="wbsCsv">엑셀 저장</button><button class="btn" type="button" id="wCal" aria-pressed="${wCal}">${wCal ? "▦ 간트 표" : "📅 월력"}</button></div>
     ${healthHtml()}
     ${late.length ? `<div class="alarm" role="alert">⚠ 지연 ${late.length}건 · 지연 보고 미작성 ${new Set(late.filter(x => !x.t.보고?.some(r => !r.해결)).map(x => x.i)).size}건<button class="btn adm" type="button" id="lateOpen">확인·알림</button></div>` : ""}
-    <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [상세]를 누르면 하위 할 일·지연 보고를 볼 수 있습니다. 오른쪽 막대는 오늘 이후 일정입니다." : "표에서 바로 고치면 자동 저장됩니다. 하위 할 일·지연 보고·작업 요청(AI 실행·메일)은 [상세]에서 합니다. 오른쪽 막대는 오늘 이후 일정입니다(간트·달력은 '일정 보기' 탭)."}</p>
-    ${w.length ? wTable(w) : '<p class="empty">아직 공정표가 없습니다. 과업범위를 넣고 [공정표 1차 생성]을 누르거나 아래에서 행을 추가해 주세요.</p>'}
+    <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [열기]를 누르면 세부 내용(과업내용·하위 할 일·자료·지연 보고)을 봅니다. 오른쪽 막대는 오늘 이후 주 단위 일정입니다." : "표에서 바로 고치면 자동 저장됩니다. [열기]를 누르면 세부 패널(과업내용·하위 할 일·자료·지연 보고·작업 요청)이 열립니다. ⋮⋮ 를 끌면 순서, 막대를 끌면 기간(가운데)·시작/마감(양 끝)이 주 단위로 바뀝니다."}</p>
+    ${wCal ? calHtml(w) : w.length ? wTable(w) : '<p class="empty">아직 공정표가 없습니다. 과업범위를 넣고 [공정표 1차 생성]을 누르거나 아래에서 행을 추가해 주세요.</p>'}
     <div class="row adm"><select id="wStg" aria-label="추가할 구분">${opt(STG, wStg)}</select><button class="btn" type="button" id="wAdd">+ 행 추가</button></div>
     ${reps.length ? `<h2>지연 보고</h2><div class="tw"><table><thead><tr><th>작업</th><th>보고일</th><th>원인</th><th>조치</th><th>새 마감</th><th>해결</th></tr></thead><tbody>${reps.map(({t, i, j, r}) => `<tr><td>${esc(t.작업)}</td><td>${esc(kst(r.at).slice(0, 10))}</td><td>${esc(r.원인)}</td><td>${esc(r.조치)}</td><td>${esc(r.새마감)}</td>
       <td><label class="chk"><input type="checkbox" data-rchk="${i}|${j}"${r.해결 ? " checked" : ""}${admin ? "" : " disabled"}> ${r.해결 ? `해결 ${esc(r.해결일)}` : "해결 완료"}</label></td></tr>`).join("")}</tbody></table></div>` : ""}`;
   const wt = $("tab-wbs").querySelector(".wt"); if (sx && wt) wt.scrollTop = sx;
   if (fk) { const el = document.querySelector(`[data-wi="${CSS.escape(fk)}"]`); if (el) { el.focus(); try { el.setSelectionRange(fs, fs); } catch {} } }
 }
-function wMove(id, d) { // 같은 구분 안에서만 위·아래로
-  const a = W(), i = a.findIndex(x => x.id === id); if (i < 0) return; let j = i + d;
-  while (a[j] && (a[j].단계 || "") !== (a[i].단계 || "")) j += d; if (!a[j]) return;
-  [a[i], a[j]] = [a[j], a[i]]; wSave(0); drawWbs();
-}
+// 끌기(관리자만, pointer 이벤트라 터치도 됨): ⋮⋮ = 행 순서(단계는 그대로), 간트 막대 = 가운데는 기간 이동·양 끝은 시작/마감. 주 단위로 옮기고 요일은 그대로 둔다
+const addW = (v, n) => { if (!v) return v; const x = new Date(v + "T00:00:00"); x.setDate(x.getDate() + 7 * n); return d8(x); };
+const dragTo = g => { let s = g.s, e = g.e; if (g.k !== "종료") s = addW(s, g.d); if (g.k !== "시작") e = addW(e, g.d); if (g.k === "시작" && e && s > e) s = e; if (g.k === "종료" && s && e < s) e = s; return [s, e]; };
+document.addEventListener("pointerdown", e => {
+  if (!admin || tab !== "wbs" || e.button) return;
+  const hd = e.target.closest?.("#tab-wbs .hd"), bar = !hd && e.target.closest?.("#tab-wbs td.tl.on"), tr = (hd || bar)?.closest("tr"), t = tr && W().find(x => x.id === tr.dataset.id); if (!t) return;
+  e.preventDefault(); drag = {t, tr, k: "row"}; tr.classList.add("drag"); if (hd) return;
+  const cs = [...tr.querySelectorAll("td.tl")], on = cs.filter(c => c.classList.contains("on")), r = bar.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, ps = periods(W()).ps;
+  Object.assign(drag, {cs, ps, i0: cs.indexOf(bar), d: 0, s: t.시작 || "", e: t.종료 || "", k: bar === on[0] && x < .3 && t.시작 >= ps[0].s ? "시작" : bar === on.at(-1) && x > .7 && t.종료 ? "종료" : "move"});
+});
+document.addEventListener("pointermove", e => { const g = drag; if (!g) return;
+  if (g.k === "row") { document.querySelectorAll("#tab-wbs .dropb, #tab-wbs .dropa").forEach(x => x.classList.remove("dropb", "dropa")); const o = document.elementFromPoint(e.clientX, e.clientY)?.closest("#tab-wbs tr[data-id]");
+    g.to = o && o !== g.tr ? {id: o.dataset.id, after: e.clientY > o.getBoundingClientRect().top + o.offsetHeight / 2} : null; if (g.to) o.classList.add(g.to.after ? "dropa" : "dropb"); return; }
+  const c = g.cs.findIndex(td => { const r = td.getBoundingClientRect(); return e.clientX >= r.left && e.clientX < r.right; }); if (c < 0) return;
+  g.d = c - g.i0; const [s, en] = dragTo(g), st = effStat(g.t); g.cs.forEach((td, j) => td.className = "tl" + (inP(s, en, g.ps[j]) ? " on " + st : ""));
+});
+const dragEnd = e => { const g = drag; drag = null; if (!g) return;
+  if (e.type === "pointerup" && g.k === "row" && g.to) { const a = W(); a.splice(a.indexOf(g.t), 1); a.splice(a.findIndex(x => x.id === g.to.id) + g.to.after, 0, g.t); wSave(0); }
+  if (e.type === "pointerup" && g.k !== "row" && g.d) { const [s, en] = dragTo(g); (g.t.기록 ||= []).push({at: new Date().toISOString(), 내용: `간트에서 일정 변경 ${g.s || "-"}~${g.e || "-"} → ${s || "-"}~${en || "-"}`}); g.t.시작 = s; g.t.종료 = en; wSave(0); drawTop(); }
+  drawWbs(true); };
+document.addEventListener("pointerup", dragEnd); document.addEventListener("pointercancel", dragEnd);
 // 담당자 '+ 인력 배치…': 사내 직원 명부에서 골라 이 프로젝트에 배치하고 바로 그 작업 담당으로
 function pickStaff(tid) {
   const free = staff.filter(x => x.재직 !== false && !PP().some(u => u.pid === cur && u.staffId === x.id));
@@ -568,23 +588,24 @@ function pickStaff(tid) {
   $("dlg").onclose = async () => { if ($("dlg").returnValue !== "ok") return; const uid = await assign($("pkS").value), t = W().find(x => x.id === tid); if (!uid || !t) return; t.담당 = {t: "real", id: uid}; wSave(0); draw(); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
-// ── 일정 보기: ① 간트 + 체크리스트 ② 월력. 팀장도 읽기로
-let sView = "gantt", calM = today().slice(0, 7);
+// 월력: 마감일 기준(지연 빨강·완료 흐림). 공정일정 탭의 [월력] 버튼
+let calM = today().slice(0, 7);
+function calHtml(w) {
+  const [y, mo] = calM.split("-").map(Number), first = new Date(y, mo - 1, 1), d = new Date(first.getTime() - (first.getDay() + 6) % 7 * 864e5), ev = {}, cells = [];
+  w.forEach((t, i) => { if (t.종료) (ev[t.종료] ||= []).push(`<button type="button" class="ev ${effStat(t)}" data-t="${i}" title="${esc(`${t.작업} · ${who(t.담당)}`)}">${esc(t.작업 || "(이름 없음)")}<br><small>${esc(who(t.담당))}</small></button>`); });
+  do { for (let k = 0; k < 7; k++) { const x = d8(d); cells.push(`<div class="cd${d.getMonth() !== mo - 1 ? " out" : ""}${x === today() ? " today" : ""}"><span class="dn">${d.getDate()}</span>${(ev[x] || []).slice(0, 3).join("")}${(ev[x] || []).length > 3 ? `<span class="note">+${ev[x].length - 3}건</span>` : ""}</div>`); d.setDate(d.getDate() + 1); } } while (d.getMonth() === mo - 1);
+  return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료</span></div>
+    <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`;
+}
+// ── 일정 보기: 간트 + 체크리스트(하위 할 일). 팀장도 읽기로
 function drawSch() {
   const p = P(); if (!p) { $("tab-sch").innerHTML = '<p class="empty">프로젝트를 먼저 고르세요.</p>'; return; }
-  const w = W(), {sc, ps} = periods(w), dis = admin ? "" : " disabled";
-  let body;
-  if (sView === "gantt") body = `<p class="note">오늘(${today()})이 든 ${sc === "주" ? "주" : "달"}부터 보여 줍니다(지난 기간 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 상세를 엽니다.</p>
+  const w = W(), {ps} = periods(w), dis = admin ? "" : " disabled";
+  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2></div><p class="note">오늘(${today()})이 든 주부터 보여 줍니다(지난 주 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
     <div class="wt"><table class="gt"><thead><tr><th style="min-width:220px">작업 · 체크리스트</th><th style="min-width:110px">담당</th><th>상태</th>${tlHead(ps)}</tr></thead><tbody>${w.map((t, i) => { const st = effStat(t);
       return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><span class="note">${esc(t.단계)} · ${esc(mw(t.시작))} ~ ${esc(mw(t.종료))}</span><br><button class="lnk" type="button" data-t="${i}">${esc(t.작업 || "(이름 없음)")}</button></td><td>${esc(who(t.담당))}</td><td><span class="st ${st}">${SL(st)}</span></td>${tlCells(t, ps)}</tr>`
       + (t.하위 || []).map((s, j) => { const ss = subStat(s); return `<tr class="sub"><td><label class="chk"><input type="checkbox" data-sc="${esc(t.id)}|${j}"${s.완료 ? " checked" : ""}${dis}> ${esc(s.할일)}</label></td><td class="note">${esc(s.담당 ? who(s.담당) : "")}</td><td>${s.마감 ? `<span class="st ${ss}">${esc(mw(s.마감))}</span>` : ""}</td>${ps.map(x => `<td class="tl${s.마감 && s.마감 >= x.s && s.마감 <= x.e ? " dot " + ss : ""}"></td>`).join("")}</tr>`; }).join(""); }).join("")
       || `<tr><td colspan="${3 + ps.length}" class="empty">공정표가 없습니다.</td></tr>`}</tbody></table></div>`;
-  else { const [y, mo] = calM.split("-").map(Number), first = new Date(y, mo - 1, 1), d = new Date(first.getTime() - (first.getDay() + 6) % 7 * 864e5), ev = {}, cells = [];
-    w.forEach((t, i) => { const st = effStat(t), e = (k, m) => { if (t[k]) (ev[t[k]] ||= []).push(`<button type="button" class="ev ${st}" data-t="${i}" title="${esc(t.작업)}">${m} ${esc(t.작업)}</button>`); }; e("시작", "▶"); e("종료", "■ 마감"); });
-    do { for (let k = 0; k < 7; k++) { const x = d8(d); cells.push(`<div class="cd${d.getMonth() !== mo - 1 ? " out" : ""}${x === today() ? " today" : ""}"><span class="dn">${d.getDate()}</span>${(ev[x] || []).slice(0, 3).join("")}${(ev[x] || []).length > 3 ? `<span class="note">+${ev[x].length - 3}건</span>` : ""}</div>`); d.setDate(d.getDate() + 1); } } while (d.getMonth() === mo - 1);
-    body = `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">▶ 시작 · ■ 마감 · 빨강 = 지연</span></div>
-      <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`; }
-  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기</h2><div class="seg" role="group" aria-label="보기"><button type="button" data-sv="gantt" aria-pressed="${sView === "gantt"}">간트 + 체크리스트</button><button type="button" data-sv="cal" aria-pressed="${sView === "cal"}">월력</button></div><span style="flex:1"></span>${sView === "gantt" ? scBtn(sc) : ""}</div>${body}`;
 }
 let wMsg = "";
 const wn = m => { wMsg = m; if ($("wNote")) $("wNote").textContent = m; };
@@ -647,51 +668,61 @@ const subRow = (s, j) => `<div class="srow"><input type="checkbox" data-sf="완�
   <select data-sf="담당" aria-label="담당">${WHO(s.담당 ? `${s.담당.t}:${s.담당.id}` : "")}</select><input type="date" data-sf="마감" value="${esc(s.마감)}" aria-label="마감"><button class="btn x adm" type="button" data-sdel="${j}" aria-label="삭제">✕</button></div>`;
 const readSubs = () => [...document.querySelectorAll("#subs .srow")].map(el => { const g = k => el.querySelector(`[data-sf="${k}"]`); return {할일: g("할일").value.trim(), 담당: pw(g("담당").value), 마감: g("마감").value, 완료: g("완료").checked}; });
 const drawSubs = () => { $("subs").innerHTML = subDraft.map(subRow).join("") || '<p class="note">하위 할 일이 없습니다.</p>'; };
+// 세부 패널(오른쪽, 좁은 화면은 전체): 표에서 못 고치는 것만 — 단계·과업내용·하위 할 일·관련 자료, 지연 보고·처리 기록은 접어 둠
 function editTask(i, toRep) {
-  const isNew = i === null; let t = isNew ? {id: nid(), 단계: "실행", 상태: "대기", 기록: [], 예산항목: [], 하위: [], 보고: []} : W()[i];
-  if (!t) return;
+  let t = W()[i]; if (!t) return;
   dlgT = t; subDraft = (t.하위 || []).map(s => ({...s}));
-  const bOpts = BR(), reps = t.보고 || [], legacy = !reps.length && (t.원인 || t.해결);
-  $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${isNew ? "작업 추가" : esc(t.작업)} <span class="st ${effStat(t)}">${SL(effStat(t))}</span></h2>
-    <div class="form"><label>단계<select data-tf="단계">${opt(["착수", "준비", "실행", "사후·정산"], t.단계)}</select></label><label class="wide">작업<input data-tf="작업" value="${esc(t.작업)}"></label>
-    <label class="wide">산출물<input data-tf="산출물" value="${esc(t.산출물)}"></label><label>시작일<input type="date" data-tf="시작" value="${esc(t.시작)}"></label><label>마감일<input type="date" data-tf="종료" value="${esc(t.종료)}"></label>
-    <label>담당 (사람·AI 직원 중 고르기)<select data-tf="담당">${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}</select></label><label>상태<select data-tf="상태">${opt(STO, sv(t.상태))}</select></label>
-    <label class="wide adm">연결 예산 항목<select data-tf="예산항목" multiple size="3">${bOpts.map(r => `<option value="${esc(r.id)}"${(t.예산항목 || []).includes(r.id) ? " selected" : ""}>${esc([r.구분, r.항목, r.내용].filter(Boolean).join(" / "))} (${won(r.금액)})</option>`).join("")}</select></label>
-    <label class="wide">진행 메모<textarea data-tf="메모">${esc(t.메모)}</textarea></label></div>
-    <h3 style="margin:14px 0 6px;font-size:14px">하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm" style="margin-top:6px"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
-    <h3 id="repH" style="margin:14px 0 6px;font-size:14px">지연 보고</h3>
+  const reps = t.보고 || [], legacy = !reps.length && (t.원인 || t.해결), rec = t.기록 || [], nOpen = reps.filter(r => !r.해결).length;
+  $("dlgForm").innerHTML = `<div class="row"><h2 style="margin:0;flex:1;font-size:17px">${esc(t.작업 || "(이름 없음)")} <span class="st ${effStat(t)}">${SL(effStat(t))}</span></h2><button class="btn" value="cancel" aria-label="닫기">✕</button></div>
+    <div class="row note"><select data-tf="단계" aria-label="단계 (구분)">${opt([...new Set([...STG, t.단계].filter(Boolean))], t.단계)}</select><span>${esc(who(t.담당))} · ${esc(t.시작 || "?")} ~ ${esc(t.종료 || "?")}</span>${admin ? "<span>· 닫으면 저장됩니다</span>" : ""}</div>
+    <label class="fl">과업내용 · 산출물<textarea data-tf="산출물" placeholder="${admin ? "이 작업으로 무엇을 만드는지" : ""}">${esc(t.산출물)}</textarea></label>
+    <h3>하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
+    <h3>관련 자료</h3><div id="att"></div>
+    ${admin ? `${assets ? dropBox("att", "파일", "", true) : ""}<div class="row"><input id="attUrl" type="url" placeholder="링크 붙이기 (https://…)" aria-label="자료 링크" style="flex:1"><button class="btn" type="button" id="attLink">링크 추가</button></div>` : ""}
+    <p class="note" id="attNote">팀장도 보는 자료입니다. 금액·연락처가 든 문서는 올리지 마세요.</p>
+    <details id="repD"${toRep ? " open" : ""}><summary class="note">지연 보고 ${reps.length}건${nOpen ? ` (미해결 ${nOpen})` : ""} · 처리 기록 ${rec.length}건</summary>
     ${reps.map((r, j) => `<div class="rep${r.해결 ? " done" : ""}"><span class="note">${esc(kst(r.at).slice(0, 10))} 보고${r.기존마감 ? ` · 기존 마감 ${esc(r.기존마감)}` : ""}${r.새마감 ? ` → ${esc(r.새마감)}` : ""}</span><div>원인: ${esc(r.원인)}</div><div>조치: ${esc(r.조치)}</div>
       <label class="chk"><input type="checkbox" data-rp="${j}"${r.해결 ? " checked" : ""}> 해결 완료${r.해결일 ? ` (${esc(r.해결일)})` : ""}</label></div>`).join("")}
     <div class="form adm" style="margin-top:6px"><label class="wide">새 지연 보고 — 원인<textarea id="rWhy">${legacy ? esc(t.원인) : ""}</textarea></label><label class="wide">조치 계획 (누가·무엇을·언제까지)<textarea id="rFix">${legacy ? esc(t.해결) : ""}</textarea></label>
       <label>새 마감일 (적으면 일정이 바뀝니다)<input type="date" id="rDue"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="button" id="repAI">CHRONOS 초안</button></div></div>
-    ${t.추천역할 ? `<p class="note">CHRONOS 추천 역할: ${esc(t.추천역할)}${t.근거 && admin ? ` · 근거: ${esc(t.근거)}` : ""}</p>` : ""}
-    ${t.결과 && admin ? `<div class="out" style="margin-top:8px;max-height:240px;overflow:auto"><b>AI 결과물</b>\n${esc(t.결과)}</div>` : ""}
-    ${(t.기록 || []).length ? `<details style="margin-top:8px"><summary class="note">처리 기록 ${t.기록.length}건</summary>${t.기록.map(r => `<p class="note">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</details>` : ""}
-    <div class="row" style="margin-top:12px"><span class="row adm"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn" value="req">저장 후 작업 요청</button><button class="btn x" value="del">삭제</button>'}</span><button class="btn" value="cancel">닫기</button><span class="note" id="dNote"></span></div>`;
-  drawSubs(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = true); // 팀장은 보기만
+    ${rec.map(r => `<p class="note">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</details>
+    ${t.결과 && admin ? `<details><summary class="note">AI 결과물</summary><div class="out" style="max-height:240px;overflow:auto">${esc(t.결과)}</div></details>` : ""}
+    <div class="row" style="margin-top:6px"><span class="row adm"><button class="btn primary" value="save">저장</button><button class="btn" value="req" title="담당에게 작업 요청">${t.담당?.t === "ai" ? "🤖 AI 실행" : "✉ 요청 메일"}</button><button class="btn x" value="del">삭제</button></span><span class="note" id="dNote"></span></div>`;
+  drawSubs(); drawAtt(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = true); // 팀장은 보기만
   $("dlg").onclose = async () => {
-    const v = $("dlg").returnValue; dlgT = null; if (!v || v === "cancel" || !admin) return;
-    if (!isNew) t = W().find(x => x.id === t.id) || t;
+    const v = $("dlg").returnValue; dlgT = null; if (!admin) return; // 닫으면(Esc·✕ 포함) 저장
+    t = W().find(x => x.id === t.id) || t;
     if (v === "del") { if (!confirm("이 작업을 삭제할까요?")) return; const k = W().indexOf(t); if (k >= 0) wbs[cur].items.splice(k, 1); await saveWbs(); draw(); return; }
     const now = new Date().toISOString(), log = m => (t.기록 ||= []).push({at: now, 내용: m});
-    $("dlgForm").querySelectorAll("[data-tf]").forEach(el => { const k = el.dataset.tf;
-      t[k] = k === "담당" ? pw(el.value) : k === "예산항목" ? [...el.selectedOptions].map(o => o.value) : el.value.trim(); });
-    if (!t.작업) return;
+    $("dlgForm").querySelectorAll("[data-tf]").forEach(el => t[el.dataset.tf] = el.value.trim());
     const old = t.하위 || []; // 업무 지표용 완료일: 완료로 바뀐 날을 남긴다
     t.하위 = readSubs().filter(s => s.할일).map(s => { const o = old.find(x => x.할일 === s.할일); return {...s, 완료일: s.완료 ? (o?.완료 && o.완료일) || today() : ""}; });
-    if (t.상태 === "완료") t.완료일 ||= today(); else delete t.완료일;
     t.보고 = t.보고 || [];
     document.querySelectorAll("[data-rp]").forEach(el => { const r = t.보고[+el.dataset.rp]; if (r && !!r.해결 !== el.checked) { r.해결 = el.checked; r.해결일 = el.checked ? today() : ""; log(el.checked ? "지연 보고 해결 완료" : "지연 보고 해결 취소"); } });
     const rep = {원인: $("rWhy").value.trim(), 조치: $("rFix").value.trim(), 새마감: $("rDue").value};
     if (rep.원인 || rep.조치) { t.보고.push({at: now, 기존마감: t.종료, ...rep, 해결: false}); log("지연 보고 작성"); delete t.원인; delete t.해결;
       if (rep.새마감 && rep.새마감 !== t.종료) { log(`마감 변경 ${t.종료 || "-"} → ${rep.새마감} (지연 보고)`); t.종료 = rep.새마감; if (t.상태 === "지연") t.상태 = "진행"; } }
-    if (isNew) { wbs[cur] = wbs[cur] || {items: []}; wbs[cur].items.push(t); }
     await saveWbs(); draw();
     if (v === "req") requestTask(t);
   };
-  $("dlg").returnValue = ""; $("dlg").showModal();
-  if (toRep) { $("repH").scrollIntoView(); $("rWhy").focus(); }
+  $("dlg").returnValue = ""; $("dlg").classList.add("side"); $("dlg").showModal();
+  if (toRep) { $("rWhy").scrollIntoView(); $("rWhy").focus(); }
 }
+// 관련 자료: 파일은 assets(/_blob/id), 없으면 http(s) 링크. 작업 문서에 {이름, id|url, 크기, 날} 로 남긴다
+const fsz = n => n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.ceil(n / 1024)}KB`;
+const attHref = a => /^[A-Za-z0-9_-]{16,64}$/.test(a.id || "") ? "/_blob/" + a.id : /^https?:\/\//i.test(a.url || "") ? a.url : "";
+function drawAtt() { const t = dlgT; if (!t || !$("att")) return;
+  $("att").innerHTML = (t.자료 || []).map((a, j) => { const h = attHref(a); return `<div class="row"><span>${a.id ? "📎" : "🔗"}</span>${h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(a.이름 || h)}</a>` : esc(a.이름)}<span class="note">${a.크기 ? fsz(a.크기) + " · " : ""}${esc(a.날)}</span><button class="btn x adm" type="button" data-adel="${j}" aria-label="자료 빼기">✕</button></div>`; }).join("") || '<p class="note">자료가 없습니다.</p>'; }
+async function attUp(fs) {
+  const t = dlgT, note = $("attNote"); if (!t || !assets || !admin) return; let n = 0;
+  for (const f of fs.slice(0, 10)) { if (f.size > 20 * 1048576) { note.textContent = `${f.name}: 20MB 이하만 올릴 수 있습니다.`; continue; }
+    note.textContent = `${f.name} 올리는 중…`;
+    try { const a = await assets.upload(f); (t.자료 ||= []).push({이름: f.name, id: a.id, 크기: f.size, 날: today()}); n++; } catch (e) { note.textContent = e?.code === "quota_exceeded" ? "저장 공간이 부족합니다." : `${f.name}: 올리지 못했습니다.`; } }
+  if (n) { (t.기록 ||= []).push({at: new Date().toISOString(), 내용: `자료 ${n}개 올림`}); await saveWbs(); note.textContent = `${n}개를 올렸습니다.`; } drawAtt();
+}
+function attLink() { const t = dlgT, u = $("attUrl").value.trim(); if (!t || !admin) return;
+  if (!/^https?:\/\/\S+$/i.test(u)) { $("attNote").textContent = "http(s) 링크만 붙일 수 있습니다."; return; }
+  (t.자료 ||= []).push({이름: u.replace(/^https?:\/\//i, "").slice(0, 80), url: u, 날: today()}); $("attUrl").value = ""; wSave(0); drawAtt(); }
 async function requestTask(t) {
   const p = P(), tag = `[JARVIS ${p.id}-${t.id}]`, subs = (t.하위 || []).filter(s => !s.완료).map(s => `  - ${s.할일}${s.마감 ? ` (마감 ${s.마감})` : ""}`).join("\n");
   if (!t.담당) { wn("담당을 먼저 배치해 주세요."); return; }
@@ -737,7 +768,7 @@ const LOCK = '<span class="tag amber" title="직원에게 공개할 때는 금�
 function drawBud() {
   const p = P(); if (!p) { $("tab-bud").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
   const b = B(), m = money(), rows = BR(), [ca, cl] = cAmt(p), g = tgt(p);
-  const drop = `<div class="drop" id="budDrop">산출내역서 엑셀(XLSX·XLS·CSV)·PDF를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="budPick">파일 선택</button><input type="file" id="budFile" accept=".xlsx,.xls,.csv,.pdf" hidden><br><span class="note">PDF는 LEDGER가 글자를 읽어 표(구분·항목·내용·산출근거·과세액·영세액)로 옮깁니다. 원본 파일은 저장하지 않습니다.</span></div>
+  const drop = dropBox("bud", "산출내역서 엑셀(XLSX·XLS·CSV)·PDF", ".xlsx,.xls,.csv,.pdf", false, "PDF는 LEDGER가 글자를 읽어 표(구분·항목·내용·산출근거·과세액·영세액)로 옮깁니다. 원본 파일은 저장하지 않습니다.") + `
     <label class="note" style="display:block;margin-top:8px">구글 시트: 표 범위(머리 줄 포함)를 복사해 여기에 붙여 넣거나, 파일 &gt; 다운로드 &gt; Microsoft Excel(.xlsx)로 받아 위에 올려 주세요.<textarea id="budTsv" placeholder="여기에 붙여넣기 (Ctrl+V)" style="display:block;width:100%;min-height:48px;margin-top:4px"></textarea></label>`;
   const up = `<div class="row"><h2>예산 (산출내역서)</h2>${LOCK}<span style="flex:1"></span>${b ? '<button class="btn" type="button" id="budXlsx">엑셀 저장</button>' : ""}</div>
     ${b ? `<details class="fold"${bup ? " open" : ""}><summary>산출내역서 다시 올리기 (엑셀·PDF·구글 시트)</summary>${drop}</details>` : drop}`;
@@ -854,7 +885,8 @@ function drawLed() {
   const rows = (lf.scope === "cur" ? L() : ledger).map(e => { const n = nl(e); return {...n, _rid: ridOf(n, rs(e.pid))}; })
     .filter(e => (!lf.link || !e._rid) && (!lf.q || [e.구분, e.항목, e.내용, e.지출항목, e.공급업체, e.비고].some(v => String(v || "").includes(lf.q)))).sort((a, b) => String(b.지출일).localeCompare(String(a.지출일)));
   const s = k => rows.reduce((m, e) => m + num(e[k]), 0), pn = id => projects.find(p => p.id === id)?.이름 || id;
-  $("tab-led").innerHTML = `<div class="row"><h2>장부 (전체 내역서)</h2>${LOCK}<span style="flex:1"></span><button class="btn primary" type="button" id="ledAdd" ${P() ? "" : "disabled"}>+ 집행 내역 추가</button><button class="btn" type="button" id="ledPick" ${P() ? "" : "disabled"}>전체 내역서 올리기 (엑셀)</button><input type="file" id="ledFile" accept=".xlsx,.xls,.csv" hidden><button class="btn" type="button" id="ledXlsx">엑셀 저장</button></div>
+  $("tab-led").innerHTML = `<div class="row"><h2>장부 (전체 내역서)</h2>${LOCK}<span style="flex:1"></span><button class="btn primary" type="button" id="ledAdd" ${P() ? "" : "disabled"}>+ 집행 내역 추가</button><button class="btn" type="button" id="ledXlsx">엑셀 저장</button></div>
+    ${P() ? dropBox("led", "전체 내역서 엑셀(XLSX·XLS·CSV)", ".xlsx,.xls,.csv") : ""}
     <div id="lStage">${lup?.pid === cur ? lupHtml() : ""}</div>
     <div class="row"><select id="lScope">${opt([["cur", "현재 프로젝트"], ["all", "전체 프로젝트"]], lf.scope)}</select><select id="lLink">${opt([["", "예산 연결 전체"], ["no", "미연결만"]], lf.link)}</select><input id="lq" type="search" placeholder="구분·항목·지출 항목·공급업체 검색" value="${esc(lf.q)}" style="flex:1;min-width:180px"></div>
     <div class="sum"><div><span class="hudlabel">건수</span><b>${rows.length}</b></div><div><span class="hudlabel">과세</span><b>${won(s("과세액"))}</b></div><div><span class="hudlabel">영세 (원화)</span><b>${won(s("영세액"))}</b></div><div><span class="hudlabel">합계</span><b>${won(s("과세액") + s("영세액"))}</b></div><div><span class="hudlabel">부가세</span><b>${won(s("부가세"))}</b></div></div>
@@ -990,7 +1022,8 @@ function drawCt() {
     <div class="row"><h2>참가기업 연락처</h2><span class="note">참가기업 연락처는 프로젝트별 페이지에서 관리합니다. 그 프로젝트의 담당 PM·관리자만 공유받습니다.</span></div>
     <p>${!p ? '<span class="note">프로젝트를 먼저 고르세요.</span>' : /^https:\/\/claude\.ai\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(p.이름)} 연락처 페이지 열기</a>` : `<span class="note">아직 없음 — JARVIS 에게 '${esc(p.이름)} 연락처 페이지 만들어줘'라고 요청해 주세요.</span>`}</p>
     <div class="row"><h2>국내외 협업사</h2><span class="note">담당자가 바뀌어도 유사 사업을 함께한 파트너를 찾을 수 있게 연락처와 협업 이력을 남깁니다.</span><span style="flex:1"></span>
-      <button class="btn" type="button" id="ptPick">엑셀 올리기</button><input type="file" id="ptFile" accept=".xlsx,.xls,.csv" hidden><button class="btn adm" type="button" id="ptXlsx">엑셀 저장</button><button class="btn primary" type="button" id="ptAdd">+ 협업사 추가</button></div>
+      <button class="btn adm" type="button" id="ptXlsx">엑셀 저장</button><button class="btn primary" type="button" id="ptAdd">+ 협업사 추가</button></div>
+    ${dropBox("pt", "협업사 엑셀(XLSX·XLS·CSV)", ".xlsx,.xls,.csv")}
     <div class="row"><input id="ptQ" type="search" placeholder="회사명·담당자 검색" value="${esc(pf.q)}" style="flex:1;min-width:160px"><select id="ptC"></select><select id="ptF"></select></div><div id="ptBox"></div>`;
   drawPt();
 }
@@ -1043,6 +1076,7 @@ async function saveXlsx(name, sheets) {
   const wb = XLSX.utils.book_new(); sheets.forEach(([n, aoa]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n));
   try { await downloads.save({filename: name, data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); } catch {}
 }
+$("dlg").addEventListener("close", () => $("dlg").classList.remove("side")); // 세부 패널 모양은 editTask 에서만 (onclose 보다 먼저 등록)
 document.addEventListener("click", async e => {
   const t = e.target.closest("button, tr.click"); if (!t || (t.tagName === "TR" && e.target.closest("select, input, a"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
@@ -1054,15 +1088,14 @@ document.addEventListener("click", async e => {
     if (n !== "" && !Number.isFinite(n)) { alert("숫자로 넣어 주세요."); return; } p.목표수익률 = n; if (await saveProj(p)) toast("목표 수익률을 저장했습니다."); draw(); }
   if (t.dataset.pj) { cur = t.dataset.pj; hiP = null; setDirty = null; pMsg = ""; try { localStorage.setItem("pmo-proj", cur); } catch {} showTab("wbs"); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
-  if (t.id === "docPick") $("docFile").click();
+  if (t.dataset.pick) $(t.dataset.pick + "File").click();
+  if (t.id === "attLink") attLink();
+  if (t.dataset.adel !== undefined && admin && dlgT) { const a = dlgT.자료.splice(+t.dataset.adel, 1)[0]; if (a?.id && assets) assets.delete(a.id).catch(() => {}); wSave(0); drawAtt(); }
   if (t.id === "genWbs") genWbs();
-  if (t.id === "wSc") { wScale = {auto: "주", 주: "월", 월: "auto"}[wScale]; draw(); }
-  if (t.dataset.sv) { sView = t.dataset.sv; drawSch(); }
-  if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawSch(); }
-  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; const id = nid(); (wbs[cur] ||= {items: []}).items.push({id, 단계: wStg, 작업: "", 산출물: "", 시작: "", 종료: "", 담당: null, 상태: "대기", 하위: [], 예산항목: [], 기록: [], 보고: []});
-    wSave(0); drawWbs(); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
-  if (t.dataset.wmv && admin) { const k = t.dataset.wmv.lastIndexOf("|"); wMove(t.dataset.wmv.slice(0, k), +t.dataset.wmv.slice(k + 1)); }
-  if (t.dataset.wdel && admin) { const a = W(), k = a.findIndex(x => x.id === t.dataset.wdel); if (k >= 0 && confirm(`'${a[k].작업 || "(이름 없음)"}' 작업을 삭제할까요?`)) { a.splice(k, 1); wSave(0); draw(); } }
+  if (t.id === "wCal") { wCal = !wCal; drawWbs(true); }
+  if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawWbs(true); }
+  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; const a = (wbs[cur] ||= {items: []}).items, k = a.findLastIndex(x => x.단계 === wStg) + 1 || a.length; // 같은 단계 끝에 넣고 세부 패널을 연다
+    const id = nid(); a.splice(k, 0, {id, 단계: wStg, 작업: "", 산출물: "", 시작: "", 종료: "", 담당: null, 상태: "대기", 하위: [], 예산항목: [], 기록: [], 보고: []}); wCal = false; wSave(0); drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
   if (t.id === "chkLate") checkLate();
   if (t.id === "lateOpen") lateAlert(true);
   if (t.id === "lateMail") lateMail();
@@ -1072,7 +1105,6 @@ document.addEventListener("click", async e => {
   if (t.dataset.t !== undefined) editTask(+t.dataset.t);
   if (t.id === "wbsCsv") saveXlsx(`CHRONOS_공정표_${P().이름}_${today()}.xlsx`, [["공정표", [["ID", "단계", "작업", "산출물", "시작일", "마감일", "담당", "상태", "메모"], ...W().flatMap(x => [[x.id, x.단계, x.작업, x.산출물, x.시작, x.종료, who(x.담당), effStat(x), x.메모], ...(x.하위 || []).map((s, j) => [`${x.id}-${j + 1}`, "", `└ ${s.할일}`, "", "", s.마감, s.담당 ? who(s.담당) : "", subStat(s), ""])])]],
     ["지연 보고", [["작업", "보고일", "기존 마감", "새 마감", "원인", "조치", "해결", "해결일"], ...W().flatMap(x => (x.보고 || []).map(r => [x.작업, kst(r.at).slice(0, 10), r.기존마감, r.새마감, r.원인, r.조치, r.해결 ? "해결" : "미해결", r.해결일]))]]]);
-  if (t.id === "budPick") $("budFile").click();
   if (t.dataset.gh !== undefined) { bShut.has(t.dataset.gh) ? bShut.delete(t.dataset.gh) : bShut.add(t.dataset.gh); drawBud(); }
   if (t.id === "bCommit") budCommit();
   if (t.id === "ulGo") { const ids = [...ulSel].filter(id => document.querySelector(`[data-ulc="${CSS.escape(id)}"]`)); if (!ids.length || !$("ulTo").value) { alert("연결할 집행을 체크하고 예산 항목을 골라 주세요."); return; } ulink(ids, $("ulTo").value); }
@@ -1081,7 +1113,6 @@ document.addEventListener("click", async e => {
     ...BR().map(r => [r.구분, r.항목, r.내용, r.산출, r.과세액, r.영세액, r.금액, ex(r).과세, ex(r).영세, ex(r).과세 + ex(r).영세, num(r.금액) - ex(r).과세 - ex(r).영세]),
     [], ["계약(공급가)", m.계약], ["계약 금액(A)", m.예산], ["집행 금액(B)", m.집행], ["미연결 장부", m.미연결], ["목표 수익률(%)", tgt(P()) ?? ""], ["수익률(집행 기준, %)", m.확정수익률?.toFixed(1)]]]]); }
   if (t.id === "ledAdd") editLed(null);
-  if (t.id === "ledPick") $("ledFile").click();
   if (t.id === "lCommit") ledCommit();
   if (t.id === "lCancel") { lup = null; drawLed(); }
   if (t.dataset.le) editLed(ledger.find(x => x.id === t.dataset.le));
@@ -1091,7 +1122,6 @@ document.addEventListener("click", async e => {
   if (t.dataset.st) editSt(staff.find(x => x.id === t.dataset.st));
   if (t.dataset.son) assign(t.dataset.son);
   if (t.dataset.sun) { const u = people.find(x => x.id === t.dataset.sun); if (u && confirm(`${u.이름}님을 이 프로젝트에서 배치 해제할까요?`) && db && admin) await db.doc(`people/${u.id}`).delete().catch(() => alert("해제하지 못했습니다.")); }  if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
-  if (t.id === "ptPick") $("ptFile").click();
   if (t.id === "ptAdd") editPt(null);
   if (t.dataset.pt) editPt(partners.find(x => x.id === t.dataset.pt));
   if (t.id === "ptXlsx" && admin) saveXlsx(`협업사_${today()}.xlsx`, [["협업사", [PT, ...partners.map(x => PT.map(k => x[k] || ""))]], ["협업 이력", [["회사명", "국가", ...HI], ...partners.flatMap(x => hist(x).map(h => [x.회사명, x.국가, ...HI.map(k => h[k] || "")]))]]]);
@@ -1106,19 +1136,16 @@ document.addEventListener("change", async e => {
   if (t.dataset.wi && admin) { const [x, k] = wFind(t.dataset.wi); if (!x) return; wPut(x, k, t.value); wSave(0); if (t.tagName === "SELECT" || t.type === "date") { drawWbs(true); drawTop(); } }
   if (t.id === "pSel") { setDirty = null; pMsg = ""; hiP = null; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} if (tab === "list") showTab("wbs"); else draw(); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "lsY") { lsf.y = t.value; drawLs(); } if (t.id === "lsS") { lsf.st = t.value; drawLs(); }
-  if (t.id === "docFile" && t.files.length) { const fs = [...t.files]; t.value = ""; readDocs(fs); }
-  if (t.id === "budFile" && t.files[0]) { const f = t.files[0]; t.value = ""; budIn(f); }
+  if (t.dataset.file && t.files.length) { const fs = [...t.files]; t.value = ""; onFiles[t.dataset.file](fs); }
   if (t.dataset.ul && t.value) ulink([t.dataset.ul], t.value);
   if (t.dataset.ulc) { t.checked ? ulSel.add(t.dataset.ulc) : ulSel.delete(t.dataset.ulc); }
   if (t.id === "ulAll") { document.querySelectorAll("[data-ulc]").forEach(el => { el.checked = t.checked; t.checked ? ulSel.add(el.dataset.ulc) : ulSel.delete(el.dataset.ulc); }); }
-  if (t.id === "ledFile" && t.files[0]) { const f = t.files[0]; t.value = ""; if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(f.name, XLSX.read(await f.arrayBuffer(), {type: "array"})); }
   if (t.id === "bSheet") { bup.sheet = t.value; bup.auto = true; budGuess(); budStage(); }
   if (t.id === "bHr") { bup.hr = Math.max(0, +t.value - 1); bup.auto = false; budGuess(); budStage(); }
   if (t.dataset.bm) { bup.map[t.dataset.bm] = t.value === "" ? -1 : +t.value; budStage(); }
   if (t.dataset.rchk && admin) { const [i, j] = t.dataset.rchk.split("|").map(Number), x = W()[i], r = x?.보고?.[j]; if (!r) return;
     r.해결 = t.checked; r.해결일 = t.checked ? today() : ""; (x.기록 ||= []).push({at: new Date().toISOString(), 내용: t.checked ? "지연 보고 해결 완료" : "지연 보고 해결 취소"}); await saveWbs(); drawWbs(); }
   if (t.dataset.lf === "rid" && t.value) { const r = RB(cur).find(x => x.id === t.value) || BR().find(x => x.id === t.value); if (r) ["구분", "항목", "내용"].forEach(k => { const el = document.querySelector(`[data-lf="${k}"]`); if (el) el.value = r[k]; }); }
-  if (t.id === "ptFile" && t.files[0]) { const f = t.files[0]; t.value = ""; try { await ptImport(await aoaOf(f)); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } }
   if (t.id === "ptC") { pf.국가 = t.value; drawPt(); } if (t.id === "ptF") { pf.분야 = t.value; drawPt(); }
   if (t.id === "lScope") { lf.scope = t.value; drawLed(); } if (t.id === "lLink") { lf.link = t.value; drawLed(); }
 });
@@ -1131,9 +1158,14 @@ document.addEventListener("input", e => { const d = e.target.dataset;
   if (d.hi) { const [i, k] = d.hi.split("|"); if (ptDraft?.이력[+i]) ptDraft.이력[+i][k] = e.target.value; }
   if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); }
   if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
-// 문서 끌어다 놓기(프로젝트 설정·예산 산출내역서). 다시 그려져도 되게 문서에서 받는다
-["dragenter", "dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest?.("#docDrop, #budDrop"); if (!z) return; e.preventDefault();
-  z.classList.toggle("on", ev === "dragenter" || ev === "dragover"); if (ev === "drop" && e.dataTransfer?.files?.length) z.id === "budDrop" ? budIn(e.dataTransfer.files[0]) : readDocs([...e.dataTransfer.files]); }));
+// 파일 올리기 공통: [파일 선택] 버튼 + 끌어다 놓기 영역(프로젝트 문서·산출내역서·장부·협업사 엑셀·작업 자료). id = k+Drop/Pick/File
+const dropBox = (k, what, accept, multi, tip = "") => `<div class="drop" id="${k}Drop" data-drop="${k}">${what}를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="${k}Pick" data-pick="${k}">파일 선택</button><input type="file" id="${k}File" data-file="${k}"${accept ? ` accept="${accept}"` : ""}${multi ? " multiple" : ""} hidden>${tip ? `<br><span class="note">${tip}</span>` : ""}</div>`;
+const onFiles = {doc: fs => readDocs(fs), bud: fs => budIn(fs[0]), att: fs => attUp(fs),
+  led: async fs => { if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(fs[0].name, XLSX.read(await fs[0].arrayBuffer(), {type: "array"})); },
+  pt: async fs => { try { await ptImport(await aoaOf(fs[0])); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } }};
+["dragenter", "dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest?.("[data-drop]"); if (!z) return; e.preventDefault();
+  z.classList.toggle("on", ev === "dragenter" || ev === "dragover"); if (ev === "drop" && e.dataTransfer?.files?.length) onFiles[z.dataset.drop]([...e.dataTransfer.files]); }));
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "attUrl") { e.preventDefault(); attLink(); } });
 document.addEventListener("input", e => { if (e.target.dataset.pf) { setDirty = cur; pMsg = ""; } if (e.target.id === "lq") { lf.q = e.target.value; const pos = e.target.selectionStart; drawLed(); $("lq").focus(); $("lq").setSelectionRange(pos, pos); } });
 
 // ── 팀장용 사본 view/{pid}: 허용 목록 필드만 (금액·이메일·전화·메모·참여율 없음)
@@ -1152,13 +1184,16 @@ function syncView() {
 showTab(tab);
 (async () => {
   let user; [db, sample, mcp, downloads, user] = await Promise.all(["db", "sample", "mcp", "downloads", "user"].map(n => window.claude?.use?.(n) ?? null));
+  assets = (await Promise.resolve(window.claude?.use?.("assets")).catch(() => null)) ?? null; // 작업 첨부(편집 권한자만). 없으면 링크 붙이기만
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("staff", !admin); showTab(tab);
   if (!db) { draw(); return; }
   const got = new Set(), ready = k => { got.add(k); if (got.size === 2 && !got.has("done")) { got.add("done"); setTimeout(() => lateAlert(false), 500); } }; // 프로젝트·공정이 모두 들어온 뒤 한 번
   // 같은 작업(id)은 같은 객체를 유지한다 — 열린 창·AI 작업 중인 작업이 새 스냅샷에 끊기지 않게
-  db.collection("wbs").onSnapshot(s => { const old = wbs; wbs = {}; s.docs.forEach(d => { const v = d.data(), prev = old[d.id]?.items || [];
-    v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; }); draw(); ready("wbs"); });
+  db.collection("wbs").onSnapshot(s => { const old = wbs, now = Date.now(); wbs = {}; s.docs.forEach(d => { const v = d.data(), prev = old[d.id]?.items || [], pd = wPend[d.id];
+    if (pd) { if ((pd.j === sj(v.items || []) && pd.t <= pd.s) || now - pd.t > 15000) delete wPend[d.id]; else if (old[d.id]) { wbs[d.id] = old[d.id]; return; } } // 내 저장이 돌아오기 전 스냅샷은 건너뜀
+    v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
+    Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
   // 협업사: 관리자·팀장 모두 읽고 쓴다(partners: interact). 참가기업 연락처는 프로젝트별 페이지
   db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ct") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
