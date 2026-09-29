@@ -327,8 +327,7 @@ function say() {
 function showTab(t) { if (admin === false && t !== "ct") t = "wbs"; /* 팀장: 공정일정·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   ["set", "wbs", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
-function draw() { drawTop(); say(); const a = document.activeElement;
-  if (tab === "ct" && ctDirty && /INPUT|TEXTAREA/.test(a?.tagName) && $("tab-ct").contains(a)) { drawPt(); return; } // 연락처 입력 중에는 표를 다시 그리지 않는다
+function draw() { drawTop(); say();
   ({set: drawSet, wbs: drawWbs, bud: drawBud, led: drawLed, ppl: drawPpl, ct: drawCt})[tab](); }
 
 // ── 저장
@@ -392,6 +391,7 @@ function drawSet() {
     <label>상태<select data-pf="상태">${opt(["준비", "수행", "정산", "완료"], p.상태 === "종료" ? "완료" : p.상태 || "준비")}</select></label>
     <label>담당 PM (인력 탭에서 등록)<select data-pf="PM">${opt(pmOpts, p.PM, "선택 안 함")}</select></label>
     <label>Google Tasks 목록<span class="row" style="gap:4px;flex-wrap:nowrap"><select data-pf="tasksList" style="flex:1">${opt(tlists || (p.tasksList ? [[p.tasksList, p.tasksListName || p.tasksList]] : []), p.tasksList, "선택 안 함")}</select><button class="btn" type="button" id="loadLists">불러오기</button></span></label>
+    <label>연락처 페이지 주소 (프로젝트별 아티팩트)<input data-pf="연락처페이지" type="url" placeholder="https://claude.ai/..." value="${esc(p.연락처페이지)}"></label>
     <label>DECODER 분석에서 가져오기<select id="fromDec">${opt(D.decoder.map(c => [c.bidNtceNo, c.사업명]), "", "선택")}</select></label>
     <label class="wide">과업범위 (제안요청서·과업지시서의 과업 내용)<textarea data-pf="과업범위" style="min-height:160px">${esc(p.과업범위)}</textarea></label></div>
     <div class="row"><button class="btn primary" type="button" id="pSave">저장</button><button class="btn x" type="button" id="pDel">프로젝트 삭제</button><span class="note" id="pNote">${esc(pMsg)}</span></div>`;
@@ -800,8 +800,8 @@ async function pplFromBud() {
   await Promise.all(add.map((r, i) => put(`people/U${Date.now().toString(36)}${i}`, {pid: cur, 이름: r.내용, 역할: r.항목, 직책: ""})));
 }
 
-// ── 연락처: 참가기업(cocontacts/{pid}) · 국내외 협업사(partners) — 관리자·팀장(관제실 공유 대상)이 보고 고친다. 내려받기는 관리자만. 외부 발송에 쓰지 않는다(mailto·tel 링크만)
-const CT = ["기업명", "담당자", "직책", "모바일", "이메일", "대표번호", "메모"], HI = ["사업", "연도", "역할", "평가"];
+// ── 연락처: 참가기업은 프로젝트별 페이지(담당 PM 에게만 공유, 주소는 pm·view 의 연락처페이지) · 국내외 협업사(partners)는 여기서 관리자·팀장이 보고 고친다. 내려받기는 관리자만. 외부 발송에 쓰지 않는다(mailto·tel 링크만)
+const HI = ["사업", "연도", "역할", "평가"];
 const PT = ["회사명", "국가", "도시", "분야", "담당자", "직책", "모바일", "이메일", "대표번호", "웹", "메모"];
 const FIELD = ["현지 시공·설치", "통관·물류", "현지 에이전시", "통번역", "홍보·PR", "행사·케이터링", "숙박·항공", "법률·회계", "기타"];
 // 엑셀 머리글 → 칸 (앞 항목이 먼저 가져간다: '휴대전화'는 모바일, '회사명'은 기업명)
@@ -821,16 +821,12 @@ const mailA = v => v ? (okMail(v) ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` :
 const webA = v => /^https?:\/\/\S+$/i.test(v || "") ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v.replace(/^https?:\/\//i, ""))}</a>` : esc(v);
 const byYear = (a, b) => String(b.연도 || "").localeCompare(String(a.연도 || ""));
 const hist = x => [...(x.이력 || [])].sort(byYear);
-let cocon = {}, partners = [], ctRows = [], ctPid = null, ctDirty = false, ctMsg = "", pf = {q: "", 국가: "", 분야: ""}, ptDraft = null;
+let partners = [], pf = {q: "", 국가: "", 분야: ""}, ptDraft = null;
 function drawCt() {
-  if (ctPid !== cur || !ctDirty) { ctRows = JSON.parse(JSON.stringify(cocon[cur]?.rows || [])); ctPid = cur; ctDirty = false; }
-  const p = P(), dis = p ? "" : "disabled", u = cocon[cur]?.updatedAt;
-  $("tab-ct").innerHTML = `<p class="ext">이 탭은 관리자·담당 PM만 봅니다(관제실 공유 대상). 직원에게 보이는 NEXUS 메모 칸에는 연락처를 적지 마세요.</p>
-    <div class="row"><h2>참가기업 연락처</h2><span class="note">${p ? esc(p.이름) : "프로젝트를 먼저 고르세요"}${u ? ` · 저장 ${esc(kst(u))}` : ""}</span><span style="flex:1"></span>
-      <button class="btn" type="button" id="ctAdd" ${dis}>+ 행 추가</button><button class="btn" type="button" id="ctPick" ${dis}>엑셀 올리기</button><input type="file" id="ctFile" accept=".xlsx,.xls,.csv" hidden><button class="btn adm" type="button" id="ctXlsx" ${dis}>엑셀 저장</button><button class="btn primary" type="button" id="ctSave" ${dis}>저장</button></div>
-    <textarea id="ctPaste" rows="2" ${dis} placeholder="엑셀에서 여러 줄을 복사해 여기에 붙여 넣으면 표에 추가됩니다. 첫 줄이 머리글이면 열 이름으로 맞추고, 없으면 기업명·담당자·직책·모바일·이메일·대표번호·메모 순서입니다."></textarea>
-    <p class="note" id="ctNote">${esc(ctMsg)}${ctDirty ? " 저장하지 않은 변경이 있습니다." : ""}</p>
-    <div class="tw"><table class="bt"><thead><tr>${CT.map(k => `<th>${k}</th>`).join("")}<th></th></tr></thead><tbody>${ctRows.map((r, i) => `<tr>${CT.map(k => `<td><input data-cc="${i}|${k}" aria-label="${k}" value="${esc(r[k])}"${k === "이메일" ? ' type="email"' : /모바일|대표번호/.test(k) ? ' type="tel"' : ""}></td>`).join("")}<td><button class="btn x" type="button" data-ccdel="${i}" aria-label="행 삭제">✕</button></td></tr>`).join("") || '<tr><td colspan="8" class="empty">등록된 참가기업 연락처가 없습니다.</td></tr>'}</tbody></table></div>
+  const p = P(), u = String(p?.연락처페이지 || "");
+  $("tab-ct").innerHTML = `<p class="ext">협업사 정보는 관제실을 공유받은 관리자·팀장이 봅니다. 참가기업 연락처는 프로젝트별 페이지에서 그 담당 PM만 봅니다. 직원에게 보이는 NEXUS 메모 칸에는 연락처를 적지 마세요.</p>
+    <div class="row"><h2>참가기업 연락처</h2><span class="note">참가기업 연락처는 프로젝트별 페이지에서 관리합니다. 그 프로젝트의 담당 PM·관리자만 공유받습니다.</span></div>
+    <p>${!p ? '<span class="note">프로젝트를 먼저 고르세요.</span>' : /^https:\/\/claude\.ai\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(p.이름)} 연락처 페이지 열기</a>` : `<span class="note">아직 없음 — JARVIS 에게 '${esc(p.이름)} 연락처 페이지 만들어줘'라고 요청해 주세요.</span>`}</p>
     <div class="row"><h2>국내외 협업사</h2><span class="note">담당자가 바뀌어도 유사 사업을 함께한 파트너를 찾을 수 있게 연락처와 협업 이력을 남깁니다.</span><span style="flex:1"></span>
       <button class="btn" type="button" id="ptPick">엑셀 올리기</button><input type="file" id="ptFile" accept=".xlsx,.xls,.csv" hidden><button class="btn adm" type="button" id="ptXlsx">엑셀 저장</button><button class="btn primary" type="button" id="ptAdd">+ 협업사 추가</button></div>
     <div class="row"><input id="ptQ" type="search" placeholder="회사명·담당자 검색" value="${esc(pf.q)}" style="flex:1;min-width:160px"><select id="ptC"></select><select id="ptF"></select></div><div id="ptBox"></div>`;
@@ -845,19 +841,6 @@ function drawPt() {
   $("ptBox").innerHTML = `<div class="tw"><table><thead><tr><th>회사명</th><th>국가·도시</th><th>분야</th><th>담당자</th><th>연락처</th><th>협업 이력</th></tr></thead><tbody>${ps.map(x => { const h = hist(x);
     return `<tr class="click" data-pt="${esc(x.id)}"><td><b>${esc(x.회사명)}</b>${x.웹 ? `<br>${webA(x.웹)}` : ""}</td><td>${esc([x.국가, x.도시].filter(Boolean).join(" · "))}</td><td>${x.분야 ? `<span class="tag">${esc(x.분야)}</span>` : ""}</td><td>${esc(x.담당자)}${x.직책 ? ` <span class="note">${esc(x.직책)}</span>` : ""}</td><td>${[telA(x.모바일), mailA(x.이메일), telA(x.대표번호)].filter(Boolean).join("<br>")}</td><td>${h.length ? `이력 ${h.length}건${h[0].연도 ? ` · 최근 ${esc(h[0].연도)}` : ""}` : '<span class="note">없음</span>'}</td></tr>`; }).join("")
     || `<tr><td colspan="6" class="empty">${partners.length ? "조건에 맞는 협업사가 없습니다." : "등록된 협업사가 없습니다."}</td></tr>`}</tbody></table></div>`;
-}
-function ctAddRows(aoa) {
-  const rows = (fromAoa(aoa, CT) || []).map((o, i) => ({id: "C" + Date.now().toString(36) + i, ...Object.fromEntries(CT.map(k => [k, o[k] || ""]))}));
-  ctRows.push(...rows); ctDirty = true; ctMsg = `${rows.length}줄을 표에 넣었습니다. [저장]을 눌러야 반영됩니다.`; drawCt();
-}
-async function ctSave() {
-  if (!db || !P()) return;
-  const rows = ctRows.map(r => ({id: r.id || "C" + Date.now().toString(36), ...Object.fromEntries(CT.map(k => [k, String(r[k] ?? "").trim()]))})).filter(r => CT.some(k => r[k]));
-  const noName = rows.filter(r => !r.기업명).length; if (noName) { alert(`기업명이 빈 행이 ${noName}개 있습니다. 기업명을 채우거나 행을 지운 뒤 저장해 주세요.`); return; }
-  const bad = rows.filter(r => (r.이메일 && !okMail(r.이메일)) || [r.모바일, r.대표번호].some(v => v && !okTel(v))).map(r => r.기업명), d = {rows, updatedAt: new Date().toISOString()};
-  try { await db.doc(`cocontacts/${cur}`).set(d); cocon[cur] = d; ctDirty = false; ctMsg = `${rows.length}곳을 저장했습니다.` + (bad.length ? ` 이메일·전화 형식을 확인해 주세요: ${bad.slice(0, 5).join(", ")}${bad.length > 5 ? " 외" : ""}` : ""); }
-  catch { ctMsg = "저장하지 못했습니다. 권한을 확인해 주세요."; }
-  drawCt();
 }
 function drawHist() { $("hBox").innerHTML = `<div class="tw"><table class="bt"><thead><tr>${HI.map(k => `<th>${k}</th>`).join("")}<th></th></tr></thead><tbody>${ptDraft.이력.map((h, i) => `<tr>${HI.map(k => `<td><input data-hi="${i}|${k}" aria-label="${k}" value="${esc(h[k])}"${k === "연도" ? ' inputmode="numeric" placeholder="2026"' : k === "평가" ? ' placeholder="예) 우수, 재협업 추천"' : ""}></td>`).join("")}<td><button class="btn x" type="button" data-hdel="${i}" aria-label="이력 삭제">✕</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">협업 이력이 없습니다.</td></tr>'}</tbody></table></div>`; }
 function editPt(x) {
@@ -904,7 +887,7 @@ document.addEventListener("click", async e => {
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.id === "pNew") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
   if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.tasksListName = tlists?.find(x => x[0] === p.tasksList)?.[1] || p.tasksListName || ""; if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = "저장했습니다."; } drawTop(); }
-  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산·참가기업 연락처도 함께 지워집니다(장부·참여인력은 남습니다).`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`, `cocontacts/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; draw(); }
+  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; draw(); }
   if (t.id === "docPick") $("docFile").click();
   if (t.id === "loadLists") loadLists();
   if (t.id === "genWbs") genWbs();
@@ -938,11 +921,6 @@ document.addEventListener("click", async e => {
   if (t.id === "pplAdd") editPpl(null);
   if (t.id === "pplBud") pplFromBud();
   if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
-  if (t.id === "ctAdd") { ctRows.push({id: "C" + Date.now().toString(36)}); ctDirty = true; drawCt(); document.querySelector(`[data-cc="${ctRows.length - 1}|기업명"]`)?.focus(); }
-  if (t.dataset.ccdel !== undefined) { ctRows.splice(+t.dataset.ccdel, 1); ctDirty = true; drawCt(); }
-  if (t.id === "ctPick") $("ctFile").click();
-  if (t.id === "ctSave") ctSave();
-  if (t.id === "ctXlsx" && admin) saveXlsx(`참가기업_연락처_${P().이름}_${today()}.xlsx`, [["참가기업 연락처", [CT, ...ctRows.map(r => CT.map(k => r[k] || ""))]]]);
   if (t.id === "ptPick") $("ptFile").click();
   if (t.id === "ptAdd") editPt(null);
   if (t.dataset.pt) editPt(partners.find(x => x.id === t.dataset.pt));
@@ -953,7 +931,6 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.dataset.pf) setDirty = cur;
-  if (t.id === "pSel" && ctDirty && !confirm("저장하지 않은 참가기업 연락처 변경이 있습니다. 버리고 프로젝트를 바꿀까요?")) { t.value = cur; return; }
   if (t.id === "pSel") { setDirty = null; pMsg = ""; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} draw(); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "fromDec") { const c = D.decoder.find(x => x.bidNtceNo === t.value); if (!c) return; setDirty = cur; const ta = document.querySelector('[data-pf="과업범위"]');
     ta.value = [`[${c.사업명}] ${c.한줄요약}`, ...c.과업범위.map(s => `- ${s.영역}: ${s.내용}`), "", "[주요 일정]", ...c.일정.map(x => `- ${x.날짜} ${x.항목}`)].join("\n");
@@ -968,7 +945,7 @@ document.addEventListener("change", async e => {
   if (t.dataset.rchk && admin) { const [i, j] = t.dataset.rchk.split("|").map(Number), x = W()[i], r = x?.보고?.[j]; if (!r) return;
     r.해결 = t.checked; r.해결일 = t.checked ? today() : ""; (x.기록 ||= []).push({at: new Date().toISOString(), 내용: t.checked ? "지연 보고 해결 완료" : "지연 보고 해결 취소"}); await saveWbs(); drawWbs(); }
   if (t.dataset.lf === "rid" && t.value) { const r = RB(cur).find(x => x.id === t.value) || BR().find(x => x.id === t.value); if (r) ["구분", "항목", "내용"].forEach(k => { const el = document.querySelector(`[data-lf="${k}"]`); if (el) el.value = r[k]; }); }
-  if ((t.id === "ctFile" || t.id === "ptFile") && t.files[0]) { const f = t.files[0]; t.value = ""; try { const a = await aoaOf(f); t.id === "ctFile" ? ctAddRows(a) : await ptImport(a); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } }
+  if (t.id === "ptFile" && t.files[0]) { const f = t.files[0]; t.value = ""; try { await ptImport(await aoaOf(f)); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } }
   if (t.id === "ptC") { pf.국가 = t.value; drawPt(); } if (t.id === "ptF") { pf.분야 = t.value; drawPt(); }
   if (t.id === "lScope") { lf.scope = t.value; drawLed(); } if (t.id === "lLink") { lf.link = t.value; drawLed(); }
 });
@@ -986,10 +963,7 @@ document.addEventListener("keydown", e => {
   e.preventDefault(); const ins = [...document.querySelectorAll("[data-bf]")], nx = ins[ins.indexOf(t) + (e.key === "ArrowUp" ? -1 : 1)];
   if (!nx) return; keep(nx.dataset.bf); nx.focus(); nx.select(); // 바뀐 값이 있으면 change → 다시 그린 뒤에도 이 칸으로
 });
-document.addEventListener("paste", e => { if (e.target.id !== "ctPaste") return; const x = e.clipboardData?.getData("text") || ""; if (!x.trim()) return; e.preventDefault();
-  ctAddRows(x.split(/\r?\n/).filter(l => l.trim()).map(l => l.split("\t").map(c => c.trim()))); }); // ponytail: 셀 안 줄바꿈(따옴표)은 나뉜다 — 필요하면 엑셀 올리기
 document.addEventListener("input", e => { const d = e.target.dataset;
-  if (d.cc) { const [i, k] = d.cc.split("|"); if (ctRows[+i]) { ctRows[+i][k] = e.target.value; ctDirty = true; $("ctNote").textContent = "저장하지 않은 변경이 있습니다."; } }
   if (d.hi) { const [i, k] = d.hi.split("|"); if (ptDraft?.이력[+i]) ptDraft.이력[+i][k] = e.target.value; }
   if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); } });
 document.addEventListener("input", e => { if (e.target.dataset.pf) { setDirty = cur; pMsg = ""; } if (e.target.id === "lq") { lf.q = e.target.value; const pos = e.target.selectionStart; drawLed(); $("lq").focus(); $("lq").setSelectionRange(pos, pos); } });
@@ -1001,7 +975,7 @@ let views = {};
 // ponytail: 관리자가 관제실을 열 때 사본 갱신 — 늦으면 루틴으로
 function syncView() {
   const want = {};
-  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "발주처", "상태", "시작", "종료"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""),
+  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "발주처", "상태", "시작", "종료", "연락처페이지"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""),
     인력: people.filter(x => !x.pid || x.pid === p.id).map(x => pick(x, ["id", "이름", "직책", "역할", "참여시작", "참여종료"])).sort((a, b) => a.id.localeCompare(b.id))});
   Object.entries(want).forEach(([id, v]) => { if (sj(v) !== sj(views[id] ?? null)) { views[id] = v; db.doc(`view/${id}`).set(v).catch(() => {}); } });
   Object.keys(views).filter(id => !want[id]).forEach(id => { delete views[id]; db.doc(`view/${id}`).delete().catch(() => {}); });
@@ -1017,8 +991,7 @@ showTab(tab);
   // 같은 작업(id)은 같은 객체를 유지한다 — 열린 창·AI 작업 중인 작업이 새 스냅샷에 끊기지 않게
   db.collection("wbs").onSnapshot(s => { const old = wbs; wbs = {}; s.docs.forEach(d => { const v = d.data(), prev = old[d.id]?.items || [];
     v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; }); draw(); ready("wbs"); });
-  // 연락처: 관리자·팀장 모두 읽고 쓴다(cocontacts·partners: interact)
-  db.collection("cocontacts").onSnapshot(s => { cocon = {}; s.docs.forEach(d => cocon[d.id] = d.data()); if (tab === "ct") draw(); }, () => {});
+  // 협업사: 관리자·팀장 모두 읽고 쓴다(partners: interact). 참가기업 연락처는 프로젝트별 페이지
   db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ct") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
     db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...d.data()})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));

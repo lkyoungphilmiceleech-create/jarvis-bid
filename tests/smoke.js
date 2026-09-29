@@ -4,7 +4,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, "..");
-const PAGES = ["office", "radar", "decoder", "atlas", "nexus", "pmo", "prism"];
+const PAGES = ["office", "radar", "decoder", "atlas", "nexus", "pmo", "prism", "pcontact"];
 const MOCK = `(() => { const q = () => ({orderBy: q, limit: q, where: q, onSnapshot: cb => { setTimeout(() => cb({docs: [], size: 0, empty: true}), 10); return () => {}; }, get: async () => ({docs: []}), add: async () => ({id: "x"}), doc: () => d()});
   const d = () => ({onSnapshot: cb => { setTimeout(() => cb({exists: false, data: () => undefined}), 10); return () => {}; }, get: async () => ({exists: false, data: () => undefined}), set: async () => {}, update: async () => {}, delete: async () => {}, collection: q});
   window.claude = {use: async n => n === "db" ? {collection: q, doc: d} : null}; })();`;
