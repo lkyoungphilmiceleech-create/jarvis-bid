@@ -170,7 +170,7 @@ const dropBox = (k, what, accept) => `<div class="drop" id="${k}Drop" data-drop=
 const ptFiles = async fs => { try { await ptImport(await aoaOf(fs[0])); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } };
 function drawCt() {
   if (!db) { $("tab-ct").innerHTML = '<p class="empty">이 화면에서는 저장소에 연결할 수 없습니다. 공유받은 claude.ai 페이지에서 열어 주세요.</p>'; return; }
-  $("tab-ct").innerHTML = `<div class="row"><h2>국내외 협업사</h2><span class="note">${partners.length}곳</span><span style="flex:1"></span>
+  $("tab-ct").innerHTML = `<div class="row"><h2>국내외 협업사</h2><span style="flex:1"></span>
       ${admin && downloads ? '<button class="btn adm" type="button" id="ptXlsx">엑셀 저장</button>' : ""}<button class="btn primary" type="button" id="ptAdd">+ 협업사 추가</button></div>
     ${dropBox("pt", "협업사 엑셀(XLSX·XLS·CSV)", ".xlsx,.xls,.csv")}
     <div class="row"><input id="ptQ" type="search" placeholder="회사명·담당자 검색" value="${esc(pf.q)}" style="flex:1;min-width:160px"><select id="ptC" aria-label="국가"></select><select id="ptF" aria-label="분야"></select></div><div id="ptBox"></div>`;
@@ -208,6 +208,6 @@ drawCt();
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("staff", !admin); drawCt();
   if (!db) return;
-  db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); if (!$("dlg").open || !document.activeElement?.closest?.("#tab-ct")) drawCt(); else drawPt(); }, () => { $("tab-ct").innerHTML = '<p class="empty">협업사 자료를 불러오지 못했습니다. 새로고침해 주세요.</p>'; });
+  db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); $("ptBox") ? drawPt() : drawCt(); }, () => { $("tab-ct").innerHTML = '<p class="empty">협업사 자료를 불러오지 못했습니다. 새로고침해 주세요.</p>'; });
 })();
 </script>

@@ -239,7 +239,7 @@ body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
     <button type="button" data-tab="sch" aria-selected="false">일정 보기</button>
     <button type="button" class="adm" data-tab="bud" aria-selected="false">예산 (LEDGER)</button>
     <button type="button" class="adm" data-tab="led" aria-selected="false">장부</button>
-    <button type="button" class="adm" data-tab="ppl" aria-selected="false">참여인력</button>
+    <button type="button" data-tab="ppl" aria-selected="false">참여인력</button>
     <button type="button" data-tab="ct" aria-selected="false">연락처</button>
   </nav>
 
@@ -272,7 +272,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 
 const STAT = ["대기", "요청", "진행", "검토", "완료", "지연"];
 const TAX = ["과세", "영세"];
-let db = null, sample = null, mcp = null, downloads = null, assets = null, admin = null; // admin: null=확인 전, false=팀장(공정·지표만)
+let db = null, sample = null, mcp = null, downloads = null, admin = null, uid = null, files = [], preqs = []; // admin: null=확인 전, false=팀장(공정·지표만)
 let projects = [], people = [], staff = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "list"; // 첫 화면은 프로젝트 목록(마지막으로 본 탭이 있으면 그 탭)
 try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "list"; } catch {}
 const P = () => projects.find(p => p.id === cur);
@@ -361,7 +361,7 @@ function say() {
     : !p ? (admin ? "" : "아직 공개된 프로젝트가 없습니다.") || "본부장님, [+ 새 프로젝트]를 누르고 착수보고서·계약서·산출내역서를 올려 주세요. CHRONOS가 계약 정보와 공정표를, LEDGER가 예산표를 만듭니다."
     : `${hi}${p.이름} — ${n ? `지연 ${n}건이 있습니다. ` : ""}${admin ? `목표 수익률 ${pct(tgt(p))}, ` : ""}공정률 ${progOf(W()) === null ? "–" : Math.round(progOf(W()) * 100) + "%"} (작업 ${W().filter(t => t.상태 === "완료").length}/${W().length} 완료)입니다.`;
 }
-function showTab(t) { if (admin === false && !["ct", "list", "sch"].includes(t)) t = "wbs"; /* 팀장: 목록·공정일정·일정 보기·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
+function showTab(t) { if (admin === false && !["ct", "list", "sch", "ppl"].includes(t)) t = "wbs"; /* 비관리자: 목록·공정일정·일정 보기·참여인력(요청)·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   ["list", "set", "wbs", "sch", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
 function draw() { drawTop(); say();
@@ -677,9 +677,9 @@ function editTask(i, toRep) {
     <div class="row note"><select data-tf="단계" aria-label="단계 (구분)">${opt([...new Set([...STG, t.단계].filter(Boolean))], t.단계)}</select><span>${esc(who(t.담당))} · ${esc(t.시작 || "?")} ~ ${esc(t.종료 || "?")}</span>${admin ? "<span>· 닫으면 저장됩니다</span>" : ""}</div>
     <label class="fl">과업내용 · 산출물<textarea data-tf="산출물" placeholder="${admin ? "이 작업으로 무엇을 만드는지" : ""}">${esc(t.산출물)}</textarea></label>
     <h3>하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
-    <h3>관련 자료</h3><div id="att"></div>
-    ${admin ? `${assets ? dropBox("att", "파일", "", true) : ""}<div class="row"><input id="attUrl" type="url" placeholder="링크 붙이기 (https://…)" aria-label="자료 링크" style="flex:1"><button class="btn" type="button" id="attLink">링크 추가</button></div>` : ""}
-    <p class="note" id="attNote">팀장도 보는 자료입니다. 금액·연락처가 든 문서는 올리지 마세요.</p>
+    <div id="attBox"><h3>관련 자료</h3><div id="att"></div>
+    ${canUp() ? `${dropBox("att", "파일(10MB까지, 모든 형식)", "", true)}<div class="row"><input id="attUrl" type="url" placeholder="링크 붙이기 (https://…)" aria-label="자료 링크" style="flex:1"><button class="btn" type="button" id="attLink">링크 추가</button></div>` : ""}
+    <p class="note" id="attNote">이 프로젝트 투입 인력이 모두 보는 자료입니다. 금액·연락처가 든 문서는 올리지 마세요.</p></div>
     <details id="repD"${toRep ? " open" : ""}><summary class="note">지연 보고 ${reps.length}건${nOpen ? ` (미해결 ${nOpen})` : ""} · 처리 기록 ${rec.length}건</summary>
     ${reps.map((r, j) => `<div class="rep${r.해결 ? " done" : ""}"><span class="note">${esc(kst(r.at).slice(0, 10))} 보고${r.기존마감 ? ` · 기존 마감 ${esc(r.기존마감)}` : ""}${r.새마감 ? ` → ${esc(r.새마감)}` : ""}</span><div>원인: ${esc(r.원인)}</div><div>조치: ${esc(r.조치)}</div>
       <label class="chk"><input type="checkbox" data-rp="${j}"${r.해결 ? " checked" : ""}> 해결 완료${r.해결일 ? ` (${esc(r.해결일)})` : ""}</label></div>`).join("")}
@@ -688,7 +688,7 @@ function editTask(i, toRep) {
     ${rec.map(r => `<p class="note">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</details>
     ${t.결과 && admin ? `<details><summary class="note">AI 결과물</summary><div class="out" style="max-height:240px;overflow:auto">${esc(t.결과)}</div></details>` : ""}
     <div class="row" style="margin-top:6px"><span class="row adm"><button class="btn primary" value="save">저장</button><button class="btn" value="req" title="담당에게 작업 요청">${t.담당?.t === "ai" ? "🤖 AI 실행" : "✉ 요청 메일"}</button><button class="btn x" value="del">삭제</button></span><span class="note" id="dNote"></span></div>`;
-  drawSubs(); drawAtt(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = true); // 팀장은 보기만
+  drawSubs(); drawAtt(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = !el.closest("#attBox")); // 비관리자는 보기 + 자료 올리기만
   $("dlg").onclose = async () => {
     const v = $("dlg").returnValue; dlgT = null; if (!admin) return; // 닫으면(Esc·✕ 포함) 저장
     t = W().find(x => x.id === t.id) || t;
@@ -708,21 +708,40 @@ function editTask(i, toRep) {
   $("dlg").returnValue = ""; $("dlg").classList.add("side"); $("dlg").showModal();
   if (toRep) { $("rWhy").scrollIntoView(); $("rWhy").focus(); }
 }
-// 관련 자료: 파일은 assets(/_blob/id), 없으면 http(s) 링크. 작업 문서에 {이름, id|url, 크기, 날} 로 남긴다
+// 관련 자료: 관제실 db 에 직접 저장 — files/{fid} 메타 + filechunks/{fid}_{i} {d: base64} (조각 180KB, 파일당 10MB). 넘으면 http(s) 링크
+// 올리기는 관리자 + 이 프로젝트 투입 인력(people.uid == 내 id) — 화면 제한일 뿐, 실제 차단은 관제실 공유·db 규칙
+const CH = 180 * 1024, FMAX = 10 * 1048576;
 const fsz = n => n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.ceil(n / 1024)}KB`;
-const attHref = a => /^[A-Za-z0-9_-]{16,64}$/.test(a.id || "") ? "/_blob/" + a.id : /^https?:\/\//i.test(a.url || "") ? a.url : "";
+const b64 = u => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const me = () => uid && PP().find(x => x.uid === uid);
+const canUp = () => !!db && (admin || !!me());
+const fOf = tid => files.filter(f => f.pid === cur && (f.tid || "") === tid).sort((a, b) => String(a.at).localeCompare(String(b.at)));
 function drawAtt() { const t = dlgT; if (!t || !$("att")) return;
-  $("att").innerHTML = (t.자료 || []).map((a, j) => { const h = attHref(a); return `<div class="row"><span>${a.id ? "📎" : "🔗"}</span>${h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(a.이름 || h)}</a>` : esc(a.이름)}<span class="note">${a.크기 ? fsz(a.크기) + " · " : ""}${esc(a.날)}</span><button class="btn x adm" type="button" data-adel="${j}" aria-label="자료 빼기">✕</button></div>`; }).join("") || '<p class="note">자료가 없습니다.</p>'; }
+  $("att").innerHTML = fOf(t.id).map(f => { const u = /^https?:\/\/\S+$/i.test(f.url || "") ? f.url : "";
+    return `<div class="row">${u ? `🔗 <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(f.이름 || u)}</a>` : `📎 <button class="lnk" type="button" data-fget="${esc(f.id)}">${esc(f.이름)}</button><span class="note">${fsz(+f.크기 || 0)}</span>`}<span class="note">${esc(kst(f.at).slice(0, 10))}</span>${admin || (uid && f.by === uid) ? `<button class="btn x" type="button" data-fdel="${esc(f.id)}" aria-label="자료 지우기">✕</button>` : ""}</div>`; }).join("") || '<p class="note">자료가 없습니다.</p>'; }
 async function attUp(fs) {
-  const t = dlgT, note = $("attNote"); if (!t || !assets || !admin) return; let n = 0;
-  for (const f of fs.slice(0, 10)) { if (f.size > 20 * 1048576) { note.textContent = `${f.name}: 20MB 이하만 올릴 수 있습니다.`; continue; }
-    note.textContent = `${f.name} 올리는 중…`;
-    try { const a = await assets.upload(f); (t.자료 ||= []).push({이름: f.name, id: a.id, 크기: f.size, 날: today()}); n++; } catch (e) { note.textContent = e?.code === "quota_exceeded" ? "저장 공간이 부족합니다." : `${f.name}: 올리지 못했습니다.`; } }
-  if (n) { (t.기록 ||= []).push({at: new Date().toISOString(), 내용: `자료 ${n}개 올림`}); await saveWbs(); note.textContent = `${n}개를 올렸습니다.`; } drawAtt();
+  const t = dlgT, note = $("attNote"); if (!t || !canUp()) return; let n = 0;
+  for (const f of fs.slice(0, 10)) {
+    if (f.size > FMAX) { note.textContent = `${f.name}: 10MB 넘는 파일은 링크로 붙여 주세요(드라이브 등).`; continue; }
+    const fid = "F" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), b = new Uint8Array(await f.arrayBuffer()), k = Math.max(1, Math.ceil(b.length / CH));
+    try { for (let i = 0; i < k; i++) { note.textContent = `${f.name} 올리는 중… ${i + 1}/${k}`; await db.doc(`filechunks/${fid}_${i}`).set({d: b64(b.subarray(i * CH, (i + 1) * CH))}); }
+      const m = {pid: cur, tid: t.id, 이름: f.name, 크기: f.size, 형식: f.type || "", by: uid || "", at: new Date().toISOString(), n: k}; await db.doc(`files/${fid}`).set(m); // 메타는 조각을 다 올린 뒤
+      if (!files.some(x => x.id === fid)) files.push({id: fid, ...m}); n++;
+    } catch { note.textContent = `${f.name}: 올리지 못했습니다.`; for (let i = 0; i < k; i++) db.doc(`filechunks/${fid}_${i}`).delete().catch(() => {}); } }
+  if (n) note.textContent = `${n}개를 올렸습니다.`; drawAtt();
 }
-function attLink() { const t = dlgT, u = $("attUrl").value.trim(); if (!t || !admin) return;
+async function attLink() { const t = dlgT, u = $("attUrl").value.trim(); if (!t || !canUp()) return;
   if (!/^https?:\/\/\S+$/i.test(u)) { $("attNote").textContent = "http(s) 링크만 붙일 수 있습니다."; return; }
-  (t.자료 ||= []).push({이름: u.replace(/^https?:\/\//i, "").slice(0, 80), url: u, 날: today()}); $("attUrl").value = ""; wSave(0); drawAtt(); }
+  const fid = "F" + Date.now().toString(36), m = {pid: cur, tid: t.id, 이름: u.replace(/^https?:\/\//i, "").slice(0, 80), url: u, by: uid || "", at: new Date().toISOString(), n: 0};
+  try { await db.doc(`files/${fid}`).set(m); if (!files.some(x => x.id === fid)) files.push({id: fid, ...m}); $("attUrl").value = ""; } catch { $("attNote").textContent = "저장하지 못했습니다."; } drawAtt(); }
+async function attGet(id) { const f = files.find(x => x.id === id), note = $("attNote"); if (!f || !db) return;
+  try { note.textContent = `${f.이름} 받는 중…`; const ps = await Promise.all([...Array(+f.n || 0)].map((_, i) => db.doc(`filechunks/${f.id}_${i}`).get()));
+    if (ps.some(p => !p.exists)) throw 0; const blob = new Blob(ps.map(p => unb64(p.data().d)), {type: f.형식 || "application/octet-stream"});
+    if (downloads) await downloads.save({filename: f.이름, data: blob}); else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = f.이름; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
+    note.textContent = ""; } catch (e) { note.textContent = e?.code === "declined" ? "" : "파일을 받지 못했습니다."; } }
+async function attDel(id) { const f = files.find(x => x.id === id); if (!f || !(admin || (uid && f.by === uid)) || !confirm(`'${f.이름}'을 지울까요?`)) return;
+  try { await db.doc(`files/${f.id}`).delete(); for (let i = 0; i < (+f.n || 0); i++) db.doc(`filechunks/${f.id}_${i}`).delete().catch(() => {}); files = files.filter(x => x.id !== id); } catch { $("attNote").textContent = "지우지 못했습니다."; } drawAtt(); }
 async function requestTask(t) {
   const p = P(), tag = `[JARVIS ${p.id}-${t.id}]`, subs = (t.하위 || []).filter(s => !s.완료).map(s => `  - ${s.할일}${s.마감 ? ` (마감 ${s.마감})` : ""}`).join("\n");
   if (!t.담당) { wn("담당을 먼저 배치해 주세요."); return; }
@@ -936,10 +955,52 @@ async function ledCommit() {
 
 // ── 참여인력: 사내 직원 명부(staff, 관리자만)에서 골라 프로젝트에 배치 → people 문서(pid·staffId). 배치 해제 = 그 people 문서 삭제
 let sq = "";
+// ── 참여 신청·인력 변경 요청(peoplereq): 비관리자(본인 참여 신청, 담당 PM 의 추가·수정·해제)는 요청만, 관리자가 승인하면 people 에 반영(본인 신청은 uid 연결)
+// 요청에는 연락처를 담지 않는다(투입 인력이 모두 읽는 경로)
+const RQF = ["이름", "부서", "직책", "역할"], RQE = ["직책", "역할", "참여시작", "참여종료"];
+const amPM = () => { const p = P(); return !!(uid && p?.PM && PP().find(x => x.id === p.PM)?.uid === uid); };
+const rqDesc = r => { const x = PP().find(u => u.id === r.대상) || people.find(u => u.id === r.대상); return `${r.종류}${r.본인 ? " (본인 참여)" : ""} · ${esc(x?.이름 || r.내용?.이름 || "?")}${Object.entries(r.내용 || {}).filter(([k, v]) => v && k !== "이름").map(([k, v]) => ` · ${esc(k)} ${esc(v)}`).join("")}`; };
+function drawPplStaff() {
+  const pp = PP(), p = P(), mine = me(), pm = amPM(), my = preqs.filter(r => r.pid === cur && r.by === uid).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  $("tab-ppl").innerHTML = !p ? '<p class="empty">프로젝트를 먼저 고르세요.</p>' : `<div class="row"><h2>참여인력</h2><span class="note">${esc(p.이름)} · 인력 추가·수정·해제는 요청을 관리자가 승인하면 반영됩니다.</span><span style="flex:1"></span>
+      ${!mine && uid && !my.some(r => r.상태 === "대기" && r.본인) ? '<button class="btn primary" type="button" id="rqJoin">이 프로젝트 참여 신청</button>' : ""}${pm ? '<button class="btn" type="button" data-rq="추가|">+ 인력 추가 요청</button>' : ""}</div>
+    ${mine ? `<p class="note">${esc(mine.이름)}님은 이 프로젝트 투입 인력입니다. 작업의 [열기]에서 자료를 올릴 수 있습니다.</p>` : ""}
+    <div class="tw"><table><thead><tr><th>성명</th><th>직책</th><th>담당 역할</th><th>참여 기간</th>${pm ? "<th></th>" : ""}</tr></thead><tbody>${pp.map(x => `<tr><td>${esc(x.이름)}${p.PM === x.id ? ' <span class="tag go">PM</span>' : ""}${x.uid && x.uid === uid ? ' <span class="tag">나</span>' : ""}</td><td>${esc(x.직책)}</td><td>${esc(x.역할)}</td><td>${esc(x.참여시작 || "")}${x.참여시작 || x.참여종료 ? " ~ " : ""}${esc(x.참여종료 || "")}</td>
+      ${pm ? `<td><button class="btn" type="button" data-rq="수정|${esc(x.id)}">수정 요청</button> <button class="btn x" type="button" data-rq="해제|${esc(x.id)}">해제 요청</button></td>` : ""}</tr>`).join("") || `<tr><td colspan="5" class="empty">배치된 인력이 없습니다.</td></tr>`}</tbody></table></div>
+    ${my.length ? `<h2>내 요청</h2>${my.map(r => `<p class="note"><span class="tag${r.상태 === "승인" ? " go" : r.상태 === "대기" ? " amber" : ""}">${esc(r.상태)}</span> ${esc(kst(r.at))} · ${rqDesc(r)}</p>`).join("")}` : ""}`;
+}
+function reqDlg(kind, target) { // kind: 참여(본인)·추가·수정·해제
+  const x = PP().find(u => u.id === target), free = PP().filter(u => !u.uid), f = (k, v = "", type = "text") => `<label>${k}<input type="${type}" data-rqf="${k}" value="${esc(v)}"></label>`;
+  $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${kind === "참여" ? "이 프로젝트 참여 신청" : kind === "추가" ? "인력 추가 요청" : `${esc(x?.이름 || "")} ${kind} 요청`}</h2>
+    ${kind === "참여" ? `<label class="fl">배치 명단에서 본인 고르기<select id="rqWho">${opt([["", "명단에 없음 — 아래에 직접 입력"], ...free.map(u => [u.id, [u.이름, u.직책].filter(Boolean).join(" · ")])])}</select></label>` : ""}
+    ${kind === "해제" ? `<p>${esc(x?.이름 || "")}님을 이 프로젝트에서 해제하도록 요청합니다.</p>` : `<div class="form">${(kind === "수정" ? RQE : RQF).map(k => f(k, x?.[k], /참여/.test(k) ? "date" : "text")).join("")}</div>`}
+    <p class="note">관리자가 승인하면 반영됩니다. 이메일·전화는 적지 마세요(관리자가 따로 받습니다).</p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" value="ok">요청 보내기</button><button class="btn" value="cancel">닫기</button></div>`;
+  $("dlg").onclose = async () => { if ($("dlg").returnValue !== "ok" || !db || !uid) return;
+    const 내용 = {}; $("dlgForm").querySelectorAll("[data-rqf]").forEach(el => { if (el.value.trim()) 내용[el.dataset.rqf] = el.value.trim(); });
+    const who = kind === "참여" ? $("rqWho").value : target || "";
+    if (kind !== "해제" && !who && !내용.이름) { alert("이름을 넣거나 명단에서 골라 주세요."); return; }
+    try { await db.collection("peoplereq").add({종류: kind === "참여" ? "추가" : kind, 본인: kind === "참여", pid: cur, 대상: who, 내용, by: uid, at: new Date().toISOString(), 상태: "대기"}); toast("요청을 보냈습니다. 관리자가 승인하면 반영됩니다."); }
+    catch { alert("요청을 보내지 못했습니다."); } };
+  $("dlg").returnValue = ""; $("dlg").showModal();
+}
+async function reqDo(id, ok) { const r = preqs.find(x => x.id === id); if (!r || !admin || r.상태 !== "대기") return;
+  const {id: _, ...base} = r, x = people.find(u => u.id === r.대상), c = r.내용 || {}, p = projects.find(q => q.id === r.pid);
+  if (ok) { let done = true;
+    if (r.종류 === "해제") done = !x || await db.doc(`people/${x.id}`).delete().then(() => true, () => false);
+    else if (r.종류 === "수정") { if (!x) return alert("대상 인력이 없습니다."); const {id: xid, ...o} = x; RQE.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; }); done = await put(`people/${xid}`, o); }
+    else if (x) { const {id: xid, ...o} = x; if (r.본인) o.uid = r.by; RQF.forEach(k => { if (c[k] && !o[k]) o[k] = c[k]; }); done = await put(`people/${xid}`, o); }
+    else done = await put(`people/U${Date.now().toString(36)}`, {pid: r.pid, 이름: c.이름 || "", 부서: c.부서 || "", 직책: c.직책 || "", 역할: c.역할 || "", 참여시작: p?.시작 || "", 참여종료: p?.종료 || "", 이메일: "", ...(r.본인 ? {uid: r.by} : {})});
+    if (!done) { alert("반영하지 못했습니다."); return; } }
+  await put(`peoplereq/${id}`, {...base, 상태: ok ? "승인" : "반려", 처리: new Date().toISOString()}); toast(ok ? "승인해 참여인력에 반영했습니다." : "반려했습니다.");
+}
+const reqBox = () => { const rs = preqs.filter(r => r.상태 === "대기").sort((a, b) => String(a.at).localeCompare(String(b.at))); if (!rs.length) return "";
+  return `<div class="co"><h3>승인 대기 ${rs.length}건</h3>${rs.map(r => `<div class="row"><span>${r.pid === cur ? "" : `<span class="tag">${esc(projects.find(p => p.id === r.pid)?.이름 || r.pid)}</span> `}${rqDesc(r)} <span class="note">${esc(kst(r.at))}</span></span><span style="flex:1"></span><button class="btn primary" type="button" data-rqok="${esc(r.id)}">승인</button><button class="btn x" type="button" data-rqno="${esc(r.id)}">반려</button></div>`).join("")}</div>`; };
 function drawPpl() {
+  if (!admin) { drawPplStaff(); return; }
   const pp = PP(), p = P();
-  $("tab-ppl").innerHTML = `<div class="row"><h2>참여인력</h2><span class="note">${p ? `${esc(p.이름)} — 아래 사내 직원 명부에서 골라 배치합니다.` : "프로젝트를 먼저 고르세요."} 담당 PM은 프로젝트 설정에서 고릅니다. 이메일은 작업 요청·지연 알림 메일에 씁니다.</span></div>
-    <div class="tw"><table><thead><tr><th>성명</th><th>직책</th><th>담당 역할</th><th>참여 기간</th><th>참여율</th><th>이메일</th><th>배치된 작업</th></tr></thead><tbody>${pp.map(x => `<tr class="click" data-pp="${esc(x.id)}"><td>${esc(x.이름)}${p?.PM === x.id ? ' <span class="tag go">PM</span>' : ""}${x.pid ? "" : ' <span class="tag">공통</span>'}</td><td>${esc(x.직책)}</td><td>${esc(x.역할)}</td><td>${esc(x.참여시작 || "")}${x.참여시작 || x.참여종료 ? " ~ " : ""}${esc(x.참여종료 || "")}</td><td class="num">${x.참여율 ? esc(x.참여율) + "%" : ""}</td><td>${esc(x.이메일)}</td>
+  $("tab-ppl").innerHTML = `<div class="row"><h2>참여인력</h2><span class="note">${p ? `${esc(p.이름)} — 아래 사내 직원 명부에서 골라 배치합니다.` : "프로젝트를 먼저 고르세요."} 담당 PM은 프로젝트 설정에서 고릅니다. 이메일은 작업 요청·지연 알림 메일에 씁니다.</span></div>${reqBox()}
+    <div class="tw"><table><thead><tr><th>성명</th><th>직책</th><th>담당 역할</th><th>참여 기간</th><th>참여율</th><th>이메일</th><th>배치된 작업</th></tr></thead><tbody>${pp.map(x => `<tr class="click" data-pp="${esc(x.id)}"><td>${esc(x.이름)}${p?.PM === x.id ? ' <span class="tag go">PM</span>' : ""}${x.pid ? "" : ' <span class="tag">공통</span>'}${x.uid ? ' <span class="tag" title="관제실 계정 연결됨">계정</span>' : ""}</td><td>${esc(x.직책)}</td><td>${esc(x.역할)}</td><td>${esc(x.참여시작 || "")}${x.참여시작 || x.참여종료 ? " ~ " : ""}${esc(x.참여종료 || "")}</td><td class="num">${x.참여율 ? esc(x.참여율) + "%" : ""}</td><td>${esc(x.이메일)}</td>
       <td class="num">${W().filter(t => (t.담당?.t === "real" && t.담당.id === x.id) || (t.하위 || []).some(s => s.담당?.t === "real" && s.담당.id === x.id)).length}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">배치된 인력이 없습니다. 아래 명부에서 [배치]를 눌러 주세요.</td></tr>'}</tbody></table></div>
     <div class="co"><div class="row"><h3>사내 직원 명부</h3><span class="note">관리자만 봅니다. 한 번 등록해 두면 프로젝트마다 골라 배치합니다.</span><span style="flex:1"></span><button class="btn primary" type="button" id="stAdd">+ 직원 등록</button></div>
       <input id="stQ" type="search" placeholder="이름·부서·직책 검색" value="${esc(sq)}"><div id="stBox"></div></div>
@@ -994,80 +1055,17 @@ function editPpl(x) {
     await put(`people/${x.id}`, n); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
-// ── 연락처: 참가기업은 프로젝트별 페이지(담당 PM 에게만 공유, 주소는 pm·view 의 연락처페이지) · 국내외 협업사(partners)는 여기서 관리자·팀장이 보고 고친다. 내려받기는 관리자만. 외부 발송에 쓰지 않는다(mailto·tel 링크만)
-const HI = ["사업", "연도", "역할", "평가"];
-const PT = ["회사명", "국가", "도시", "분야", "담당자", "직책", "모바일", "이메일", "대표번호", "웹", "메모"];
-const FIELD = ["현지 시공·설치", "통관·물류", "현지 에이전시", "통번역", "홍보·PR", "행사·케이터링", "숙박·항공", "법률·회계", "기타"];
-// 엑셀 머리글 → 칸 (앞 항목이 먼저 가져간다: '휴대전화'는 모바일, '회사명'은 기업명)
-const HM = [["모바일", /모바일|휴대|핸드폰|^hp$|mobile|cell/], ["이메일", /이메일|email|메일/], ["대표번호", /대표번호|대표전화|전화|tel|phone|연락처/], ["웹", /^웹|홈페이지|website|url/],
-  ["기업명", /기업|회사|업체|상호|company|파트너/], ["국가", /국가|country/], ["도시", /도시|city/], ["분야", /분야|업종|category|field/], ["사업", /사업|프로젝트|project/], ["연도", /연도|년도|year/],
-  ["역할", /역할|role/], ["평가", /평가|rating/], ["담당자", /담당|성명|이름|name|contact/], ["직책", /직책|직위|직급|title|position/], ["메모", /메모|비고|memo|note/]];
-const hmap = row => { const h = row.map(nk), m = {}, used = new Set(); HM.forEach(([k, re]) => { const j = h.findIndex((x, i) => x && !used.has(i) && re.test(x)); if (j >= 0) { m[k] = j; used.add(j); } }); return m; };
-function fromAoa(aoa, pos) { // 앞 5줄 안에 머리글이 있으면 열 이름으로, 없으면 pos 순서로(pos 없으면 null)
-  const hi = aoa.slice(0, 5).findIndex(r => Object.keys(hmap(r)).length >= 2 && r.every(c => String(c).length <= 20 && !/@|\d{3}/.test(c))); // 메일·전화가 든 줄은 머리글 아님
-  const m = hi >= 0 ? hmap(aoa[hi]) : pos && Object.fromEntries(pos.map((k, i) => [k, i])); if (!m) return null;
-  return aoa.slice(hi + 1).map(r => Object.fromEntries(Object.entries(m).map(([k, j]) => [k, String(r[j] ?? "").trim()]))).filter(o => Object.values(o).some(Boolean));
-}
-const aoaOf = async f => { if (!window.XLSX) throw new Error("엑셀 읽기 도구를 불러오지 못했습니다."); return Object.values(readBook(XLSX.read(await f.arrayBuffer(), {type: "array"})))[0] || []; };
+// ── 연락처: 참가기업은 프로젝트별 페이지(담당 PM 에게만 공유, 주소는 pm·view 의 연락처페이지) · 국내외 협업사는 별도 페이지(org/partners.tpl.html)
 const okMail = v => /^[^\s@"<>]+@[^\s@"<>]+\.[^\s@"<>]+$/.test(v), okTel = v => /^\+?[\d\s\-().]{7,20}$/.test(v);
 const telA = v => v ? (okTel(v) ? `<a href="tel:${esc(v.replace(/[^\d+]/g, ""))}">${esc(v)}</a>` : esc(v)) : "";
 const mailA = v => v ? (okMail(v) ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : esc(v)) : "";
-const webA = v => /^https?:\/\/\S+$/i.test(v || "") ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v.replace(/^https?:\/\//i, ""))}</a>` : esc(v);
-const byYear = (a, b) => String(b.연도 || "").localeCompare(String(a.연도 || ""));
-const hist = x => [...(x.이력 || [])].sort(byYear);
-let partners = [], pf = {q: "", 국가: "", 분야: ""}, ptDraft = null;
 function drawCt() {
   const p = P(), u = String(p?.연락처페이지 || "");
-  $("tab-ct").innerHTML = `<p class="ext">협업사 정보는 관제실을 공유받은 관리자·팀장이 봅니다. 참가기업 연락처는 프로젝트별 페이지에서 그 담당 PM만 봅니다. 직원에게 보이는 NEXUS 메모 칸에는 연락처를 적지 마세요.</p>
+  $("tab-ct").innerHTML = `<p class="ext">참가기업 연락처와 국내외 협업사는 관리자·담당 PM 만 공유받는 별도 페이지에서 관리합니다. 직원에게 보이는 NEXUS 메모 칸에는 연락처를 적지 마세요.</p>
     <div class="row"><h2>참가기업 연락처</h2><span class="note">참가기업 연락처는 프로젝트별 페이지에서 관리합니다. 그 프로젝트의 담당 PM·관리자만 공유받습니다.</span></div>
     <p>${!p ? '<span class="note">프로젝트를 먼저 고르세요.</span>' : /^https:\/\/claude\.ai\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(p.이름)} 연락처 페이지 열기</a>` : `<span class="note">아직 없음 — JARVIS 에게 '${esc(p.이름)} 연락처 페이지 만들어줘'라고 요청해 주세요.</span>`}</p>
-    <div class="row"><h2>국내외 협업사</h2><span class="note">담당자가 바뀌어도 유사 사업을 함께한 파트너를 찾을 수 있게 연락처와 협업 이력을 남깁니다.</span><span style="flex:1"></span>
-      <button class="btn adm" type="button" id="ptXlsx">엑셀 저장</button><button class="btn primary" type="button" id="ptAdd">+ 협업사 추가</button></div>
-    ${dropBox("pt", "협업사 엑셀(XLSX·XLS·CSV)", ".xlsx,.xls,.csv")}
-    <div class="row"><input id="ptQ" type="search" placeholder="회사명·담당자 검색" value="${esc(pf.q)}" style="flex:1;min-width:160px"><select id="ptC"></select><select id="ptF"></select></div><div id="ptBox"></div>`;
-  drawPt();
+    <div class="row"><h2>국내외 협업사</h2><span class="note">국내외 협업사 DB(연락처·협업 이력)는 관리자·담당 PM 만 공유받는 별도 페이지에서 관리합니다.</span></div>`;
 }
-function drawPt() {
-  if (!$("ptBox")) return;
-  $("ptC").innerHTML = opt([...new Set(partners.map(x => x.국가).filter(Boolean))].sort(), pf.국가, "국가 전체");
-  $("ptF").innerHTML = opt([...new Set([...FIELD, ...partners.map(x => x.분야).filter(Boolean)])], pf.분야, "분야 전체");
-  const q = pf.q.toLowerCase(), ps = partners.filter(x => (!q || [x.회사명, x.담당자].some(v => String(v || "").toLowerCase().includes(q))) && (!pf.국가 || x.국가 === pf.국가) && (!pf.분야 || x.분야 === pf.분야))
-    .sort((a, b) => String(a.회사명).localeCompare(String(b.회사명), "ko"));
-  $("ptBox").innerHTML = `<div class="tw"><table><thead><tr><th>회사명</th><th>국가·도시</th><th>분야</th><th>담당자</th><th>연락처</th><th>협업 이력</th></tr></thead><tbody>${ps.map(x => { const h = hist(x);
-    return `<tr class="click" data-pt="${esc(x.id)}"><td><b>${esc(x.회사명)}</b>${x.웹 ? `<br>${webA(x.웹)}` : ""}</td><td>${esc([x.국가, x.도시].filter(Boolean).join(" · "))}</td><td>${x.분야 ? `<span class="tag">${esc(x.분야)}</span>` : ""}</td><td>${esc(x.담당자)}${x.직책 ? ` <span class="note">${esc(x.직책)}</span>` : ""}</td><td>${[telA(x.모바일), mailA(x.이메일), telA(x.대표번호)].filter(Boolean).join("<br>")}</td><td>${h.length ? `이력 ${h.length}건${h[0].연도 ? ` · 최근 ${esc(h[0].연도)}` : ""}` : '<span class="note">없음</span>'}</td></tr>`; }).join("")
-    || `<tr><td colspan="6" class="empty">${partners.length ? "조건에 맞는 협업사가 없습니다." : "등록된 협업사가 없습니다."}</td></tr>`}</tbody></table></div>`;
-}
-function drawHist() { $("hBox").innerHTML = `<div class="tw"><table class="bt"><thead><tr>${HI.map(k => `<th>${k}</th>`).join("")}<th></th></tr></thead><tbody>${ptDraft.이력.map((h, i) => `<tr>${HI.map(k => `<td><input data-hi="${i}|${k}" aria-label="${k}" value="${esc(h[k])}"${k === "연도" ? ' inputmode="numeric" placeholder="2026"' : k === "평가" ? ' placeholder="예) 우수, 재협업 추천"' : ""}></td>`).join("")}<td><button class="btn x" type="button" data-hdel="${i}" aria-label="이력 삭제">✕</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">협업 이력이 없습니다.</td></tr>'}</tbody></table></div>`; }
-function editPt(x) {
-  const isNew = !x; ptDraft = {...x, 이력: hist(x || {}).map(h => ({...h}))};
-  const f = (k, extra = "") => `<label>${k}<input data-rf="${k}" value="${esc(ptDraft[k])}"${extra}></label>`;
-  $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${isNew ? "협업사 추가" : esc(x.회사명)}</h2><div class="form">${f("회사명")}${f("국가", ' list="ptCs"')}${f("도시")}${f("분야", ' list="ptFs" placeholder="고르거나 직접 입력"')}${f("담당자")}${f("직책")}${f("모바일", ' type="tel"')}${f("이메일", ' type="email"')}${f("대표번호", ' type="tel"')}${f("웹", ' type="url" placeholder="https://"')}<label class="wide">메모<textarea data-rf="메모">${esc(ptDraft.메모)}</textarea></label></div>
-    <datalist id="ptCs">${opt([...new Set(partners.map(p => p.국가).filter(Boolean))])}</datalist><datalist id="ptFs">${opt(FIELD)}</datalist>
-    <div class="row" style="margin-top:12px"><h2>협업 이력</h2><span style="flex:1"></span><button class="btn" type="button" id="hAdd">+ 이력 추가</button></div><div id="hBox"></div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn x" value="del">삭제</button>'}<button class="btn" value="cancel">닫기</button></div>`;
-  drawHist();
-  $("dlg").onclose = async () => { const v = $("dlg").returnValue; if (!v || v === "cancel" || !db) return;
-    if (v === "del") { if (confirm(`'${x.회사명}' 협업사를 삭제할까요? 협업 이력도 함께 지워집니다.`)) await db.doc(`partners/${x.id}`).delete().catch(() => alert("삭제하지 못했습니다.")); return; }
-    const n = {}; $("dlgForm").querySelectorAll("[data-rf]").forEach(el => n[el.dataset.rf] = el.value.trim());
-    if (!n.회사명) { alert("회사명을 넣어 주세요."); $("dlg").returnValue = ""; $("dlg").showModal(); return; }
-    n.이력 = ptDraft.이력.map(h => Object.fromEntries(HI.map(k => [k, String(h[k] ?? "").trim()]))).filter(h => HI.some(k => h[k])).sort(byYear); n.updatedAt = new Date().toISOString();
-    try { if (isNew) await db.collection("partners").add(n); else await db.doc(`partners/${x.id}`).set(n); if ((n.이메일 && !okMail(n.이메일)) || [n.모바일, n.대표번호].some(v => v && !okTel(v))) alert("저장했습니다. 이메일·전화 형식을 한 번 확인해 주세요."); }
-    catch { alert("저장하지 못했습니다."); } };
-  $("dlg").returnValue = ""; $("dlg").showModal();
-}
-// 협업사 엑셀: 머리글 필수. 회사명+국가가 같으면 한 곳으로 합치고(빈 칸만 채움) 이력은 이어 붙인다
-async function ptImport(aoa) {
-  const got = fromAoa(aoa); if (!got) { alert("첫 줄(머리글)에 회사명·국가·담당자 같은 열 이름이 있어야 합니다."); return; }
-  const key = o => nk(o.회사명) + "|" + nk(o.국가), by = new Map(partners.map(x => [key(x), {...x, 이력: [...(x.이력 || [])]}])), touched = new Set();
-  got.forEach(o => { o.회사명 = o.기업명; if (!o.회사명) return; const k = key(o), x = by.get(k) || {이력: []}, h = Object.fromEntries(HI.map(f => [f, o[f] || ""]));
-    PT.forEach(f => { if (o[f] && !x[f]) x[f] = o[f]; }); if (HI.some(f => h[f]) && !x.이력.some(y => HI.every(f => (y[f] || "") === h[f]))) x.이력.push(h); by.set(k, x); touched.add(k); });
-  const list = [...touched].map(k => by.get(k)), nNew = list.filter(x => !x.id).length; if (!list.length) { alert("회사명이 있는 줄을 찾지 못했습니다."); return; }
-  if (!db || !confirm(`협업사 ${list.length}곳(새로 ${nNew}곳, 기존과 합침 ${list.length - nNew}곳)을 저장할까요? 같은 회사명·국가는 합치고 이력은 이어 붙입니다.`)) return;
-  const at = new Date().toISOString(); let ok = 0;
-  for (const {id, ...d} of list) { d.이력.sort(byYear); d.updatedAt = at; try { if (id) await db.doc(`partners/${id}`).set(d); else await db.collection("partners").add(d); ok++; } catch {} }
-  alert(`${list.length}곳 중 ${ok}곳을 저장했습니다.`);
-}
-
 // ── 공통
 const askErr = e => ({not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 눌러 주세요.", prompt_too_large: "자료가 너무 깁니다. 문서를 줄여 주세요.", image_rejected: "사진을 읽지 못했습니다(형식·크기 확인)."}[e?.code] || "답을 받지 못했습니다. 다시 눌러 주세요.");
 const mcpMsg = e => ({needs_reauth: "연결이 만료되었습니다. claude.ai 설정 → 커넥터에서 다시 연결해 주세요.", server_not_connected: "커넥터가 연결되어 있지 않습니다.", not_in_manifest: "이 페이지에 허용되지 않았습니다.", tool_error: "요청이 거절되었습니다" + (e?.message ? `: ${e.message.slice(0, 120)}` : "")}[e?.code] || "실패했습니다" + (e?.message ? `: ${e.message.slice(0, 120)}` : ""));
@@ -1090,7 +1088,11 @@ document.addEventListener("click", async e => {
   if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
   if (t.dataset.pick) $(t.dataset.pick + "File").click();
   if (t.id === "attLink") attLink();
-  if (t.dataset.adel !== undefined && admin && dlgT) { const a = dlgT.자료.splice(+t.dataset.adel, 1)[0]; if (a?.id && assets) assets.delete(a.id).catch(() => {}); wSave(0); drawAtt(); }
+  if (t.dataset.fget) attGet(t.dataset.fget);
+  if (t.id === "rqJoin") reqDlg("참여");
+  if (t.dataset.rq) { const [k, id] = t.dataset.rq.split("|"); reqDlg(k, id); }
+  if (t.dataset.rqok || t.dataset.rqno) reqDo(t.dataset.rqok || t.dataset.rqno, !!t.dataset.rqok);
+  if (t.dataset.fdel) attDel(t.dataset.fdel);
   if (t.id === "genWbs") genWbs();
   if (t.id === "wCal") { wCal = !wCal; drawWbs(true); }
   if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawWbs(true); }
@@ -1122,11 +1124,6 @@ document.addEventListener("click", async e => {
   if (t.dataset.st) editSt(staff.find(x => x.id === t.dataset.st));
   if (t.dataset.son) assign(t.dataset.son);
   if (t.dataset.sun) { const u = people.find(x => x.id === t.dataset.sun); if (u && confirm(`${u.이름}님을 이 프로젝트에서 배치 해제할까요?`) && db && admin) await db.doc(`people/${u.id}`).delete().catch(() => alert("해제하지 못했습니다.")); }  if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
-  if (t.id === "ptAdd") editPt(null);
-  if (t.dataset.pt) editPt(partners.find(x => x.id === t.dataset.pt));
-  if (t.id === "ptXlsx" && admin) saveXlsx(`협업사_${today()}.xlsx`, [["협업사", [PT, ...partners.map(x => PT.map(k => x[k] || ""))]], ["협업 이력", [["회사명", "국가", ...HI], ...partners.flatMap(x => hist(x).map(h => [x.회사명, x.국가, ...HI.map(k => h[k] || "")]))]]]);
-  if (t.id === "hAdd") { ptDraft.이력.push({사업: "", 연도: "", 역할: "", 평가: ""}); drawHist(); document.querySelector(`[data-hi="${ptDraft.이력.length - 1}|사업"]`)?.focus(); }
-  if (t.dataset.hdel !== undefined) { ptDraft.이력.splice(+t.dataset.hdel, 1); drawHist(); }
 });
 document.addEventListener("change", async e => {
   const t = e.target;
@@ -1146,7 +1143,6 @@ document.addEventListener("change", async e => {
   if (t.dataset.rchk && admin) { const [i, j] = t.dataset.rchk.split("|").map(Number), x = W()[i], r = x?.보고?.[j]; if (!r) return;
     r.해결 = t.checked; r.해결일 = t.checked ? today() : ""; (x.기록 ||= []).push({at: new Date().toISOString(), 내용: t.checked ? "지연 보고 해결 완료" : "지연 보고 해결 취소"}); await saveWbs(); drawWbs(); }
   if (t.dataset.lf === "rid" && t.value) { const r = RB(cur).find(x => x.id === t.value) || BR().find(x => x.id === t.value); if (r) ["구분", "항목", "내용"].forEach(k => { const el = document.querySelector(`[data-lf="${k}"]`); if (el) el.value = r[k]; }); }
-  if (t.id === "ptC") { pf.국가 = t.value; drawPt(); } if (t.id === "ptF") { pf.분야 = t.value; drawPt(); }
   if (t.id === "lScope") { lf.scope = t.value; drawLed(); } if (t.id === "lLink") { lf.link = t.value; drawLed(); }
 });
 document.addEventListener("compositionend", e => { const d = e.target.dataset; if (!d?.wi || !admin) return; const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); wSave(); } });
@@ -1155,14 +1151,11 @@ document.addEventListener("focusout", e => { if (wRe && e.target.dataset?.wi) se
 document.addEventListener("paste", e => { if (e.target.id === "budTsv") { e.preventDefault(); budTsv(e.clipboardData?.getData("text") || ""); } });
 document.addEventListener("input", e => { const d = e.target.dataset;
   if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); if (!e.isComposing) wSave(); } }
-  if (d.hi) { const [i, k] = d.hi.split("|"); if (ptDraft?.이력[+i]) ptDraft.이력[+i][k] = e.target.value; }
-  if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); }
   if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
 // 파일 올리기 공통: [파일 선택] 버튼 + 끌어다 놓기 영역(프로젝트 문서·산출내역서·장부·협업사 엑셀·작업 자료). id = k+Drop/Pick/File
 const dropBox = (k, what, accept, multi, tip = "") => `<div class="drop" id="${k}Drop" data-drop="${k}">${what}를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="${k}Pick" data-pick="${k}">파일 선택</button><input type="file" id="${k}File" data-file="${k}"${accept ? ` accept="${accept}"` : ""}${multi ? " multiple" : ""} hidden>${tip ? `<br><span class="note">${tip}</span>` : ""}</div>`;
 const onFiles = {doc: fs => readDocs(fs), bud: fs => budIn(fs[0]), att: fs => attUp(fs),
-  led: async fs => { if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(fs[0].name, XLSX.read(await fs[0].arrayBuffer(), {type: "array"})); },
-  pt: async fs => { try { await ptImport(await aoaOf(fs[0])); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } }};
+  led: async fs => { if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(fs[0].name, XLSX.read(await fs[0].arrayBuffer(), {type: "array"})); }};
 ["dragenter", "dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest?.("[data-drop]"); if (!z) return; e.preventDefault();
   z.classList.toggle("on", ev === "dragenter" || ev === "dragover"); if (ev === "drop" && e.dataTransfer?.files?.length) onFiles[z.dataset.drop]([...e.dataTransfer.files]); }));
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "attUrl") { e.preventDefault(); attLink(); } });
@@ -1175,8 +1168,8 @@ let views = {};
 // ponytail: 관리자가 관제실을 열 때 사본 갱신 — 늦으면 루틴으로
 function syncView() {
   const want = {};
-  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "코드", "발주처", "상태", "시작", "종료", "연락처페이지"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""),
-    인력: people.filter(x => !x.pid || x.pid === p.id).map(x => pick(x, ["id", "이름", "직책", "역할", "참여시작", "참여종료"])).sort((a, b) => a.id.localeCompare(b.id))});
+  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "코드", "발주처", "상태", "시작", "종료", "연락처페이지"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""), PM: String(p.PM ?? ""),
+    인력: people.filter(x => !x.pid || x.pid === p.id).map(x => pick(x, ["id", "이름", "직책", "역할", "참여시작", "참여종료", "uid"])).sort((a, b) => a.id.localeCompare(b.id))});
   Object.entries(want).forEach(([id, v]) => { if (sj(v) !== sj(views[id] ?? null)) { views[id] = v; db.doc(`view/${id}`).set(v).catch(() => {}); } });
   Object.keys(views).filter(id => !want[id]).forEach(id => { delete views[id]; db.doc(`view/${id}`).delete().catch(() => {}); });
 }
@@ -1184,7 +1177,7 @@ function syncView() {
 showTab(tab);
 (async () => {
   let user; [db, sample, mcp, downloads, user] = await Promise.all(["db", "sample", "mcp", "downloads", "user"].map(n => window.claude?.use?.(n) ?? null));
-  assets = (await Promise.resolve(window.claude?.use?.("assets")).catch(() => null)) ?? null; // 작업 첨부(편집 권한자만). 없으면 링크 붙이기만
+  uid = (await user?.id?.().catch(() => null)) ?? null;
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("staff", !admin); showTab(tab);
   if (!db) { draw(); return; }
@@ -1194,8 +1187,8 @@ showTab(tab);
     if (pd) { if ((pd.j === sj(v.items || []) && pd.t <= pd.s) || now - pd.t > 15000) delete wPend[d.id]; else if (old[d.id]) { wbs[d.id] = old[d.id]; return; } } // 내 저장이 돌아오기 전 스냅샷은 건너뜀
     v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
     Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
-  // 협업사: 관리자·팀장 모두 읽고 쓴다(partners: interact). 참가기업 연락처는 프로젝트별 페이지
-  db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ct") draw(); }, () => {});
+  db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...d.data()})); if (dlgT) drawAtt(); }, () => {});
+  db.collection("peoplereq").onSnapshot(s => { preqs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
     db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...d.data()})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));
       if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); }, () => { $("say").textContent = "관제실 자료를 불러오지 못했습니다. 새로고침해 주세요."; });
