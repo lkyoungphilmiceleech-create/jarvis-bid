@@ -677,7 +677,7 @@ function editTask(i, toRep) {
     <div class="row note"><select data-tf="단계" aria-label="단계 (구분)">${opt([...new Set([...STG, t.단계].filter(Boolean))], t.단계)}</select><span>${esc(who(t.담당))} · ${esc(t.시작 || "?")} ~ ${esc(t.종료 || "?")}</span>${admin ? "<span>· 닫으면 저장됩니다</span>" : ""}</div>
     <label class="fl">과업내용 · 산출물<textarea data-tf="산출물" placeholder="${admin ? "이 작업으로 무엇을 만드는지" : ""}">${esc(t.산출물)}</textarea></label>
     <h3>하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
-    <div id="attBox"><h3>관련 자료</h3><div id="att"></div>
+    <div id="attBox"><h3>관련 자료</h3><p class="note">관제실을 공유받은 사람은 모두 볼 수 있습니다. 예산·계약 금액·연락처가 든 문서는 올리지 마세요.</p><div id="att"></div>
     ${canUp() ? `${dropBox("att", "파일(10MB까지, 모든 형식)", "", true)}<div class="row"><input id="attUrl" type="url" placeholder="링크 붙이기 (https://…)" aria-label="자료 링크" style="flex:1"><button class="btn" type="button" id="attLink">링크 추가</button></div>` : ""}
     <p class="note" id="attNote">이 프로젝트 투입 인력이 모두 보는 자료입니다. 금액·연락처가 든 문서는 올리지 마세요.</p></div>
     <details id="repD"${toRep ? " open" : ""}><summary class="note">지연 보고 ${reps.length}건${nOpen ? ` (미해결 ${nOpen})` : ""} · 처리 기록 ${rec.length}건</summary>
@@ -995,7 +995,7 @@ async function reqDo(id, ok) { const r = preqs.find(x => x.id === id); if (!r ||
   await put(`peoplereq/${id}`, {...base, 상태: ok ? "승인" : "반려", 처리: new Date().toISOString()}); toast(ok ? "승인해 참여인력에 반영했습니다." : "반려했습니다.");
 }
 const reqBox = () => { const rs = preqs.filter(r => r.상태 === "대기").sort((a, b) => String(a.at).localeCompare(String(b.at))); if (!rs.length) return "";
-  return `<div class="co"><h3>승인 대기 ${rs.length}건</h3>${rs.map(r => `<div class="row"><span>${r.pid === cur ? "" : `<span class="tag">${esc(projects.find(p => p.id === r.pid)?.이름 || r.pid)}</span> `}${rqDesc(r)} <span class="note">${esc(kst(r.at))}</span></span><span style="flex:1"></span><button class="btn primary" type="button" data-rqok="${esc(r.id)}">승인</button><button class="btn x" type="button" data-rqno="${esc(r.id)}">반려</button></div>`).join("")}</div>`; };
+  return `<div class="co"><h3>승인 대기 ${rs.length}건</h3><p class="note">승인 전에 신청자가 실제 그 사람인지 확인해 주세요.</p>${rs.map(r => `<div class="row"><span>${r.pid === cur ? "" : `<span class="tag">${esc(projects.find(p => p.id === r.pid)?.이름 || r.pid)}</span> `}${rqDesc(r)} <span class="note">${esc(kst(r.at))}</span></span><span style="flex:1"></span><button class="btn primary" type="button" data-rqok="${esc(r.id)}">승인</button><button class="btn x" type="button" data-rqno="${esc(r.id)}">반려</button></div>`).join("")}</div>`; };
 function drawPpl() {
   if (!admin) { drawPplStaff(); return; }
   const pp = PP(), p = P();
@@ -1152,7 +1152,7 @@ document.addEventListener("paste", e => { if (e.target.id === "budTsv") { e.prev
 document.addEventListener("input", e => { const d = e.target.dataset;
   if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); if (!e.isComposing) wSave(); } }
   if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
-// 파일 올리기 공통: [파일 선택] 버튼 + 끌어다 놓기 영역(프로젝트 문서·산출내역서·장부·협업사 엑셀·작업 자료). id = k+Drop/Pick/File
+// 파일 올리기 공통: [파일 선택] 버튼 + 끌어다 놓기 영역(프로젝트 문서·산출내역서·장부·작업 자료). id = k+Drop/Pick/File
 const dropBox = (k, what, accept, multi, tip = "") => `<div class="drop" id="${k}Drop" data-drop="${k}">${what}를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="${k}Pick" data-pick="${k}">파일 선택</button><input type="file" id="${k}File" data-file="${k}"${accept ? ` accept="${accept}"` : ""}${multi ? " multiple" : ""} hidden>${tip ? `<br><span class="note">${tip}</span>` : ""}</div>`;
 const onFiles = {doc: fs => readDocs(fs), bud: fs => budIn(fs[0]), att: fs => attUp(fs),
   led: async fs => { if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(fs[0].name, XLSX.read(await fs[0].arrayBuffer(), {type: "array"})); }};
