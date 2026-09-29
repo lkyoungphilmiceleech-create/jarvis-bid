@@ -59,7 +59,7 @@ body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-bloc
 .tabs button{border:1px solid var(--line);background:var(--glass);color:var(--ink);border-radius:999px;padding:8px 18px;cursor:pointer;font:500 14px var(--sans)}
 .tabs button[aria-selected="true"]{background:var(--holo);color:var(--holo-ink);border-color:var(--holo)}
 .panel{padding:18px;display:flex;flex-direction:column;gap:14px;animation:land .3s ease-out}
-.panel[hidden]{display:none}
+[hidden]{display:none!important}
 .panel h2{margin:0;font:700 16px var(--sans)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .grid2{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px}
@@ -191,11 +191,11 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div class="kpis" id="kpis"></div>
   </section>
 
-  <nav class="tabs" role="tablist"><button type="button" role="tab" data-tab="briefs" aria-selected="true">동향 브리핑</button><button type="button" role="tab" data-tab="deep" aria-selected="false">심층 리포트</button><button type="button" role="tab" data-tab="rep" aria-selected="false">보고서 아카이브</button><button type="button" role="tab" data-tab="lib" aria-selected="false">제안 조사 자료</button></nav>
+  <nav class="tabs" role="tablist"><button type="button" role="tab" data-tab="briefs" aria-selected="true">동향 브리핑</button><button type="button" role="tab" data-tab="deep" aria-selected="false">심층 리포트</button><button type="button" role="tab" data-tab="rep" aria-selected="false">보고서 아카이브</button><button type="button" role="tab" data-tab="lib" aria-selected="false" hidden>제안 조사 자료</button></nav>
 
   <section class="glass panel" id="tab-deep" hidden>
     <div class="row"><h2 style="margin:0">심층 리포트</h2><span class="note">밤 22·00·02시에 진흥원 백서·컨퍼런스 발표자료·전문가 SNS·전문지·언론 기사를 국내외에서 조사하고(3회), 새벽 5·6·7시에 마케팅·제안서용 보고서를 초안 → 검증·보강 → 완성 3단계로 만듭니다(한국 기업 사례·벤치마킹 사례·수치 차트).</span></div>
-    <div class="item" id="dFocus"><div class="row"><b>이번 주 리서치 주제</b><span class="note">매일 밤 이 주제로 조사합니다. 비우거나 기간이 지나면 콘텐츠·출판·과학기술을 돌아가며 조사합니다.</span></div>
+    <div class="item" id="dFocus" hidden><div class="row"><b>이번 주 리서치 주제</b><span class="note">매일 밤 이 주제로 조사합니다. 비우거나 기간이 지나면 콘텐츠·출판·과학기술을 돌아가며 조사합니다.</span></div>
       <div class="row"><input id="dT" placeholder="주제 — 예) 미주 지역 IP 비즈니스" style="flex:2;min-width:220px"><input id="dR" placeholder="권역 — 예) 미주(미국·캐나다·중남미)" style="flex:1;min-width:160px"><label class="note">적용 마지막 날 <input type="date" id="dE"></label></div>
       <textarea id="dS" placeholder="세부 관점 (한 줄에 하나) — 예) IP 라이선싱·머천다이징 시장 규모" style="min-height:70px"></textarea>
       <div class="row"><button class="btn primary" type="button" id="dSave">저장</button><span class="note" id="dNote"></span></div></div>
@@ -330,12 +330,15 @@ async function saveFocus() { if (!DB) return; const 주제 = $("dT").value.trim(
 draw();
 (async () => {
   const db = await window.claude?.use?.("db"); DB = db;
+  const user = await window.claude?.use?.("user"); // 주제 설정·공고 자료실은 관리자(편집 권한)만 — 직원은 브리핑·리포트 읽기만
+  const admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
+  $("dFocus").hidden = !admin; document.querySelector('[data-tab="lib"]').hidden = !admin;
   if (!db) { $("say").textContent = "본부장님, 이 화면에서는 브리핑 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요."; return; }
   db.doc("config/focus").onSnapshot(d => { dfocus = d.exists ? d.data() : {}; drawDeep(); });
   db.collection("reports").orderBy("날짜", "desc").limit(60).onSnapshot(s => { reports = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
   db.collection("nights").orderBy("날짜", "desc").limit(14).onSnapshot(s => { nights = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
   db.collection("research").onSnapshot(s => { research = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
-  db.collection("library").onSnapshot(s => { lib = s.docs.map(d => ({id: d.id, ...d.data()})); drawLib(); draw(); });
+  if (admin) db.collection("library").onSnapshot(s => { lib = s.docs.map(d => ({id: d.id, ...d.data()})); drawLib(); draw(); }, () => {});
   db.collection("briefs").orderBy("날짜", "desc").limit(60).onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); drawLib(); drawRep(); }, () => { $("say").textContent = "본부장님, 브리핑을 불러오지 못했습니다. 새로고침해 주세요."; });
 })();
 </script>
