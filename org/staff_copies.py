@@ -13,10 +13,14 @@ import json, pathlib, re, sys
 PUBF = ["유형", "이름", "직책", "역할구분", "회사", "국가", "도시", "분야", "산업군", "프로필", "거래실적", "거래출처", "거래근거", "근거", "웹",
         "행사경로", "행사경로출처", "발굴대상", "발굴경로", "상태", "최고적합도", "최초발굴일", "최근확인일", "시험"]
 PUBM = ["pid", "프로젝트", "기업명", "적합도", "적합이유", "추천접근"]
-A = re.ASCII | re.I  # JS 정규식처럼 \w·\b 를 ASCII 기준으로
-MAIL = re.compile(r"[\w.+-]+\s*(@|\[at\]|\(at\))\s*[\w-]+(\s*(\.|\[dot\])\s*[\w-]+)+", A)
-PHONE = re.compile(r"(\+\d|\b0\d{1,2})[\d\s().-]{6,}\d", re.ASCII)
-LINKEDIN = re.compile(r"(https?://)?([\w-]+\.)*linkedin\.com/\S*", A)
+# JS 정규식과 같게: \w·\d·\b 는 ASCII 로 풀어 쓰고, \s·\S 는 유니코드 그대로(NBSP·전각 공백 포함)
+MAIL = re.compile(r"[A-Za-z0-9_.+-]+\s*(@|\[at\]|\(at\))\s*[A-Za-z0-9_-]+(\s*(\.|\[dot\])\s*[A-Za-z0-9_-]+)+", re.I)
+PHONE = re.compile(r"(\+[0-9]|(?<![A-Za-z0-9_])0[0-9]{1,2})[0-9\s().-]{6,}[0-9]")
+LINKEDIN = re.compile(r"(https?://)?([A-Za-z0-9_-]+\.)*linkedin\.com/\S*", re.I)
+
+
+def truthy(v):  # JS 참/거짓: 빈 배열·객체도 참
+    return v not in (None, False, 0, "") or isinstance(v, (list, dict))
 
 
 def scrub(v):
@@ -30,27 +34,29 @@ def scrub(v):
 
 
 def pick(o, ks):
+    o = o if isinstance(o, dict) else {}
     return {k: v for k in ks if (v := scrub(o.get(k))) is not None and v != ""}
 
 
 def reach(b):
-    return b.get("연락") or ("개인 이메일" if b.get("이메일") else "회사 연락처" if b.get("회사연락처") else "행사 경로" if b.get("행사경로")
-                            else "링크드인만" if b.get("링크드인") else "없음")
+    t = lambda k: truthy(b.get(k))
+    return b.get("연락") if t("연락") else "개인 이메일" if t("이메일") else "회사 연락처" if t("회사연락처") else "행사 경로" if t("행사경로") else "링크드인만" if t("링크드인") else "없음"
 
 
 def pub_of(b):
     return {**pick(b, PUBF), "매칭": [pick(m, PUBM) for m in (b.get("매칭") if isinstance(b.get("매칭"), list) else [])], "연락": reach(b)}
 
 
-def s(x):
-    return "" if x is None else str(x)
+def s(x):  # JS String()
+    return "" if x is None else ("true" if x else "false") if isinstance(x, bool) else ",".join(map(s, x)) if isinstance(x, list) else str(x)
 
 
 def views(pm, people):
-    name = {i: s(p.get("이름")) for i, p in people.items()}
-    return {pid: {**{k: s(p.get(k)) for k in ["이름", "발주처", "상태", "시작", "종료"]}, "담당PM": name.get(p.get("PM"), ""),
+    ppl = [{"id": i, **x} for i, x in people.items()]  # JS {id: d.id, ...d.data()} 처럼 data 의 id 가 이긴다
+    return {pid: {**{k: s(p.get(k)) for k in ["이름", "발주처", "상태", "시작", "종료"]},
+                  "담당PM": s(next((x.get("이름") for x in ppl if x["id"] == p.get("PM")), "")),
                   "인력": sorted(({k: s(x.get(k)) for k in ["id", "이름", "직책", "역할", "참여시작", "참여종료"]}
-                                for i, x in ((i, {**x, "id": i}) for i, x in people.items()) if not x.get("pid") or x.get("pid") == pid), key=lambda x: x["id"])}
+                                for x in ppl if not x.get("pid") or x.get("pid") == pid), key=lambda x: x["id"])}  # ponytail: JS localeCompare 와 달리 코드 순서 — 인력 id 는 "U"+base36 이라 같음
             for pid, p in pm.items()}
 
 
@@ -75,6 +81,9 @@ def test():
     assert scrub("문의 kim@x.co.kr 또는 010-1234-5678, 02-123-4567") == "문의 (이메일 생략) 또는 (전화 생략), (전화 생략)"
     assert scrub("name [at] x [dot] com") == "(이메일 생략)"
     assert scrub("전화010-1234-5678") == "전화(전화 생략)"  # JS \b 처럼 한글 뒤에서도 가림
+    assert scrub("010\u00a01234\u00a05678") == "(전화 생략)" and scrub("kim\u3000@\u3000x.com") == "(이메일 생략)"  # NBSP·전각 공백
+    assert scrub("linkedin.com/in/x\u00a0abc") == "\u00a0abc" and reach({"이메일": []}) == "개인 이메일"
+    assert pub_of({"매칭": [None, "x", {"pid": "P"}]})["매칭"] == [{}, {}, {"pid": "P"}] and s(True) == "true" and s([1, 2]) == "1,2"
     assert scrub("https://kr.linkedin.com/in/x") == "" and scrub("see linkedin.com/in/abc ok") == "see  ok"
     assert scrub("2025.07 투자(105억원)") == "2025.07 투자(105억원)" and scrub(["a", "https://linkedin.com/in/x"]) == ["a"]
     b = {"이름": "A", "이메일": "a@b.com", "회사연락처": "x", "메모": "비밀", "dbId": "D1", "최고적합도": 0,
