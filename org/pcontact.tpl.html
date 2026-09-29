@@ -1,0 +1,172 @@
+<title>프로젝트 연락처</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+/* 관제실(pmo.tpl.html)과 같은 색·글꼴 */
+:root{
+  color-scheme:dark;
+  --bg:#060C13;--bg2:#0A1622;--glass:rgba(16,34,50,.72);--glass2:rgba(22,46,66,.55);--ink:#DDF3FA;--muted:#7F9CAB;--line:rgba(88,200,235,.22);
+  --holo:#38D5F0;--holo-ink:#04121A;--holo-soft:rgba(56,213,240,.14);--amber:#F5B942;--go:#4BE3A0;--stop:#FF7A7A;--grid:rgba(56,213,240,.07);
+  --hud:"Chakra Petch","IBM Plex Sans KR",ui-monospace,monospace;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--go:#127A4E;--stop:#B3332B;--grid:rgba(10,127,160,.08);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#E4ECF1;--bg2:#D6E2EA;--glass:rgba(255,255,255,.8);--glass2:rgba(240,247,250,.9);--ink:#0E2230;--muted:#557080;--line:rgba(10,110,140,.22);
+  --holo:#0A7FA0;--holo-ink:#FFFFFF;--holo-soft:rgba(10,127,160,.1);--amber:#A56A06;--go:#127A4E;--stop:#B3332B;--grid:rgba(10,127,160,.08);}}
+body{color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:16px 56px;min-height:100%;
+  background:linear-gradient(var(--grid) 1px,transparent 1px) 0 0/32px 32px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/32px 32px,radial-gradient(1200px 600px at 30% 0%,var(--bg2),var(--bg)) fixed,var(--bg)}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hudlabel{font:500 11px var(--hud);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}
+.bar .where{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.live{width:8px;height:8px;border-radius:50%;background:var(--go);box-shadow:0 0 10px var(--go);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.clock{font:700 15px var(--hud);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--sans);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--holo);color:var(--holo-ink)}
+.btn{font:500 13px var(--sans);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:7px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:border-color .2s,box-shadow .2s}
+.btn:hover{border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.btn.primary{background:var(--go);color:var(--holo-ink);border-color:var(--go)}
+.btn.x{color:var(--muted)}
+.btn.x:hover{color:var(--stop);border-color:var(--stop)}
+.btn:disabled{opacity:.45;cursor:default;box-shadow:none}
+:focus-visible{outline:2px solid var(--holo);outline-offset:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+@keyframes bob{50%{transform:translateY(-4px)}}
+.hero{display:flex;gap:16px;align-items:center;padding:16px 18px;flex-wrap:wrap}
+.hero img{width:72px;height:72px;animation:bob 4s ease-in-out infinite}
+.hero h1{margin:0;font:700 22px/1.3 var(--sans);color:var(--holo);overflow-wrap:anywhere}
+.hero>div{flex:1;min-width:0}
+.panel{padding:18px;display:flex;flex-direction:column;gap:14px}
+.panel h2{margin:0;font:700 16px var(--sans)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,textarea{font:14px var(--sans);color:var(--ink);background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0;box-sizing:border-box}
+textarea{min-height:52px;resize:vertical;width:100%}
+input:focus,textarea:focus{outline:0;border-color:var(--holo);box-shadow:0 0 12px var(--holo-soft)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:500 11px var(--hud);letter-spacing:.04em;color:var(--muted);background:var(--glass2);white-space:nowrap}
+tbody tr:hover{background:var(--holo-soft)}
+.bt td input{width:100%;min-width:90px;padding:3px 6px;font-size:12px}
+.bt td.go{white-space:nowrap;font-size:12px}
+a{color:var(--holo)}
+.empty{font-size:13px;color:var(--muted);padding:6px 0}
+.ext{border:1px solid var(--holo);border-radius:12px;padding:10px 12px;background:var(--holo-soft);font-size:13px;margin:6px 0 0}
+body.staff .adm{display:none!important} /* 공유받은 PM: 내려받기 숨김 — 실제 차단은 downloads 권한 */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="glass bar">
+    <div class="where"><span class="live" aria-hidden="true"></span><span class="hudlabel">JARVIS OPS</span><span>사업 수행 본부 · 프로젝트 연락처</span></div>
+    <div class="where"><span class="clock" id="clock">--:--:--</span><span class="hudlabel">KST</span>
+      <div class="seg" role="group" aria-label="화면 모드"><button type="button" data-theme-m="system">시스템</button><button type="button" data-theme-m="light">라이트</button><button type="button" data-theme-m="dark">다크</button></div>
+    </div>
+  </header>
+
+  <section class="glass hero">
+    <img src="__AVATAR__" alt="">
+    <div><h1 id="ttl">참가기업 연락처</h1>
+      <p class="ext">이 페이지는 이 프로젝트의 담당 PM·관리자만 공유받습니다. 연락처를 다른 곳(NEXUS 메모 등)에 옮겨 적지 마세요.</p></div>
+  </section>
+
+  <section class="glass panel" id="box"><p class="empty">여는 중입니다…</p></section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const kst = s => s ? new Date(s).toLocaleString("sv-SE", {timeZone: "Asia/Seoul"}).slice(0, 16) : "";
+const today = () => new Date().toLocaleDateString("sv-SE", {timeZone: "Asia/Seoul"});
+const nk = s => String(s ?? "").replace(/[\s()_\-·/.,]/g, "").toLowerCase();
+const applyTheme = m => { if (m === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = m;
+  document.querySelectorAll("[data-theme-m]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeM === m)); try { localStorage.setItem("pmo-theme", m); } catch {} };
+let th = "system"; try { th = localStorage.getItem("pmo-theme") || "system"; } catch {} applyTheme(th);
+const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}); tick(); setInterval(tick, 1000);
+
+// ── 참가기업 연락처(contacts/list) — 관제실 연락처 탭에서 옮겨 옴. 외부 발송에 쓰지 않는다(mailto·tel 링크만)
+const CT = ["기업명", "담당자", "직책", "모바일", "이메일", "대표번호", "메모"];
+// 엑셀 머리글 → 칸 (앞 항목이 먼저 가져간다: '휴대전화'는 모바일, '회사명'은 기업명). 관제실과 같은 표
+const HM = [["모바일", /모바일|휴대|핸드폰|^hp$|mobile|cell/], ["이메일", /이메일|email|메일/], ["대표번호", /대표번호|대표전화|전화|tel|phone|연락처/], ["웹", /^웹|홈페이지|website|url/],
+  ["기업명", /기업|회사|업체|상호|company|파트너/], ["국가", /국가|country/], ["도시", /도시|city/], ["분야", /분야|업종|category|field/], ["사업", /사업|프로젝트|project/], ["연도", /연도|년도|year/],
+  ["역할", /역할|role/], ["평가", /평가|rating/], ["담당자", /담당|성명|이름|name|contact/], ["직책", /직책|직위|직급|title|position/], ["메모", /메모|비고|memo|note/]];
+const hmap = row => { const h = row.map(nk), m = {}, used = new Set(); HM.forEach(([k, re]) => { const j = h.findIndex((x, i) => x && !used.has(i) && re.test(x)); if (j >= 0) { m[k] = j; used.add(j); } }); return m; };
+function fromAoa(aoa, pos) { // 앞 5줄 안에 머리글이 있으면 열 이름으로, 없으면 pos 순서로
+  const hi = aoa.slice(0, 5).findIndex(r => Object.keys(hmap(r)).length >= 2 && r.every(c => String(c).length <= 20 && !/@|\d{3}/.test(c))); // 메일·전화가 든 줄은 머리글 아님
+  const m = hi >= 0 ? hmap(aoa[hi]) : Object.fromEntries(pos.map((k, i) => [k, i]));
+  return aoa.slice(hi + 1).map(r => Object.fromEntries(Object.entries(m).map(([k, j]) => [k, String(r[j] ?? "").trim()]))).filter(o => Object.values(o).some(Boolean));
+}
+const readBook = wb => { const out = {}; wb.SheetNames.forEach(n => { const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, defval: "", raw: false, blankrows: false}); if (rows.length) out[n] = rows.map(r => r.map(v => String(v).trim())); }); return out; };
+const aoaOf = async f => { if (!window.XLSX) throw new Error("엑셀 읽기 도구를 불러오지 못했습니다."); return Object.values(readBook(XLSX.read(await f.arrayBuffer(), {type: "array"})))[0] || []; };
+const okMail = v => /^[^\s@"<>]+@[^\s@"<>]+\.[^\s@"<>]+$/.test(v), okTel = v => /^\+?[\d\s\-().]{7,20}$/.test(v);
+const telA = (v, l) => v && okTel(v) ? `<a href="tel:${esc(v.replace(/[^\d+]/g, ""))}">${l}</a>` : "";
+const mailA = (v, l) => v && okMail(v) ? `<a href="mailto:${esc(v)}">${l}</a>` : "";
+
+let db = null, downloads = null, admin = false, proj = null, saved = null, ctRows = [], ctDirty = false, ctMsg = "";
+function drawHead() { const n = proj?.이름 || "프로젝트 이름 미지정"; $("ttl").textContent = `참가기업 연락처 — ${n}`; }
+function draw() {
+  if (!db) { $("box").innerHTML = '<p class="empty">이 화면에서는 저장소에 연결할 수 없습니다. 공유받은 claude.ai 페이지에서 열어 주세요.</p>'; return; }
+  if (!ctDirty) ctRows = JSON.parse(JSON.stringify(saved?.rows || []));
+  const u = saved?.updatedAt;
+  $("box").innerHTML = `<div class="row"><h2>참가기업 연락처</h2><span class="note">${ctRows.length}곳${u ? ` · 저장 ${esc(kst(u))}` : ""}</span><span style="flex:1"></span>
+      <button class="btn" type="button" id="ctAdd">+ 행 추가</button><button class="btn" type="button" id="ctPick">엑셀 올리기</button><input type="file" id="ctFile" accept=".xlsx,.xls,.csv" hidden>${admin && downloads ? '<button class="btn adm" type="button" id="ctXlsx">엑셀 저장</button>' : ""}<button class="btn primary" type="button" id="ctSave">저장</button></div>
+    <textarea id="ctPaste" rows="2" placeholder="엑셀에서 여러 줄을 복사해 여기에 붙여 넣으면 표에 추가됩니다. 첫 줄이 머리글이면 열 이름으로 맞추고, 없으면 기업명·담당자·직책·모바일·이메일·대표번호·메모 순서입니다."></textarea>
+    <p class="note" id="ctNote">${esc(ctMsg)}${ctDirty ? " 저장하지 않은 변경이 있습니다." : ""}</p>
+    <div class="tw"><table class="bt"><thead><tr>${CT.map(k => `<th>${k}</th>`).join("")}<th>바로가기</th><th></th></tr></thead><tbody>${ctRows.map((r, i) => `<tr>${CT.map(k => `<td><input data-cc="${i}|${k}" aria-label="${k}" value="${esc(r[k])}"${k === "이메일" ? ' type="email"' : /모바일|대표번호/.test(k) ? ' type="tel"' : ""}></td>`).join("")}<td class="go">${[telA(r.모바일, "모바일"), mailA(r.이메일, "메일"), telA(r.대표번호, "대표")].filter(Boolean).join(" · ")}</td><td><button class="btn x" type="button" data-ccdel="${i}" aria-label="행 삭제">✕</button></td></tr>`).join("") || '<tr><td colspan="9" class="empty">등록된 참가기업 연락처가 없습니다.</td></tr>'}</tbody></table></div>`;
+}
+// 다른 사람의 저장이 들어와도 입력 중(미저장 변경 + 표 안 포커스)에는 다시 그리지 않는다
+const redraw = () => { const a = document.activeElement; if (ctDirty && /INPUT|TEXTAREA/.test(a?.tagName) && $("box").contains(a)) return; draw(); };
+function ctAddRows(aoa) {
+  const rows = fromAoa(aoa, CT).map((o, i) => ({id: "C" + Date.now().toString(36) + i, ...Object.fromEntries(CT.map(k => [k, o[k] || ""]))}));
+  ctRows.push(...rows); ctDirty = true; ctMsg = `${rows.length}줄을 표에 넣었습니다. [저장]을 눌러야 반영됩니다.`; draw();
+}
+async function ctSave() {
+  if (!db) return;
+  const rows = ctRows.map(r => ({id: r.id || "C" + Date.now().toString(36), ...Object.fromEntries(CT.map(k => [k, String(r[k] ?? "").trim()]))})).filter(r => CT.some(k => r[k]));
+  const noName = rows.filter(r => !r.기업명).length; if (noName) { alert(`기업명이 빈 행이 ${noName}개 있습니다. 기업명을 채우거나 행을 지운 뒤 저장해 주세요.`); return; }
+  const bad = rows.filter(r => (r.이메일 && !okMail(r.이메일)) || [r.모바일, r.대표번호].some(v => v && !okTel(v))).map(r => r.기업명), d = {rows, updatedAt: new Date().toISOString()};
+  try { await db.doc("contacts/list").set(d); saved = d; ctDirty = false; ctMsg = `${rows.length}곳을 저장했습니다.` + (bad.length ? ` 이메일·전화 형식을 확인해 주세요: ${bad.slice(0, 5).join(", ")}${bad.length > 5 ? " 외" : ""}` : ""); }
+  catch { ctMsg = "저장하지 못했습니다. 권한을 확인해 주세요."; }
+  draw();
+}
+async function saveXlsx() {
+  if (!admin || !downloads || !window.XLSX) { alert("이 화면에서는 파일 저장을 쓸 수 없습니다."); return; }
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([CT, ...ctRows.map(r => CT.map(k => r[k] || ""))]), "참가기업 연락처");
+  try { await downloads.save({filename: `참가기업_연락처_${proj?.이름 || "프로젝트"}_${today()}.xlsx`, data: new Uint8Array(XLSX.write(wb, {type: "array", bookType: "xlsx"}))}); } catch {}
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.themeM) applyTheme(t.dataset.themeM);
+  if (t.id === "ctAdd") { ctRows.push({id: "C" + Date.now().toString(36)}); ctDirty = true; draw(); document.querySelector(`[data-cc="${ctRows.length - 1}|기업명"]`)?.focus(); }
+  if (t.dataset.ccdel !== undefined) { ctRows.splice(+t.dataset.ccdel, 1); ctDirty = true; draw(); }
+  if (t.id === "ctPick") $("ctFile").click();
+  if (t.id === "ctSave") ctSave();
+  if (t.id === "ctXlsx") saveXlsx();
+});
+document.addEventListener("change", async e => { const t = e.target;
+  if (t.id === "ctFile" && t.files[0]) { const f = t.files[0]; t.value = ""; try { ctAddRows(await aoaOf(f)); } catch (er) { alert(er.message || "파일을 읽지 못했습니다."); } } });
+document.addEventListener("paste", e => { if (e.target.id !== "ctPaste") return; const x = e.clipboardData?.getData("text") || ""; if (!x.trim()) return; e.preventDefault();
+  ctAddRows(x.split(/\r?\n/).filter(l => l.trim()).map(l => l.split("\t").map(c => c.trim()))); }); // ponytail: 셀 안 줄바꿈(따옴표)은 나뉜다 — 필요하면 엑셀 올리기
+document.addEventListener("input", e => { const d = e.target.dataset;
+  if (d.cc) { const [i, k] = d.cc.split("|"); if (ctRows[+i]) { ctRows[+i][k] = e.target.value; ctDirty = true; $("ctNote").textContent = "저장하지 않은 변경이 있습니다."; } } });
+addEventListener("beforeunload", e => { if (ctDirty) { e.preventDefault(); e.returnValue = ""; } });
+
+(async () => {
+  let user; [db, downloads, user] = await Promise.all(["db", "downloads", "user"].map(n => window.claude?.use?.(n) ?? null));
+  admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
+  document.body.classList.toggle("staff", !admin); drawHead(); draw();
+  if (!db) return;
+  db.doc("config/project").onSnapshot(s => { proj = s.exists ? s.data() : null; drawHead(); }, () => {});
+  db.doc("contacts/list").onSnapshot(s => { saved = s.exists ? s.data() : null; redraw(); }, () => { ctMsg = "연락처를 불러오지 못했습니다. 새로고침해 주세요."; redraw(); });
+})();
+</script>
