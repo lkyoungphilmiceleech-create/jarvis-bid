@@ -913,6 +913,6 @@ showTab(tab);
   db.collection("budget").onSnapshot(s => { budget = {}; s.docs.forEach(d => budget[d.id] = d.data()); if (tab !== "bud" || !document.activeElement?.dataset?.bf) draw(); });
   db.collection("ledger").onSnapshot(s => { ledger = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab !== "led" || document.activeElement?.id !== "lq") draw(); });
   db.collection("people").onSnapshot(s => { people = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); sync("people"); });
-  db.collection("view").onSnapshot(s => { views = {}; s.docs.forEach(d => views[d.id] = d.data()); sync("view"); }, () => {});
+  db.collection("view").onSnapshot(s => { const first = !seen.has("view"); views = {}; s.docs.forEach(d => views[d.id] = d.data()); if (first) sync("view"); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
 })();
 </script>
