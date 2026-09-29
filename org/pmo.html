@@ -544,15 +544,15 @@ function editTask(i, toRep) {
     <label class="wide">산출물<input data-tf="산출물" value="${esc(t.산출물)}"></label><label>시작일<input type="date" data-tf="시작" value="${esc(t.시작)}"></label><label>마감일<input type="date" data-tf="종료" value="${esc(t.종료)}"></label>
     <label>담당<select data-tf="담당">${opt(WHO(), t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}</select></label><label>상태<select data-tf="상태">${opt(STAT, t.상태)}</select></label>
     <label class="wide adm">연결 예산 항목<select data-tf="예산항목" multiple size="3">${bOpts.map(r => `<option value="${esc(r.id)}"${(t.예산항목 || []).includes(r.id) ? " selected" : ""}>${esc([r.구분, r.항목, r.내용].filter(Boolean).join(" / "))} (${won(r.금액)})</option>`).join("")}</select></label>
-    <label class="wide">진행 메모<textarea data-tf="메모">${esc(t.메모)}</textarea></label></div>
+    <label class="wide adm">진행 메모<textarea data-tf="메모">${esc(t.메모)}</textarea></label></div>
     <h3 style="margin:14px 0 6px;font-size:14px">하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm" style="margin-top:6px"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
     <h3 id="repH" style="margin:14px 0 6px;font-size:14px">지연 보고</h3>
     ${reps.map((r, j) => `<div class="rep${r.해결 ? " done" : ""}"><span class="note">${esc(kst(r.at).slice(0, 10))} 보고${r.기존마감 ? ` · 기존 마감 ${esc(r.기존마감)}` : ""}${r.새마감 ? ` → ${esc(r.새마감)}` : ""}</span><div>원인: ${esc(r.원인)}</div><div>조치: ${esc(r.조치)}</div>
       <label class="chk"><input type="checkbox" data-rp="${j}"${r.해결 ? " checked" : ""}> 해결 완료${r.해결일 ? ` (${esc(r.해결일)})` : ""}</label></div>`).join("")}
     <div class="form adm" style="margin-top:6px"><label class="wide">새 지연 보고 — 원인<textarea id="rWhy">${legacy ? esc(t.원인) : ""}</textarea></label><label class="wide">조치 계획 (누가·무엇을·언제까지)<textarea id="rFix">${legacy ? esc(t.해결) : ""}</textarea></label>
       <label>새 마감일 (적으면 일정이 바뀝니다)<input type="date" id="rDue"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="button" id="repAI">CHRONOS 초안</button></div></div>
-    ${t.추천역할 ? `<p class="note">CHRONOS 추천 역할: ${esc(t.추천역할)}${t.근거 ? ` · 근거: ${esc(t.근거)}` : ""}</p>` : ""}
-    ${t.결과 ? `<div class="out" style="margin-top:8px;max-height:240px;overflow:auto"><b>AI 결과물</b>\n${esc(t.결과)}</div>` : ""}
+    ${t.추천역할 ? `<p class="note">CHRONOS 추천 역할: ${esc(t.추천역할)}${t.근거 && admin ? ` · 근거: ${esc(t.근거)}` : ""}</p>` : ""}
+    ${t.결과 && admin ? `<div class="out" style="margin-top:8px;max-height:240px;overflow:auto"><b>AI 결과물</b>\n${esc(t.결과)}</div>` : ""}
     ${(t.기록 || []).length ? `<details style="margin-top:8px"><summary class="note">처리 기록 ${t.기록.length}건</summary>${t.기록.map(r => `<p class="note">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</details>` : ""}
     <div class="row" style="margin-top:12px"><span class="row adm"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn" value="req">저장 후 작업 요청</button><button class="btn x" value="del">삭제</button>'}</span><button class="btn" value="cancel">닫기</button><span class="note" id="dNote"></span></div>`;
   drawSubs(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = true); // 팀장은 보기만
@@ -604,7 +604,7 @@ async function requestTask(t) {
     try { await mcp.callTool("Zapier", "execute_zapier_write_action", {selected_api: "GoogleTasksCLIAPI", action: "task", tool_name: "google_tasks_create_task", params: {task_list: p.tasksList, title: `${tag} ${t.작업} — ${u.이름}`, notes: `산출물: ${t.산출물 || "-"}\n기간: ${t.시작} ~ ${t.종료}`, due: t.종료 ? `${t.종료}T09:00:00+09:00` : undefined}}); log.push("Google Tasks 등록"); }
     catch (e) { log.push("Tasks 실패: " + mcpMsg(e)); }
   }
-  t.상태 = "요청"; t.요청 = {at: new Date().toISOString(), tag}; // wbs 는 팀장도 읽으므로 이메일은 남기지 않는다 t.기록.push({at: new Date().toISOString(), 내용: `${u.이름}에게 요청 — ${log.join(", ")}`});
+  t.상태 = "요청"; t.요청 = {at: new Date().toISOString(), tag}; /* wbs 는 팀장도 읽으므로 이메일은 남기지 않는다 */ t.기록.push({at: new Date().toISOString(), 내용: `${u.이름}에게 요청 — ${log.join(", ")}`});
   wn(`${u.이름}에게 요청했습니다: ${log.join(", ")}`); await saveWbs(); draw();
 }
 async function repAI() {

@@ -981,8 +981,8 @@ function editPipe(b) {
 // ── 직원용 사본(pubpipe): 허용 목록 필드만. 이메일·회사연락처·링크드인·메모·dbId 는 넣지 않는다
 const PUBF = ["유형", "이름", "직책", "역할구분", "회사", "국가", "도시", "분야", "산업군", "프로필", "거래실적", "거래출처", "거래근거", "근거", "웹", "행사경로", "행사경로출처", "발굴대상", "발굴경로", "상태", "최고적합도", "최초발굴일", "최근확인일", "시험"];
 const PUBM = ["pid", "프로젝트", "기업명", "적합도", "적합이유", "추천접근"];
-const scrub = v => Array.isArray(v) ? v.map(scrub).filter(x => x !== "") : typeof v !== "string" ? v : /^https?:\/\/([\w-]+\.)*linkedin\.com/i.test(v) ? ""
-  : v.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "(이메일 생략)").replace(/\+\d[\d\s().-]{7,}\d/g, "(전화 생략)"); // ponytail: 글 속 이메일·국제전화(+)만 가림 — 국내 번호 형식이 섞이면 규칙 추가
+const scrub = v => Array.isArray(v) ? v.map(scrub).filter(x => x !== "") : typeof v !== "string" ? v : /linkedin\.com/i.test(v) && !/\s/.test(v.trim()) ? ""
+  : v.replace(/[\w.+-]+\s*(@|\[at\]|\(at\))\s*[\w-]+(\s*(\.|\[dot\])\s*[\w-]+)+/gi, "(이메일 생략)").replace(/(\+\d|\b0\d{1,2})[\d\s().-]{6,}\d/g, "(전화 생략)").replace(/(https?:\/\/)?([\w-]+\.)*linkedin\.com\/\S*/gi, ""); // ponytail: 흔한 형식(이메일·[at]·국제·국내 전화·링크드인 주소)만 가림 — 허용 목록 필드가 1차 방어
 const pick = (o, ks) => Object.fromEntries(ks.map(k => [k, scrub(o?.[k])]).filter(([, v]) => v != null && v !== ""));
 const pubOf = b => ({...pick(b, PUBF), 매칭: (Array.isArray(b.매칭) ? b.매칭 : []).map(m => pick(m, PUBM)), 연락: reach(b)});
 const pubJs = o => JSON.stringify(o, [...PUBF, ...PUBM, "매칭", "연락"].sort());
