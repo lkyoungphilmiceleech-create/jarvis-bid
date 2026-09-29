@@ -313,7 +313,7 @@ function kickoff(p = P()) {
   return [{k: "계약", done: !!(p.계약일 && (num(p.계약총액) || num(p.계약금액))), hint: "계약일·계약 금액 입력(문서로 채우기 가능)", tab: "set"},
     {k: "담당 PM", done: !!p.PM, hint: "참여인력 등록 후 설정에서 담당 PM 선택", tab: "set"},
     {k: "인력 배치", done: PP().length > 0, hint: "참여인력 탭의 사내 직원 명부에서 골라 배치", tab: "ppl"},
-    {k: "예산·수익률", done: !!B()?.기준, hint: "산출내역서 올리기 → [수익률 고정]", tab: "bud"},
+    {k: "예산·수익률", done: !!B() && tgt(p) !== null, hint: "산출내역서 올리기 → 목표 수익률 입력(상단 ✎)", tab: "bud"},
     {k: "체크리스트", done: w.length > 0 && !gap, hint: w.length ? `담당·마감이 빠진 작업 ${gap}건 채우기` : "공정표 1차 생성", tab: "wbs"}];
 }
 function stepsHtml() {
@@ -499,11 +499,12 @@ function lateList() {
 // 타임라인: 오늘이 든 주(월요일)·달부터 끝까지만. 기간 3개월 이하면 주, 길면 월(wScale 로 바꿈). 일 단위는 두지 않는다
 const d8 = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const wkL = d => `${d.getMonth() + 1}월 ${Math.ceil(d.getDate() / 7)}주`;
-const mw = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? wkL(new Date(v + "T00:00:00")) : "";
+const mon = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
+const mw = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? wkL(mon(new Date(v + "T00:00:00"))) : ""; // 타임라인 머리와 같은 주(월요일 기준)
 let wScale = "auto";
 function periods(w) {
   const end = [P()?.종료, ...w.map(t => t.종료)].filter(Boolean).sort().pop() || today(), d0 = new Date(today() + "T00:00:00"), e = new Date(end + "T00:00:00");
-  const sc = wScale !== "auto" ? wScale : (e - d0) / 864e5 <= 92 ? "주" : "월", out = [], d = sc === "주" ? new Date(d0.getTime() - (d0.getDay() + 6) % 7 * 864e5) : new Date(d0.getFullYear(), d0.getMonth(), 1);
+  const sc = wScale !== "auto" ? wScale : (e - d0) / 864e5 <= 92 ? "주" : "월", out = [], d = sc === "주" ? mon(d0) : new Date(d0.getFullYear(), d0.getMonth(), 1);
   while ((!out.length || d <= e) && out.length < (sc === "주" ? 60 : 36)) { const st = new Date(d); if (sc === "주") d.setDate(d.getDate() + 7); else d.setMonth(d.getMonth() + 1);
     out.push({s: d8(st), e: d8(new Date(d.getTime() - 864e5)), l: sc === "주" ? wkL(st) : `${String(st.getFullYear()).slice(2)}.${st.getMonth() + 1}`}); }
   return {sc, ps: out};
@@ -512,7 +513,7 @@ const tlHead = ps => ps.map((x, k) => `<th class="tlh${k ? "" : " now"}">${x.l}<
 const tlCells = (t, ps) => ps.map(x => `<td class="tl${(t.시작 || t.종료) && (t.시작 || t.종료) <= x.e && (t.종료 || t.시작) >= x.s ? " on " + effStat(t) : ""}"></td>`).join("");
 // 공정일정: 표(구분·항목·과업내용·담당자·시작일·마감일·진행 내용 + 오른쪽 타임라인), 표 안에서 바로 고치면 자동 저장
 const STG = ["착수", "준비", "실행", "사후·정산"];
-let wStg = "실행", wT, wSaved = "";
+let wStg = "실행", wT, wSaved = "", wRe = false; // wRe: 입력 중이라 미룬 다시 그리기
 const wMark = m => { wSaved = m; if ($("wSaved")) $("wSaved").textContent = m; };
 const wSave = (ms = 600) => { clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
 const nid = () => "T" + String(W().reduce((m, x) => Math.max(m, +String(x.id).slice(1) || 0), 0) + 1).padStart(3, "0");
@@ -534,10 +535,11 @@ function wTable(w) {
         <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>
         <td class="ops"><button class="btn" type="button" data-t="${i}">상세</button><span class="adm"> <button class="btn" type="button" data-wmv="${f("-1")}" aria-label="위로"${k ? "" : " disabled"}>↑</button><button class="btn" type="button" data-wmv="${f("1")}" aria-label="아래로"${k < ts.length - 1 ? "" : " disabled"}>↓</button> <button class="btn x" type="button" data-wdel="${esc(t.id)}" aria-label="삭제">✕</button></span></td>${tlCells(t, ps)}</tr>`; }).join(""); }).join("")}</tbody></table></div>`;
 }
-function drawWbs() {
+function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const p = P(); if (!p) { $("tab-wbs").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
-  // 입력 중에 다시 그려도(저장 뒤 스냅샷 등) 입력한 글자와 커서를 지킨다
-  const fa = document.activeElement, fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
+  // 글자 칸 입력(한글 조합 포함) 중에는 다시 그리지 않는다 — 조합 중 글자가 두 번 들어가지 않게. 포커스가 빠질 때 다시 그림
+  const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { wRe = true; return; }
+  const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
   if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
   const w = W(), late = lateList(), reps = w.flatMap((t, i) => (t.보고 || []).map((r, j) => ({t, i, j, r})));
   $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span><span style="flex:1"></span>
@@ -737,14 +739,14 @@ function drawBud() {
   const b = B(), m = money(), rows = BR(), [ca, cl] = cAmt(p), g = tgt(p);
   const drop = `<div class="drop" id="budDrop">산출내역서 엑셀(XLSX·XLS·CSV)·PDF를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="budPick">파일 선택</button><input type="file" id="budFile" accept=".xlsx,.xls,.csv,.pdf" hidden><br><span class="note">PDF는 LEDGER가 글자를 읽어 표(구분·항목·내용·산출근거·과세액·영세액)로 옮깁니다. 원본 파일은 저장하지 않습니다.</span></div>
     <label class="note" style="display:block;margin-top:8px">구글 시트: 표 범위(머리 줄 포함)를 복사해 여기에 붙여 넣거나, 파일 &gt; 다운로드 &gt; Microsoft Excel(.xlsx)로 받아 위에 올려 주세요.<textarea id="budTsv" placeholder="여기에 붙여넣기 (Ctrl+V)" style="display:block;width:100%;min-height:48px;margin-top:4px"></textarea></label>`;
-  const up = `<div class="row"><h2>예산 (산출내역서)</h2>${LOCK}<span style="flex:1"></span>${b ? '<button class="btn" type="button" id="budBase" title="지금 예상 수익률을 착수 기준으로 고정">수익률 고정</button><button class="btn" type="button" id="budXlsx">엑셀 저장</button>' : ""}</div>
+  const up = `<div class="row"><h2>예산 (산출내역서)</h2>${LOCK}<span style="flex:1"></span>${b ? '<button class="btn" type="button" id="budXlsx">엑셀 저장</button>' : ""}</div>
     ${b ? `<details class="fold"${bup ? " open" : ""}><summary>산출내역서 다시 올리기 (엑셀·PDF·구글 시트)</summary>${drop}</details>` : drop}`;
   if (!b) { $("tab-bud").innerHTML = up + '<p class="note" id="bNote">계약 당시 산출내역서를 올리면 구분·항목·내용·산출근거·계약 금액(과세·영세·합계)을 그대로 옮깁니다. 집행 금액은 장부에 적은 내역을 항목별로 더해 자동으로 채웁니다.</p><div id="bStage"></div>'; if (bup) budStage(); return; }
   const ex = r => m.by[r.id] || {과세: 0, 영세: 0, n: 0}, sum = (rs, f) => rs.reduce((a, r) => a + f(r), 0), rest = (a, e) => `<td class="num${a - e < 0 ? " neg" : ""}">${won(a - e)}</td>`;
   const nums = rs => { const a = sum(rs, r => num(r.금액)), e = sum(rs, r => ex(r).과세 + ex(r).영세);
     return [sum(rs, r => num(r.과세액)), sum(rs, r => num(r.영세액)), a].map(v => `<td class="num">${won(v)}</td>`).join("") + `<td class="num">${won(e)}</td>${rest(a, e)}<td class="num">${a ? pct(e / a * 100) : "–"}</td>`; };
   const groups = []; rows.forEach(r => { const x = groups.at(-1); if (x && x.name === r.구분) x.rows.push(r); else groups.push({name: r.구분, rows: [r]}); });
-  const base = b.기준, left = m.예산 - m.집행, un = L().filter(e => !ridOf(nl(e), rows));
+  const left = m.예산 - m.집행, un = L().filter(e => !ridOf(nl(e), rows));
   const lab = r => [r.구분, r.항목, r.내용].filter(Boolean).join(" / "), ropt = rec => opt([...(rec ? [[rec.id, `★ 추천: ${lab(rec)}`]] : []), ...rows.map(r => [r.id, lab(r)])], "", "예산 항목 선택");
   $("tab-bud").innerHTML = up + `<div class="sum6">
       <div><span class="hudlabel">${esc(cl)}</span><b>${won(ca)}</b><div class="note">공급가 ${won(m.계약)}${m.계약 && Math.abs(m.계약 - m.예산) > 1 ? ` · <span class="warn">내역서와 ${won(m.예산 - m.계약)} 차이</span>` : ""}</div></div>
@@ -752,7 +754,7 @@ function drawBud() {
       <div><span class="hudlabel">집행 (B) · 장부</span><b>${won(m.집행)}</b></div>
       <div><span class="hudlabel">잔액 (A−B)</span><b${left < 0 ? ' class="err"' : ""}>${won(left)}</b></div>
       <div><span class="hudlabel">목표 수익률</span><b>${pct(g)}</b></div></div>
-    <p class="note">${g === null ? "목표 수익률이 없습니다 — 위 '목표 수익률 ✎'을 눌러 넣어 주세요. " : `목표 수익률 <b>${pct(g)}</b> 대비 현재 수익률(집행 기준) <b>${pct(m.확정수익률)}</b>${m.확정수익률 === null ? "" : ` (${m.확정수익률 - g >= 0 ? "+" : ""}${(m.확정수익률 - g).toFixed(1)}%p)`} · `}참고: (계약 공급가 − 집행) ÷ 계약 공급가 · 착수 기준 ${base ? `${pct(base.수익률)} (${esc(kst(base.at).slice(0, 10))} 고정)` : "미고정"}</p>
+    <p class="note">${g === null ? "목표 수익률이 없습니다 — 위 '목표 수익률 ✎'을 눌러 넣어 주세요. " : `목표 수익률 <b>${pct(g)}</b> 대비 현재 수익률(집행 기준) <b>${pct(m.확정수익률)}</b>${m.확정수익률 === null ? "" : ` (${m.확정수익률 - g >= 0 ? "+" : ""}${(m.확정수익률 - g).toFixed(1)}%p)`} · `}참고: (계약 공급가 − 집행) ÷ 계약 공급가</p>
     <p class="note" id="bNote">${esc(b.file)} · ${rows.length}개 항목 · 금액은 공급가액(부가세 제외). 집행(B)은 장부에 적은 내역을 항목별로 더한 값이고, 잔액 = 예산 − 집행입니다. 소계 줄을 누르면 접힙니다.</p>
     <div class="sheet"><table class="bt"><thead><tr><th>구분</th><th>항목</th><th style="min-width:140px">내용</th><th style="min-width:110px">산출근거</th><th>계약 과세</th><th>계약 영세</th><th>계약 합계 (A)</th><th>집행 (B)</th><th>잔액</th><th>집행률</th></tr></thead><tbody>
     ${groups.map(x => `<tr class="head click${bShut.has(x.name) ? " shut" : ""}" data-gh="${esc(x.name)}"><td>${esc(x.name || "(구분 없음)")} 소계</td><td colspan="3">${x.rows.length}항목</td>${nums(x.rows)}</tr>` + (bShut.has(x.name) ? "" : x.rows.map(r => { const e = ex(r), a = num(r.금액), en = e.과세 + e.영세;
@@ -840,7 +842,7 @@ function budStage() {
 }
 async function budCommit() {
   const out = budParse(), old = B(), p = P();
-  budget[cur] = {file: bup.name, v: 2, rows: out, ...(old?.기준 ? {기준: old.기준} : {})}; bup = null; await saveBud(); // 착수 시 고정한 기준 수익률은 다시 올려도 유지
+  budget[cur] = {file: bup.name, v: 2, rows: out}; bup = null; await saveBud();
   if (!num(p.계약금액)) { p.계약금액 = out.reduce((a, r) => a + r.금액, 0); await saveProj(p); }
   draw();
 }
@@ -1048,8 +1050,8 @@ document.addEventListener("click", async e => {
   if (t.id === "pNew" || t.id === "pNew2") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
   if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.목표수익률 = p.목표수익률 === "" || !isFinite(+p.목표수익률) ? "" : +p.목표수익률;
     if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = ""; hiP = p.id; showTab("list"); toast(`저장했습니다 — ${p.코드 ? p.코드 + " " : ""}${p.이름}`); } else drawTop(); } // 저장하면 목록으로 가서 그 행을 강조
-  if (t.id === "tgt" && admin) { const p = P(), v = prompt(`${p.이름} 목표 수익률(%) — 비우면 지웁니다`, tgt(p) ?? ""); if (v === null) return; const n = v.trim() === "" ? "" : +v.replace(/[^\d.\-]/g, "");
-    if (n !== "" && !isFinite(n)) { alert("숫자로 넣어 주세요."); return; } p.목표수익률 = n; if (await saveProj(p)) toast("목표 수익률을 저장했습니다."); draw(); }
+  if (t.id === "tgt" && admin) { const p = P(), v = prompt(`${p.이름} 목표 수익률(%) — 비우면 지웁니다`, tgt(p) ?? ""); if (v === null) return; const n = v.trim() === "" ? "" : Number(v.trim().replace(/[%,\s]/g, "")); // 숫자가 아니면 0 으로 저장하지 않는다
+    if (n !== "" && !Number.isFinite(n)) { alert("숫자로 넣어 주세요."); return; } p.목표수익률 = n; if (await saveProj(p)) toast("목표 수익률을 저장했습니다."); draw(); }
   if (t.dataset.pj) { cur = t.dataset.pj; hiP = null; setDirty = null; pMsg = ""; try { localStorage.setItem("pmo-proj", cur); } catch {} showTab("wbs"); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
   if (t.id === "docPick") $("docFile").click();
@@ -1072,9 +1074,6 @@ document.addEventListener("click", async e => {
     ["지연 보고", [["작업", "보고일", "기존 마감", "새 마감", "원인", "조치", "해결", "해결일"], ...W().flatMap(x => (x.보고 || []).map(r => [x.작업, kst(r.at).slice(0, 10), r.기존마감, r.새마감, r.원인, r.조치, r.해결 ? "해결" : "미해결", r.해결일]))]]]);
   if (t.id === "budPick") $("budFile").click();
   if (t.dataset.gh !== undefined) { bShut.has(t.dataset.gh) ? bShut.delete(t.dataset.gh) : bShut.add(t.dataset.gh); drawBud(); }
-  if (t.id === "budBase") { const m = money(), b = B(); if (m.확정수익률 === null) { alert("계약 금액을 먼저 넣어 주세요."); return; }
-    if (b.기준 && !confirm(`이미 ${kst(b.기준.at).slice(0, 10)}에 고정한 기준(${pct(b.기준.수익률)})이 있습니다. 지금 값(${pct(m.확정수익률)})으로 바꿀까요?`)) return;
-    b.기준 = {at: new Date().toISOString(), 수익률: m.확정수익률, 집행: m.집행, 계약: m.계약}; await saveBud(); draw(); }
   if (t.id === "bCommit") budCommit();
   if (t.id === "ulGo") { const ids = [...ulSel].filter(id => document.querySelector(`[data-ulc="${CSS.escape(id)}"]`)); if (!ids.length || !$("ulTo").value) { alert("연결할 집행을 체크하고 예산 항목을 골라 주세요."); return; } ulink(ids, $("ulTo").value); }
   if (t.id === "bCancel") { bup = null; $("bStage").innerHTML = ""; }
@@ -1104,7 +1103,7 @@ document.addEventListener("change", async e => {
   if (t.dataset.pf) setDirty = cur;
   if (t.dataset.wi && admin && t.value === "+add") { const [x] = wFind(t.dataset.wi); t.blur(); drawWbs(); if (x) pickStaff(x.id); return; }
   if (t.dataset.sc && admin) { const [x, j] = wFind(t.dataset.sc), sb = x?.하위?.[+j]; if (!sb) return; sb.완료 = t.checked; sb.완료일 = t.checked ? today() : ""; wSave(0); draw(); }
-  if (t.dataset.wi && admin) { const [x, k] = wFind(t.dataset.wi); if (!x) return; wPut(x, k, t.value); wSave(0); if (t.tagName === "SELECT" || t.type === "date") { drawWbs(); drawTop(); } }
+  if (t.dataset.wi && admin) { const [x, k] = wFind(t.dataset.wi); if (!x) return; wPut(x, k, t.value); wSave(0); if (t.tagName === "SELECT" || t.type === "date") { drawWbs(true); drawTop(); } }
   if (t.id === "pSel") { setDirty = null; pMsg = ""; hiP = null; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} if (tab === "list") showTab("wbs"); else draw(); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "lsY") { lsf.y = t.value; drawLs(); } if (t.id === "lsS") { lsf.st = t.value; drawLs(); }
   if (t.id === "docFile" && t.files.length) { const fs = [...t.files]; t.value = ""; readDocs(fs); }
@@ -1123,10 +1122,12 @@ document.addEventListener("change", async e => {
   if (t.id === "ptC") { pf.국가 = t.value; drawPt(); } if (t.id === "ptF") { pf.분야 = t.value; drawPt(); }
   if (t.id === "lScope") { lf.scope = t.value; drawLed(); } if (t.id === "lLink") { lf.link = t.value; drawLed(); }
 });
+document.addEventListener("compositionend", e => { const d = e.target.dataset; if (!d?.wi || !admin) return; const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); wSave(); } });
+document.addEventListener("focusout", e => { if (wRe && e.target.dataset?.wi) setTimeout(() => { if (!wRe) return; wRe = false; if (tab === "wbs") drawWbs(); }); });
 // 구글 시트 붙여넣기 칸
 document.addEventListener("paste", e => { if (e.target.id === "budTsv") { e.preventDefault(); budTsv(e.clipboardData?.getData("text") || ""); } });
 document.addEventListener("input", e => { const d = e.target.dataset;
-  if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); wSave(); } }
+  if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); if (!e.isComposing) wSave(); } }
   if (d.hi) { const [i, k] = d.hi.split("|"); if (ptDraft?.이력[+i]) ptDraft.이력[+i][k] = e.target.value; }
   if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); }
   if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
