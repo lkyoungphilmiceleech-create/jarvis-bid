@@ -53,7 +53,7 @@ def s(x):  # JS String()
 
 def views(pm, people):
     ppl = [{"id": i, **x} for i, x in people.items()]  # JS {id: d.id, ...d.data()} 처럼 data 의 id 가 이긴다
-    return {pid: {**{k: s(p.get(k)) for k in ["이름", "발주처", "상태", "시작", "종료", "연락처페이지"]},
+    return {pid: {**{k: s(p.get(k)) for k in ["이름", "코드", "발주처", "상태", "시작", "종료", "연락처페이지"]},
                   "담당PM": s(next((x.get("이름") for x in ppl if x["id"] == p.get("PM")), "")),
                   "인력": sorted(({k: s(x.get(k)) for k in ["id", "이름", "직책", "역할", "참여시작", "참여종료"]}
                                 for x in ppl if not x.get("pid") or x.get("pid") == pid), key=lambda x: x["id"])}  # ponytail: JS localeCompare 와 달리 코드 순서 — 인력 id 는 "U"+base36 이라 같음
@@ -90,7 +90,7 @@ def test():
          "매칭": [{"pid": "P", "msg": "비밀", "적합도": 80}]}
     assert pub_of(b) == {"이름": "A", "최고적합도": 0, "매칭": [{"pid": "P", "적합도": 80}], "연락": "개인 이메일"}
     v = views({"P1": {"이름": "사업", "계약금액": 100, "PM": "u1"}}, {"u1": {"이름": "김", "이메일": "k@x.com", "인건비": 5}})
-    assert v == {"P1": {"이름": "사업", "발주처": "", "상태": "", "시작": "", "종료": "", "연락처페이지": "", "담당PM": "김",
+    assert v == {"P1": {"이름": "사업", "코드": "", "발주처": "", "상태": "", "시작": "", "종료": "", "연락처페이지": "", "담당PM": "김",
                         "인력": [{"id": "u1", "이름": "김", "직책": "", "역할": "", "참여시작": "", "참여종료": ""}]}}
     print("ok")
 

@@ -120,7 +120,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .pbar select{min-width:200px;max-width:100%}
 .pbar label{max-width:100%}
 .kp{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-.kp div{border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--glass2);min-width:84px}
+.kp div,.kp button{border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--glass2);min-width:84px;color:var(--ink);font:inherit;text-align:left}
+.kp button{cursor:pointer}.kp button:hover{border-color:var(--holo)}
 .kp b{display:block;font:700 16px var(--hud);font-variant-numeric:tabular-nums;color:var(--holo)}
 .kp .hot b{color:var(--go)}
 .kp .bad b{color:var(--stop)}
@@ -181,6 +182,9 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .sheet td input{border-radius:4px;text-align:right;font-variant-numeric:tabular-nums}
 .sheet td input:focus{outline:2px solid var(--holo);outline-offset:-1px}
 body.staff .adm{display:none!important} /* 팀장(비관리자): 쓰기·금액 컨트롤 숨김 — 실제 차단은 db 규칙 */
+tr.hi td{background:var(--go-soft)!important;box-shadow:inset 0 1px var(--go),inset 0 -1px var(--go)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:20;background:var(--go);color:var(--holo-ink);border-radius:10px;padding:9px 18px;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:calc(100% - 32px)}
+.toast[hidden]{display:none}
 .ext{border:1px solid var(--holo);border-radius:12px;padding:10px 12px;background:var(--holo-soft);font-size:13px}
 </style>
 
@@ -198,7 +202,7 @@ body.staff .adm{display:none!important} /* 팀장(비관리자): 쓰기·금액 
   </section>
 
   <section class="glass pbar">
-    <label class="note">프로젝트 <select id="pSel"></select></label><button class="btn adm" type="button" id="pNew">+ 새 프로젝트</button>
+    <label class="note">프로젝트 <select id="pSel"></select></label><button class="btn" type="button" data-tab="list">📋 프로젝트 목록</button><button class="btn adm" type="button" id="pNew">+ 새 프로젝트</button>
     <div class="kp" id="kp"></div>
   </section>
 
@@ -211,6 +215,7 @@ body.staff .adm{display:none!important} /* 팀장(비관리자): 쓰기·금액 
     <button type="button" data-tab="ct" aria-selected="false">연락처</button>
   </nav>
 
+  <section class="glass panel" id="tab-list" hidden></section>
   <section class="glass panel" id="tab-set" hidden></section>
   <section class="glass panel" id="tab-wbs"></section>
   <section class="glass panel" id="tab-bud" hidden></section>
@@ -219,6 +224,7 @@ body.staff .adm{display:none!important} /* 팀장(비관리자): 쓰기·금액 
   <section class="glass panel" id="tab-ct" hidden></section>
 </div>
 
+<div class="toast" id="toast" role="status" hidden></div>
 <dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
 
 <script>
@@ -238,8 +244,8 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 const STAT = ["대기", "요청", "진행", "검토", "완료", "지연"];
 const TAX = ["과세", "영세"];
 let db = null, sample = null, mcp = null, downloads = null, admin = null; // admin: null=확인 전, false=팀장(공정·지표만)
-let projects = [], people = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "wbs";
-try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "wbs"; } catch {}
+let projects = [], people = [], staff = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "list"; // 첫 화면은 프로젝트 목록(마지막으로 본 탭이 있으면 그 탭)
+try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "list"; } catch {}
 const P = () => projects.find(p => p.id === cur);
 const W = () => (wbs[cur]?.items) || [];
 const B = () => budget[cur];
@@ -281,14 +287,13 @@ function money() {
   s.확정수익률 = s.계약 ? (s.계약 - s.집행) / s.계약 * 100 : null;
   s.by = by; return s;
 }
-// ── 착수 흐름: 계약 → 담당 PM → 인력 배치 → 예산·수익률 → 착수 보고 → 체크리스트(담당·마감)
+// ── 착수 흐름: 계약 → 담당 PM → 인력 배치 → 예산·수익률 → 체크리스트(담당·마감)
 function kickoff(p = P()) {
   const w = W(), gap = w.filter(t => !t.담당 || !t.종료).length;
-  return [{k: "계약", done: !!(p.계약일 && num(p.계약금액)), hint: "계약일·계약 금액 입력(문서로 채우기 가능)", tab: "set"},
+  return [{k: "계약", done: !!(p.계약일 && (num(p.계약총액) || num(p.계약금액))), hint: "계약일·계약 금액 입력(문서로 채우기 가능)", tab: "set"},
     {k: "담당 PM", done: !!p.PM, hint: "참여인력 등록 후 설정에서 담당 PM 선택", tab: "set"},
-    {k: "인력 배치", done: PP().length > 0, hint: "참여인력 등록(성명·직책·역할·참여 기간)", tab: "ppl"},
+    {k: "인력 배치", done: PP().length > 0, hint: "참여인력 탭의 사내 직원 명부에서 골라 배치", tab: "ppl"},
     {k: "예산·수익률", done: !!B()?.기준, hint: "산출내역서 올리기 → 예정 금액(C) 입력 → [수익률 고정]", tab: "bud"},
-    {k: "착수 보고", done: !!p.착수보고, hint: "착수 보고일 입력", tab: "set"},
     {k: "체크리스트", done: w.length > 0 && !gap, hint: w.length ? `담당·마감이 빠진 작업 ${gap}건 채우기` : "공정표 1차 생성", tab: "wbs"}];
 }
 function stepsHtml() {
@@ -296,11 +301,16 @@ function stepsHtml() {
   return `<div class="flow" aria-label="착수 흐름">${st.map((x, i) => `<button type="button" class="${x.done ? "done" : i === n ? "on" : ""}" data-tab="${x.tab}" title="${esc(x.hint)}">${x.done ? "✓" : i + 1} ${esc(x.k)}</button>`).join('<i aria-hidden="true">›</i>')}</div>
     <p class="note">${n >= 0 ? `다음 할 일: <b>${esc(st[n].k)}</b> — ${esc(st[n].hint)}` : "착수 준비를 모두 마쳤습니다."}</p>`;
 }
+// 공정률: 완료 작업 1, 진행 중 작업은 하위 할 일 완료 비율만큼
+const progOf = w => w.length ? w.reduce((a, t) => a + (t.상태 === "완료" ? 1 : (t.하위 || []).length ? t.하위.filter(x => x.완료).length / t.하위.length : 0), 0) / w.length : null;
+// 계약 금액: 부가세 포함(계약총액)이 기준, 없으면 공급가
+const cAmt = p => num(p?.계약총액) ? [num(p.계약총액), "계약 (부가세 포함)"] : num(p?.계약금액) ? [num(p.계약금액), "계약 (공급가 기준)"] : [0, "계약 (부가세 포함)"];
+const tgt = p => p?.목표수익률 === undefined || p.목표수익률 === "" || p.목표수익률 === null ? null : +p.목표수익률;
 // ── 사업 건강도: 기간 경과 대비 공정 진척, 예산 집행(전망 대비), 지연
 function health(p = P()) {
   const w = W(), m = money(), d = x => new Date(x + "T00:00:00");
   const el = p.시작 && p.종료 && p.종료 > p.시작 ? Math.max(0, Math.min(1, (d(today()) - d(p.시작)) / Math.max(864e5, d(p.종료) - d(p.시작)))) : null;
-  const prog = w.length ? w.reduce((a, t) => a + (t.상태 === "완료" ? 1 : (t.하위 || []).length ? t.하위.filter(x => x.완료).length / t.하위.length : 0), 0) / w.length : null;
+  const prog = progOf(w);
   const late = lateList().length, open = w.reduce((a, t) => a + (t.보고 || []).filter(r => !r.해결).length, 0), gap = el !== null && prog !== null ? prog - el : null;
   return {el, prog, spend: m.전망 ? m.집행 / m.전망 : null, late, open, gap, lv: gap === null && !late ? "–" : gap < -.25 || late >= 5 ? "위험" : gap < -.1 || late ? "주의" : "양호"};
 }
@@ -312,23 +322,45 @@ function healthHtml() {
 }
 const pct = v => v === null || v === undefined || isNaN(v) ? "–" : `${(Math.abs(v) < .05 ? 0 : v).toFixed(1)}%`;
 function drawTop() {
-  $("pSel").innerHTML = projects.length ? opt(projects.map(p => [p.id, p.이름 || "(이름 없음)"]), cur) : '<option value="">프로젝트 없음</option>';
+  $("pSel").innerHTML = (projects.length ? "" : '<option value="">프로젝트 없음</option>') + opt([...(cur && !P() ? [["", "프로젝트 선택"]] : []), ...projects.map(p => [p.id, [p.코드, p.이름 || "(이름 없음)"].filter(Boolean).join(" · ")])], cur || "");
   const p = P(); if (!p) { $("kp").innerHTML = ""; return; }
-  const m = money(), late = lateList().length, h = health(), k = kickoff();
-  $("kp").innerHTML = [["상태", p.상태 === "종료" ? "완료" : p.상태 || "준비"], ["착수", `${k.filter(x => x.done).length}/${k.length}`, "", 1], ["계약(공급가)", won(m.계약), "", 1], ["집행", won(m.집행), "", 1], ["예상 수익률", pct(m.예상수익률), m.예상수익률 < 0 ? "bad" : "hot", 1], ["공정", `${W().filter(t => t.상태 === "완료").length}/${W().length}`, "", 2], ["건강도", h.lv, h.lv === "위험" ? "bad" : h.lv === "양호" ? "hot" : ""], ["지연", late, late ? "bad" : ""]]
-    .filter(x => admin ? x[3] !== 2 : !x[3]).map(([k, v, c]) => `<div class="${c || ""}"><span class="hudlabel">${k}</span><b>${esc(v)}</b></div>`).join("");
+  const m = money(), late = lateList().length, h = health(), k = kickoff(), [ca, cl] = cAmt(p), g = tgt(p);
+  $("kp").innerHTML = [["상태", p.상태 === "종료" ? "완료" : p.상태 || "준비"], ["착수", `${k.filter(x => x.done).length}/${k.length}`, "", 1], [cl, won(ca), "", 1], ["집행", won(m.집행), "", 1], ["목표 수익률 ✎", pct(g), g < 0 ? "bad" : "hot", 1, "tgt"], ["공정률", h.prog === null ? "–" : Math.round(h.prog * 100) + "%"], ["건강도", h.lv, h.lv === "위험" ? "bad" : h.lv === "양호" ? "hot" : ""], ["지연", late, late ? "bad" : ""]]
+    .filter(x => admin || !x[3]).map(([k, v, c, , id]) => id ? `<button type="button" id="${id}" class="${c || ""}" title="눌러서 수정 (관리자)"><span class="hudlabel">${k}</span><b>${esc(v)}</b></button>` : `<div class="${c || ""}"><span class="hudlabel">${k}</span><b>${esc(v)}</b></div>`).join("");
 }
 function say() {
   const p = P(), n = p ? lateList().length : 0, hi = admin ? "본부장님, " : ""; // 팀장도 보므로 관리자에게만 호칭
   $("say").textContent = !db ? hi + "이 화면에서는 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요."
+    : !p && projects.length ? `${hi}프로젝트 ${projects.length}개 — 목록에서 프로젝트를 눌러 여세요.`
     : !p ? (admin ? "" : "아직 공개된 프로젝트가 없습니다.") || "본부장님, [+ 새 프로젝트]를 누르고 착수보고서·계약서·산출내역서를 올려 주세요. CHRONOS가 계약 정보와 공정표를, LEDGER가 예산표를 만듭니다."
-    : `${hi}${p.이름} — ${n ? `지연 ${n}건이 있습니다. ` : ""}${admin ? `예상 수익률 ${pct(money().예상수익률)}, ` : ""}공정 ${W().filter(t => t.상태 === "완료").length}/${W().length} 완료입니다.`;
+    : `${hi}${p.이름} — ${n ? `지연 ${n}건이 있습니다. ` : ""}${admin ? `목표 수익률 ${pct(tgt(p))}, ` : ""}공정률 ${progOf(W()) === null ? "–" : Math.round(progOf(W()) * 100) + "%"} (작업 ${W().filter(t => t.상태 === "완료").length}/${W().length} 완료)입니다.`;
 }
-function showTab(t) { if (admin === false && t !== "ct") t = "wbs"; /* 팀장: 공정일정·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
+function showTab(t) { if (admin === false && !["ct", "list"].includes(t)) t = "wbs"; /* 팀장: 목록·공정일정·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  ["set", "wbs", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
+  ["list", "set", "wbs", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
 function draw() { drawTop(); say();
-  ({set: drawSet, wbs: drawWbs, bud: drawBud, led: drawLed, ppl: drawPpl, ct: drawCt})[tab](); }
+  ({list: drawList, set: drawSet, wbs: drawWbs, bud: drawBud, led: drawLed, ppl: drawPpl, ct: drawCt})[tab](); }
+let toastT; const toast = m => { $("toast").textContent = m; $("toast").hidden = false; clearTimeout(toastT); toastT = setTimeout(() => $("toast").hidden = true, 3500); };
+
+// ── 프로젝트 목록: 연도·상태 필터·검색, 행을 누르면 그 프로젝트를 연다. 금액 열은 관리자만(팀장 사본에는 금액이 없다)
+let lsf = {y: "", st: "", q: ""}, hiP = null; // hiP: 방금 저장한 프로젝트(강조)
+const yearOf = p => String(p.시작 || p.계약일 || p.종료 || "").slice(0, 4);
+function drawList() {
+  if (!$("lsQ")) $("tab-list").innerHTML = `<div class="row"><h2>프로젝트 목록</h2><span class="note" id="lsN"></span><span style="flex:1"></span><button class="btn primary adm" type="button" id="pNew2">+ 새 프로젝트</button></div>
+    <div class="row"><select id="lsY" aria-label="연도"></select><select id="lsS" aria-label="상태"></select><input id="lsQ" type="search" placeholder="코드·프로젝트명·발주처 검색" style="flex:1;min-width:160px"></div><div id="lsBox"></div>`;
+  $("lsY").innerHTML = opt([...new Set(projects.map(yearOf).filter(Boolean))].sort().reverse(), lsf.y, "연도 전체");
+  $("lsS").innerHTML = opt(["준비", "수행", "정산", "완료"], lsf.st, "상태 전체"); if ($("lsQ").value !== lsf.q) $("lsQ").value = lsf.q;
+  drawLs();
+}
+function drawLs() {
+  const q = lsf.q.toLowerCase(), st = p => p.상태 === "종료" ? "완료" : p.상태 || "준비";
+  const ps = projects.filter(p => (!lsf.y || yearOf(p) === lsf.y) && (!lsf.st || st(p) === lsf.st) && (!q || [p.코드, p.이름, admin ? p.발주처 : ""].some(v => String(v || "").toLowerCase().includes(q))))
+    .sort((a, b) => String(b.시작 || "").localeCompare(String(a.시작 || "")) || String(b.코드 || "").localeCompare(String(a.코드 || "")));
+  $("lsN").textContent = `${ps.length} / ${projects.length}개`;
+  $("lsBox").innerHTML = `<div class="tw"><table><thead><tr><th>코드</th><th>프로젝트</th>${admin ? "<th>발주처</th>" : ""}<th>기간</th><th>상태</th><th>공정률</th>${admin ? "<th>계약 금액 (부가세 포함)</th>" : ""}</tr></thead><tbody>${ps.map(p => { const g = progOf(wbs[p.id]?.items || []), [ca, cl] = cAmt(p);
+    return `<tr class="click${p.id === hiP ? " hi" : ""}" data-pj="${esc(p.id)}"${p.id === cur ? ' aria-current="true"' : ""}><td>${esc(p.코드) || '<span class="note">–</span>'}</td><td><b>${esc(p.이름 || "(이름 없음)")}</b>${p.id === hiP ? ' <span class="tag go">방금 저장</span>' : ""}</td>${admin ? `<td>${esc(p.발주처)}</td>` : ""}<td>${esc(p.시작 || "")}${p.시작 || p.종료 ? " ~ " : ""}${esc(p.종료 || "")}</td><td><span class="tag">${esc(st(p))}</span></td><td class="num">${g === null ? "–" : Math.round(g * 100) + "%"}</td>${admin ? `<td class="num">${ca ? won(ca) : ""}${ca && !num(p.계약총액) ? ' <span class="note">공급가</span>' : ""}</td>` : ""}</tr>`; }).join("")
+    || `<tr><td colspan="7" class="empty">${projects.length ? "조건에 맞는 프로젝트가 없습니다." : admin ? "프로젝트가 없습니다. [+ 새 프로젝트]를 눌러 주세요." : "아직 공개된 프로젝트가 없습니다."}</td></tr>`}</tbody></table></div>`;
+}
 
 // ── 저장
 async function put(path, data, note) { if (!db || !admin) return false; try { await db.doc(path).set(data); if (note) note.textContent = "저장했습니다."; return true; } catch { if (note) note.textContent = "저장하지 못했습니다."; return false; } }
@@ -346,23 +378,25 @@ async function pdfText(buf) {
   for (let i = 1; i <= Math.min(doc.numPages, 40); i++) out += (await (await doc.getPage(i)).getTextContent()).items.map(x => x.str).join(" ") + "\n";
   return out;
 }
-const xmlText = x => new DOMParser().parseFromString(x.replace(/<\/(?:w|hp):p>/g, "\n").replace(/<(?:w|hp):tab\b[^>]*\/>/g, " ").replace(/<[^>]+>/g, ""), "text/html").documentElement.textContent;
+const xmlText = x => new DOMParser().parseFromString(x.replace(/<\/(?:w|hp|a):p>/g, "\n").replace(/<(?:w|hp|a):tab\b[^>]*\/>/g, " ").replace(/<[^>]+>/g, ""), "text/html").documentElement.textContent;
 const readBook = wb => { const out = {}; wb.SheetNames.forEach(n => { const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, defval: "", raw: false, blankrows: false}); if (rows.length) out[n] = rows.map(r => r.map(v => String(v).trim())); }); return out; };
 async function readDoc(f) {
   const ext = f.name.split(".").pop().toLowerCase();
-  if (/^(png|jpe?g|webp)$/.test(ext)) return {image: f};
-  if (ext === "hwp") throw new Error("HWP는 PDF나 HWPX로 저장해서 올려 주세요.");
+  if (/^(png|jpe?g|webp|gif)$/.test(ext)) return {image: f};
+  if (ext === "hwp") throw new Error("HWP 는 HWPX 나 PDF 로 저장해 올려 주세요.");
+  if (ext === "doc" || ext === "ppt") throw new Error(`${ext.toUpperCase()}(구형)는 ${ext.toUpperCase()}X 나 PDF 로 저장해 올려 주세요.`);
   const buf = await f.arrayBuffer();
   if (ext === "pdf") return {text: await pdfText(buf)};
-  if (ext === "docx" || ext === "hwpx") {
+  if (/^(docx|hwpx|pptx)$/.test(ext)) {
     await lib("jszip", "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"); const z = await JSZip.loadAsync(buf);
-    const names = Object.keys(z.files).filter(n => ext === "docx" ? n === "word/document.xml" : /^Contents\/section\d+\.xml$/.test(n)).sort();
+    const re = {docx: /^word\/document\.xml$/, hwpx: /^Contents\/section\d+\.xml$/, pptx: /^ppt\/slides\/slide\d+\.xml$/}[ext];
+    const names = Object.keys(z.files).filter(n => re.test(n)).sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
     let t = ""; for (const n of names) t += xmlText(await z.file(n).async("string")) + "\n"; return {text: t};
   }
   if (/^(xlsx|xls|csv)$/.test(ext)) { if (!window.XLSX) throw new Error("엑셀 읽기 도구를 불러오지 못했습니다."); const wb = XLSX.read(buf, {type: "array"});
     return {wb, text: Object.entries(readBook(wb)).map(([n, rows]) => `[시트 ${n}]\n` + rows.map(r => r.filter(Boolean).join(" | ")).join("\n")).join("\n\n")}; }
   if (ext === "txt") return {text: new TextDecoder().decode(buf)};
-  throw new Error("읽을 수 없는 형식입니다(PDF·DOCX·HWPX·엑셀·사진).");
+  throw new Error("읽을 수 없는 형식입니다(PDF·HWPX·DOCX·PPTX·엑셀·사진).");
 }
 // 엑셀 머리: 병합된 두 줄 머리(예: '계약 금액(A)' 아래 '과세·영세·합계')를 '계약 금액(A) 과세'처럼 한 줄로 합친다
 const findHr = (rows, re) => { const i = rows.findIndex(r => r.some(c => re.test(c))); return i >= 0 ? i : Math.max(0, rows.findIndex(r => r.filter(Boolean).length >= 3)); };
@@ -375,24 +409,22 @@ const col = (h, ...res) => { for (const re of res) { const j = h.findIndex(x => 
 const TOTAL = /소\s*계|합\s*계|총\s*계|^계$|^부가(가치)?세/; // 소계·합계는 다시 계산, 부가세 줄은 공급가 예산이 아님
 
 // ── 프로젝트 설정 (문서로 채우기)
-let tlists = null, setDirty = null, pMsg = "", xres = null; // setDirty: 저장 전 입력 중인 프로젝트 id — 다른 기기 갱신으로 입력이 지워지지 않게
+let setDirty = null, pMsg = "", xres = null; // setDirty: 저장 전 입력 중인 프로젝트 id — 다른 기기 갱신으로 입력이 지워지지 않게
 function drawSet() {
   const p = P(); if (p && setDirty === p.id && $("pSave")) return; if (!p) { $("tab-set").innerHTML = '<p class="empty">위에서 [+ 새 프로젝트]를 눌러 주세요.</p>'; return; }
-  const pmOpts = PP().map(x => [x.id, `${x.이름}${x.직책 ? ` · ${x.직책}` : ""}`]);
+  const pmOpts = PP().map(x => [x.id, `${x.이름}${x.직책 ? ` · ${x.직책}` : ""}`]), g = tgt(p);
   $("tab-set").innerHTML = `<h2>프로젝트 설정</h2>
     <div class="co"><h3>착수 흐름 — 계약이 끝나면 차례대로</h3>${stepsHtml()}</div>
-    <div class="co"><h3>문서로 채우기 — CHRONOS</h3><p class="note">착수보고서·계약서·산출내역서(PDF·DOCX·HWPX·엑셀·사진)를 올리면 CHRONOS가 읽고 프로젝트명·계약 금액·계약일·계약 종료일·상태를 뽑아 아래 칸에 넣습니다. 확인 후 [저장]을 눌러 주세요. 원본 파일은 저장하지 않습니다. HWP는 PDF나 HWPX로 저장해 올려 주세요.</p>
-      <div class="row"><button class="btn primary" type="button" id="docPick">문서 올리기</button><input type="file" id="docFile" multiple hidden accept=".pdf,.docx,.hwpx,.hwp,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp"><span class="note" id="xNote"></span></div>
+    <div class="co"><h3>문서로 채우기 — CHRONOS</h3><p class="note">착수보고서·계약서·산출내역서를 올리면 CHRONOS가 읽고 프로젝트명·계약 금액·계약일·계약 종료일·상태를 뽑아 아래 칸에 넣습니다. 확인 후 [저장]을 눌러 주세요. 원본 파일은 저장하지 않습니다.</p>
+      <div class="drop" id="docDrop">HWPX·PDF·DOCX·PPTX·엑셀(XLSX·XLS·CSV)·사진을 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="docPick">파일 선택</button><input type="file" id="docFile" multiple hidden accept=".hwpx,.hwp,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,image/*"><br><span class="note">HWP(구형)는 읽을 수 없어 HWPX 나 PDF 로 저장해 올려 주세요.</span></div><p class="note" id="xNote"></p>
       <div id="xOut">${xres?.pid === p.id ? extHtml(xres) : ""}</div></div>
     <div class="form">
-    <label>프로젝트명<input data-pf="이름" value="${esc(p.이름)}"></label><label>발주처<input data-pf="발주처" value="${esc(p.발주처)}"></label>
-    <label>계약 금액 (공급가액, 부가세 제외)<input data-pf="계약금액" inputmode="numeric" value="${esc(p.계약금액 ? won(p.계약금액) : "")}"></label><label>계약 총액 (부가세 포함, 문서 기재)<input data-pf="계약총액" inputmode="numeric" value="${esc(p.계약총액 ? won(p.계약총액) : "")}"></label>
-    <label>계약일<input type="date" data-pf="계약일" value="${esc(p.계약일)}"></label><label>착수일<input type="date" data-pf="시작" value="${esc(p.시작)}"></label><label>계약 종료일<input type="date" data-pf="종료" value="${esc(p.종료)}"></label><label>착수 보고일<input type="date" data-pf="착수보고" value="${esc(p.착수보고)}"></label>
+    <label>프로젝트 코드<input data-pf="코드" placeholder="예) 2026-KOCCA-01" value="${esc(p.코드)}"></label><label>프로젝트명<input data-pf="이름" value="${esc(p.이름)}"></label><label>발주처<input data-pf="발주처" value="${esc(p.발주처)}"></label>
+    <label>계약 금액 (부가세 포함)<input data-pf="계약총액" inputmode="numeric" value="${esc(p.계약총액 ? won(p.계약총액) : "")}"></label><label>공급가액 (부가세 제외, 예산 계산용)<input data-pf="계약금액" inputmode="numeric" value="${esc(p.계약금액 ? won(p.계약금액) : "")}"></label>
+    <label>목표 수익률 (%)<input data-pf="목표수익률" type="number" step="0.1" value="${g === null ? "" : esc(g)}"></label>
+    <label>계약일<input type="date" data-pf="계약일" value="${esc(p.계약일)}"></label><label>착수일<input type="date" data-pf="시작" value="${esc(p.시작)}"></label><label>계약 종료일<input type="date" data-pf="종료" value="${esc(p.종료)}"></label>
     <label>상태<select data-pf="상태">${opt(["준비", "수행", "정산", "완료"], p.상태 === "종료" ? "완료" : p.상태 || "준비")}</select></label>
     <label>담당 PM (인력 탭에서 등록)<select data-pf="PM">${opt(pmOpts, p.PM, "선택 안 함")}</select></label>
-    <label>Google Tasks 목록<span class="row" style="gap:4px;flex-wrap:nowrap"><select data-pf="tasksList" style="flex:1">${opt(tlists || (p.tasksList ? [[p.tasksList, p.tasksListName || p.tasksList]] : []), p.tasksList, "선택 안 함")}</select><button class="btn" type="button" id="loadLists">불러오기</button></span></label>
-    <label>연락처 페이지 주소 (프로젝트별 아티팩트)<input data-pf="연락처페이지" type="url" placeholder="https://claude.ai/..." value="${esc(p.연락처페이지)}"></label>
-    <label>DECODER 분석에서 가져오기<select id="fromDec">${opt(D.decoder.map(c => [c.bidNtceNo, c.사업명]), "", "선택")}</select></label>
     <label class="wide">과업범위 (제안요청서·과업지시서의 과업 내용)<textarea data-pf="과업범위" style="min-height:160px">${esc(p.과업범위)}</textarea></label></div>
     <div class="row"><button class="btn primary" type="button" id="pSave">저장</button><button class="btn x" type="button" id="pDel">프로젝트 삭제</button><span class="note" id="pNote">${esc(pMsg)}</span></div>`;
 }
@@ -425,24 +457,14 @@ JSON만 답한다: {"이름":"사업(용역)명","발주처":"","계약총액":�
   } catch (e) { note.textContent = askErr(e); }
   finally { if ($("docPick")) $("docPick").disabled = false; }
 }
-async function loadLists() {
-  const note = $("pNote");
-  if (!mcp) { note.textContent = "이 화면에서는 Google Tasks를 불러올 수 없습니다."; return; }
-  note.textContent = "Google Tasks 목록을 불러오는 중…";
-  try { const r = await mcp.callTool("Zapier", "inspect_zapier_actions", {tool_name: "google_tasks_create_task", enum_property: "task_list"});
-    const txt = JSON.stringify(r.payload ?? r.content), m = [...txt.matchAll(/\{\\?"value\\?":\\?"([^"\\]+)\\?",\\?"label\\?":\\?"([^"\\]+)\\?"\}/g)];
-    tlists = m.map(x => [x[1], x[2]]); note.textContent = tlists.length ? `${tlists.length}개 목록을 찾았습니다.` : "목록을 찾지 못했습니다.";
-    const sel = document.querySelector('[data-pf="tasksList"]'); if (sel) sel.innerHTML = opt(tlists, sel.value, "선택 안 함");
-  } catch (e) { note.textContent = mcpMsg(e); }
-}
-
 // ── CHRONOS: 공정 (간트·하위 할 일·지연 경고·지연 보고)
 const AI = D.ai; // [{code, 역할}]
 const who = d => d ? (d.t === "ai" ? `🤖 ${d.id}` : `👤 ${people.find(x => x.id === d.id)?.이름 || "?"}`) : "미배치";
 const effStat = t => t.상태 !== "완료" && t.종료 && t.종료 < today() ? "지연" : STAT.includes(t.상태) ? t.상태 : "대기"; // 목록 밖 값은 화면·class 에 넣지 않는다
 const subStat = s => s.완료 ? "완료" : s.마감 && s.마감 < today() ? "지연" : "대기";
 const daysLate = d => Math.round((new Date(today() + "T00:00:00") - new Date(d + "T00:00:00")) / 864e5);
-const WHO = () => [["", "미배치"], ...AI.map(a => ["ai:" + a.code, `🤖 ${a.code} · ${a.역할}`]), ...PP().map(x => ["real:" + x.id, `👤 ${x.이름}${x.직책 ? ` · ${x.직책}` : ""} · ${x.역할 || ""}`])];
+// 담당 선택지: 사람(이 프로젝트에 배치된 인력) + AI 직원 — 사람이 작업마다 직접 고른다
+const WHO = v => opt([["", "미배치"]], v) + `<optgroup label="사람 (배치된 인력)">${opt(PP().map(x => ["real:" + x.id, `👤 ${x.이름}${x.직책 ? ` · ${x.직책}` : ""}${x.역할 ? ` · ${x.역할}` : ""}`]), v)}</optgroup><optgroup label="AI 직원">${opt(AI.map(a => ["ai:" + a.code, `🤖 ${a.code} · ${a.역할}`]), v)}</optgroup>`;
 function lateList() {
   const out = [];
   W().forEach((t, i) => {
@@ -487,14 +509,12 @@ async function genWbs() {
 [프로젝트] ${p.이름} / 발주처 ${p.발주처 || "-"} / 계약일 ${p.계약일 || "?"} / 기간 ${p.시작 || "?"} ~ ${p.종료 || "?"} / 오늘 ${today()}
 [과업범위]\n${String(p.과업범위).slice(0, 12000)}
 [산출내역서 항목 (id|구분/항목/내용|금액)]\n${rows || "(아직 없음)"}
-[AI 직원] ${AI.map(a => `${a.code}(${a.역할})`).join(", ")}
-[참여인력] ${PP().map(x => `${x.id}:${x.이름}(${[x.직책, x.역할].filter(Boolean).join("·")}${x.참여시작 ? ` ${x.참여시작}~${x.참여종료 || ""}` : ""})`).join(", ") || "(미등록)"}
-과업범위와 산출내역서를 빠짐없이 검토해 공정일정표(WBS)를 만든다. 착수→준비→실행→사후·정산 단계 순서, 작업은 산출물이 확인 가능한 단위(15~40개), 작업마다 하위 할 일 0~4개. 기간은 프로젝트 기간 안에서 현실적으로 배분하고 선후관계를 지킨다. 문서 작성·조사·번역·바이어 발굴처럼 AI 직원이 할 수 있는 일은 AI 직원을, 현장·계약·대면 업무는 참여인력(참여 기간 안)을 추천한다.
-JSON만 답한다: {"items":[{"단계":"착수|준비|실행|사후·정산","작업":"","산출물":"","시작":"YYYY-MM-DD","종료":"YYYY-MM-DD","담당":{"t":"ai|real","id":"AI 코드 또는 참여인력 id(없으면 빈 칸)","추천역할":"실제 직원일 때 필요한 역할"},"하위":[{"할일":"","마감":"YYYY-MM-DD"}],"예산항목":["산출내역서 id"],"근거":"과업범위의 어느 부분인지 짧게"}]}`;
+과업범위와 산출내역서를 빠짐없이 검토해 공정일정표(WBS)를 만든다. 착수→준비→실행→사후·정산 단계 순서, 작업은 산출물이 확인 가능한 단위(15~40개), 작업마다 하위 할 일 0~4개. 기간은 프로젝트 기간 안에서 현실적으로 배분하고 선후관계를 지킨다. 담당자는 지정하지 않는다(본부장님이 작업마다 사람·AI 직원을 직접 고른다). 추천역할에는 이 작업에 필요한 역할만 참고로 적는다.
+JSON만 답한다: {"items":[{"단계":"착수|준비|실행|사후·정산","작업":"","산출물":"","시작":"YYYY-MM-DD","종료":"YYYY-MM-DD","추천역할":"필요한 역할(참고용, 예: 현장 운영·디자인·번역)","하위":[{"할일":"","마감":"YYYY-MM-DD"}],"예산항목":["산출내역서 id"],"근거":"과업범위의 어느 부분인지 짧게"}]}`;
   try { const r = await sample.json(prompt, {modelTier: "complex"});
-    const items = (r.items || []).map((t, i) => ({id: "T" + String(i + 1).padStart(3, "0"), 단계: t.단계, 작업: t.작업, 산출물: t.산출물, 시작: t.시작, 종료: t.종료, 담당: t.담당?.id ? {t: t.담당.t === "ai" ? "ai" : "real", id: t.담당.id} : null, 추천역할: t.담당?.추천역할 || "",
+    const items = (r.items || []).map((t, i) => ({id: "T" + String(i + 1).padStart(3, "0"), 단계: t.단계, 작업: t.작업, 산출물: t.산출물, 시작: t.시작, 종료: t.종료, 담당: null, 추천역할: String(t.추천역할 || ""),
       하위: (t.하위 || []).filter(s => s?.할일).map(s => ({할일: s.할일, 마감: /^\d{4}-\d{2}-\d{2}$/.test(s.마감 || "") ? s.마감 : "", 담당: null, 완료: false})), 예산항목: t.예산항목 || [], 근거: t.근거 || "", 상태: "대기", 기록: [], 보고: []}));
-    wbs[cur] = {items}; await saveWbs(); wn(`공정표 ${items.length}건을 만들었습니다. 작업을 눌러 날짜·하위 할 일·담당자를 고쳐 주세요.`); drawWbs(); drawTop();
+    wbs[cur] = {items}; await saveWbs(); wn(`공정표 ${items.length}건을 만들었습니다. 작업을 눌러 담당(사람·AI 직원)을 고르고 날짜·하위 할 일을 고쳐 주세요.`); drawWbs(); drawTop();
   } catch (e) { wn(askErr(e)); $("genWbs").disabled = false; }
 }
 function checkLate() {
@@ -535,7 +555,7 @@ async function lateMail() {
 }
 let dlgT = null, subDraft = [];
 const subRow = (s, j) => `<div class="srow"><input type="checkbox" data-sf="완료"${s.완료 ? " checked" : ""} aria-label="완료"><input data-sf="할일" value="${esc(s.할일)}" placeholder="하위 할 일">
-  <select data-sf="담당" aria-label="담당">${opt(WHO(), s.담당 ? `${s.담당.t}:${s.담당.id}` : "")}</select><input type="date" data-sf="마감" value="${esc(s.마감)}" aria-label="마감"><button class="btn x adm" type="button" data-sdel="${j}" aria-label="삭제">✕</button></div>`;
+  <select data-sf="담당" aria-label="담당">${WHO(s.담당 ? `${s.담당.t}:${s.담당.id}` : "")}</select><input type="date" data-sf="마감" value="${esc(s.마감)}" aria-label="마감"><button class="btn x adm" type="button" data-sdel="${j}" aria-label="삭제">✕</button></div>`;
 const readSubs = () => [...document.querySelectorAll("#subs .srow")].map(el => { const g = k => el.querySelector(`[data-sf="${k}"]`); return {할일: g("할일").value.trim(), 담당: pw(g("담당").value), 마감: g("마감").value, 완료: g("완료").checked}; });
 const drawSubs = () => { $("subs").innerHTML = subDraft.map(subRow).join("") || '<p class="note">하위 할 일이 없습니다.</p>'; };
 function editTask(i, toRep) {
@@ -546,7 +566,7 @@ function editTask(i, toRep) {
   $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${isNew ? "작업 추가" : esc(t.작업)} <span class="st ${effStat(t)}">${effStat(t)}</span></h2>
     <div class="form"><label>단계<select data-tf="단계">${opt(["착수", "준비", "실행", "사후·정산"], t.단계)}</select></label><label class="wide">작업<input data-tf="작업" value="${esc(t.작업)}"></label>
     <label class="wide">산출물<input data-tf="산출물" value="${esc(t.산출물)}"></label><label>시작일<input type="date" data-tf="시작" value="${esc(t.시작)}"></label><label>마감일<input type="date" data-tf="종료" value="${esc(t.종료)}"></label>
-    <label>담당<select data-tf="담당">${opt(WHO(), t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}</select></label><label>상태<select data-tf="상태">${opt(STAT, t.상태)}</select></label>
+    <label>담당 (사람·AI 직원 중 고르기)<select data-tf="담당">${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}</select></label><label>상태<select data-tf="상태">${opt(STAT, t.상태)}</select></label>
     <label class="wide adm">연결 예산 항목<select data-tf="예산항목" multiple size="3">${bOpts.map(r => `<option value="${esc(r.id)}"${(t.예산항목 || []).includes(r.id) ? " selected" : ""}>${esc([r.구분, r.항목, r.내용].filter(Boolean).join(" / "))} (${won(r.금액)})</option>`).join("")}</select></label>
     <label class="wide adm">진행 메모<textarea data-tf="메모">${esc(t.메모)}</textarea></label></div>
     <h3 style="margin:14px 0 6px;font-size:14px">하위 할 일</h3><div class="subs" id="subs"></div><div class="row adm" style="margin-top:6px"><button class="btn" type="button" id="subAdd">+ 하위 할 일</button></div>
@@ -598,16 +618,12 @@ async function requestTask(t) {
   }
   const u = people.find(x => x.id === t.담당.id);
   if (!u?.이메일) { wn("담당 직원의 이메일을 인력 탭에서 등록해 주세요."); return; }
-  if (!mcp) { wn("이 화면에서는 메일·Tasks를 보낼 수 없습니다."); return; }
-  if (!confirm(`${u.이름}(${u.이메일})에게 작업 요청 메일을 보내고${p.tasksList ? " Google Tasks에 등록" : ""}할까요?`)) return;
+  if (!mcp) { wn("이 화면에서는 메일을 보낼 수 없습니다."); return; }
+  if (!confirm(`${u.이름}(${u.이메일})에게 작업 요청 메일을 보낼까요?`)) return;
   const body = `${u.이름}님, 안녕하세요.\n\n${p.이름} 공정에 따라 아래 작업을 요청드립니다.\n\n■ 작업: ${t.작업}\n■ 산출물: ${t.산출물 || "-"}\n■ 기간: ${t.시작} ~ ${t.종료}\n${subs ? `■ 하위 할 일:\n${subs}\n` : ""}■ 메모: ${t.메모 || "-"}\n\n진행 상황이나 어려운 점은 이 메일에 회신해 주세요(제목의 ${tag} 표시는 그대로 두어 주세요).\n\n— JARVIS 사업 수행 관제실 CHRONOS (본부장님 대리 발송)`;
   const log = [];
   try { await mcp.callTool("Gmail", "send_message", {to: [u.이메일], subject: `${tag} ${t.작업} 요청 (마감 ${t.종료})`, body}); log.push("메일 발송"); }
   catch (e) { log.push("메일 실패: " + mcpMsg(e)); }
-  if (p.tasksList) {
-    try { await mcp.callTool("Zapier", "execute_zapier_write_action", {selected_api: "GoogleTasksCLIAPI", action: "task", tool_name: "google_tasks_create_task", params: {task_list: p.tasksList, title: `${tag} ${t.작업} — ${u.이름}`, notes: `산출물: ${t.산출물 || "-"}\n기간: ${t.시작} ~ ${t.종료}`, due: t.종료 ? `${t.종료}T09:00:00+09:00` : undefined}}); log.push("Google Tasks 등록"); }
-    catch (e) { log.push("Tasks 실패: " + mcpMsg(e)); }
-  }
   t.상태 = "요청"; t.요청 = {at: new Date().toISOString(), tag}; /* wbs 는 팀장도 읽으므로 이메일은 남기지 않는다 */ t.기록.push({at: new Date().toISOString(), 내용: `${u.이름}에게 요청 — ${log.join(", ")}`});
   wn(`${u.이름}에게 요청했습니다: ${log.join(", ")}`); await saveWbs(); draw();
 }
@@ -762,22 +778,49 @@ async function ledCommit() {
   lup = null; drawLed(); alert(ok === rows.length ? `${ok}건을 장부에 넣었습니다.` : `${rows.length}건 중 ${ok}건만 저장했습니다. 다시 올리면 빠진 것만 추가됩니다.`);
 }
 
-// ── 참여인력 (프로젝트별)
+// ── 참여인력: 사내 직원 명부(staff, 관리자만)에서 골라 프로젝트에 배치 → people 문서(pid·staffId). 배치 해제 = 그 people 문서 삭제
+let sq = "";
 function drawPpl() {
-  const pp = PP(), p = P(), fromBud = BR().some(r => /인건비/.test(r.구분) && r.내용);
-  $("tab-ppl").innerHTML = `<div class="row"><h2>참여인력</h2><span style="flex:1"></span>${fromBud ? '<button class="btn" type="button" id="pplBud">산출내역서 인건비에서 가져오기</button>' : ""}<button class="btn primary" type="button" id="pplAdd" ${p ? "" : "disabled"}>+ 참여인력 등록</button></div>
-    <p class="note">${p ? `${esc(p.이름)} 참여인력입니다.` : ""} 담당 PM은 프로젝트 설정에서 고릅니다. 이메일은 작업 요청·지연 알림 메일에 씁니다.</p>
+  const pp = PP(), p = P();
+  $("tab-ppl").innerHTML = `<div class="row"><h2>참여인력</h2><span class="note">${p ? `${esc(p.이름)} — 아래 사내 직원 명부에서 골라 배치합니다.` : "프로젝트를 먼저 고르세요."} 담당 PM은 프로젝트 설정에서 고릅니다. 이메일은 작업 요청·지연 알림 메일에 씁니다.</span></div>
     <div class="tw"><table><thead><tr><th>성명</th><th>직책</th><th>담당 역할</th><th>참여 기간</th><th>참여율</th><th>이메일</th><th>배치된 작업</th></tr></thead><tbody>${pp.map(x => `<tr class="click" data-pp="${esc(x.id)}"><td>${esc(x.이름)}${p?.PM === x.id ? ' <span class="tag go">PM</span>' : ""}${x.pid ? "" : ' <span class="tag">공통</span>'}</td><td>${esc(x.직책)}</td><td>${esc(x.역할)}</td><td>${esc(x.참여시작 || "")}${x.참여시작 || x.참여종료 ? " ~ " : ""}${esc(x.참여종료 || "")}</td><td class="num">${x.참여율 ? esc(x.참여율) + "%" : ""}</td><td>${esc(x.이메일)}</td>
-      <td class="num">${W().filter(t => (t.담당?.t === "real" && t.담당.id === x.id) || (t.하위 || []).some(s => s.담당?.t === "real" && s.담당.id === x.id)).length}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">등록된 참여인력이 없습니다.</td></tr>'}</tbody></table></div>
-    <h2>업무 지표 <span class="note">— 배정된 작업·하위 할 일의 완료와 지연만 셉니다. 개인 평가·순위가 아닙니다.</span></h2>
-    <div class="tw"><table><thead><tr><th>담당</th><th>배정</th><th>완료</th><th>진행 중</th><th>지연 중</th><th>완료율</th><th>기한 내 완료</th></tr></thead><tbody>${metrics().map(o => `<tr><td>${esc(who(o.d))}</td><td class="num">${o.배정}</td><td class="num">${o.완료}</td><td class="num">${o.진행}</td><td class="num${o.지연 ? " warn" : ""}">${o.지연}</td><td class="num">${pct(o.완료 / o.배정 * 100)}</td><td class="num">${o.기록 ? `${o.기한내}/${o.기록}` : "–"}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">배정된 작업이 없습니다.</td></tr>'}</tbody></table></div>
-    <h2>AI 직원</h2><div class="tw"><table><thead><tr><th>코드</th><th>역할</th><th>배치된 작업</th></tr></thead><tbody>${AI.map(a => `<tr><td>🤖 ${esc(a.code)}</td><td>${esc(a.역할)}</td><td class="num">${W().filter(t => t.담당?.t === "ai" && t.담당.id === a.code).length}</td></tr>`).join("")}</tbody></table></div>`;
+      <td class="num">${W().filter(t => (t.담당?.t === "real" && t.담당.id === x.id) || (t.하위 || []).some(s => s.담당?.t === "real" && s.담당.id === x.id)).length}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">배치된 인력이 없습니다. 아래 명부에서 [배치]를 눌러 주세요.</td></tr>'}</tbody></table></div>
+    <div class="co"><div class="row"><h3>사내 직원 명부</h3><span class="note">관리자만 봅니다. 한 번 등록해 두면 프로젝트마다 골라 배치합니다.</span><span style="flex:1"></span><button class="btn primary" type="button" id="stAdd">+ 직원 등록</button></div>
+      <input id="stQ" type="search" placeholder="이름·부서·직책 검색" value="${esc(sq)}"><div id="stBox"></div></div>
+    <h2>업무 지표</h2><p class="note">공정일정의 담당자·상태로 계산합니다. 작업 수를 센 값이며 점수·평가·순위가 아닙니다.</p>
+    <div class="tw"><table><thead><tr><th>담당</th><th>담당 작업</th><th>완료</th><th>진행</th><th>지연</th><th>기한 지난 미완료</th><th>하위 할 일 완료/담당</th></tr></thead><tbody>${metrics().map(o => `<tr><td>${esc(who(o.d))}</td><td class="num">${o.작업}</td><td class="num">${o.완료}</td><td class="num">${o.진행}</td><td class="num">${o.지연}</td><td class="num${o.초과 ? " warn" : ""}">${o.초과}</td><td class="num">${o.하위 ? `${o.하위완료}/${o.하위}` : "–"}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">담당이 정해진 작업이 없습니다.</td></tr>'}</tbody></table></div>
+    <h2>AI 직원</h2><p class="note">AI 직원은 공정일정에서 작업별로 직접 고릅니다(자동 배치 없음). 작업을 누르고 담당에서 🤖 AI 직원을 고른 뒤 [저장 후 작업 요청]을 누르면 초안을 만듭니다.</p>
+    <div class="tw"><table><thead><tr><th>코드</th><th>역할</th><th>하는 일</th><th>배치된 작업</th></tr></thead><tbody>${AI.map(a => `<tr><td>🤖 ${esc(a.code)}</td><td>${esc(a.역할)}</td><td class="note">${esc((a.업무 || []).join(" · "))}</td><td class="num">${W().filter(t => t.담당?.t === "ai" && t.담당.id === a.code).length}</td></tr>`).join("")}</tbody></table></div>`;
+  drawSt();
 }
-// 업무 지표: 담당(하위 할 일은 없으면 작업 담당)별 배정·완료·진행·지연, 완료일이 남은 완료 중 마감 안에 끝낸 수
+function drawSt() {
+  if (!$("stBox")) return; const q = sq.toLowerCase(), on = id => PP().find(x => x.pid === cur && x.staffId === id);
+  const ss = staff.filter(x => !q || [x.이름, x.부서, x.직책].some(v => String(v || "").toLowerCase().includes(q))).sort((a, b) => (b.재직 !== false) - (a.재직 !== false) || String(a.이름).localeCompare(String(b.이름), "ko"));
+  $("stBox").innerHTML = `<div class="tw"><table><thead><tr><th>이름</th><th>부서</th><th>직책</th><th>이메일</th><th>연락처</th><th>이 프로젝트</th></tr></thead><tbody>${ss.map(x => { const d = on(x.id);
+    return `<tr class="click" data-st="${esc(x.id)}"><td>${esc(x.이름)}${x.재직 === false ? ' <span class="tag">퇴사</span>' : ""}</td><td>${esc(x.부서)}</td><td>${esc(x.직책)}</td><td>${mailA(x.이메일)}</td><td>${telA(x.연락처)}</td>
+      <td>${d ? `<span class="tag go">배치됨</span> <button class="btn x" type="button" data-sun="${esc(d.id)}">해제</button>` : x.재직 === false || !cur ? "" : `<button class="btn" type="button" data-son="${esc(x.id)}">배치</button>`}</td></tr>`; }).join("")
+    || `<tr><td colspan="6" class="empty">${staff.length ? "조건에 맞는 직원이 없습니다." : "등록된 직원이 없습니다. [+ 직원 등록]을 눌러 주세요."}</td></tr>`}</tbody></table></div>`;
+}
+function editSt(x) {
+  const isNew = !x; x = x || {재직: true}; const f = (k, type = "text") => `<label>${k}<input type="${type}" data-sf2="${k}" value="${esc(x[k])}"></label>`;
+  $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${isNew ? "직원 등록" : esc(x.이름)}</h2><div class="form">${f("이름")}${f("부서")}${f("직책")}${f("이메일", "email")}${f("연락처", "tel")}</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : x.재직 === false ? '<button class="btn" value="back">재직으로 되돌리기</button>' : '<button class="btn x" value="out">퇴사 처리</button>'}<button class="btn" value="cancel">닫기</button></div>`;
+  $("dlg").onclose = async () => { const v = $("dlg").returnValue; if (!v || v === "cancel" || !db) return;
+    const n = {재직: v === "out" ? false : v === "back" ? true : x.재직 !== false}; $("dlgForm").querySelectorAll("[data-sf2]").forEach(el => n[el.dataset.sf2] = el.value.trim()); if (!n.이름) return;
+    const id = x.id || "S" + Date.now().toString(36); if (!await put(`staff/${id}`, n)) { alert("저장하지 못했습니다."); return; }
+    // 배치된 people 사본의 이름·직책·이메일도 명부에 맞춘다
+    await Promise.all(people.filter(u => u.staffId === id && (u.이름 !== n.이름 || u.직책 !== n.직책 || u.이메일 !== n.이메일)).map(({id: uid, ...u}) => put(`people/${uid}`, {...u, 이름: n.이름, 직책: n.직책, 이메일: n.이메일}))); };
+  $("dlg").returnValue = ""; $("dlg").showModal();
+}
+async function assign(sid) {
+  const x = staff.find(y => y.id === sid), p = P(); if (!x || !p || PP().some(u => u.pid === cur && u.staffId === sid)) return;
+  if (await put(`people/U${Date.now().toString(36)}`, {pid: cur, staffId: sid, 이름: x.이름 || "", 직책: x.직책 || "", 역할: "", 참여시작: p.시작 || "", 참여종료: p.종료 || "", 이메일: x.이메일 || ""})) toast(`${x.이름}님을 배치했습니다. 이름을 눌러 담당 역할·기간을 적어 주세요.`);
+}
+// 업무 지표: 공정표 작업을 담당별로 센다(상태 그대로). 하위 할 일은 따로 센다
 function metrics() {
-  const out = {}, add = (d, due, done, at) => { if (!d) return; const o = out[`${d.t}:${d.id}`] ||= {d, 배정: 0, 완료: 0, 진행: 0, 지연: 0, 기한내: 0, 기록: 0};
-    o.배정++; if (done) { o.완료++; if (at) { o.기록++; if (!due || at <= due) o.기한내++; } } else if (due && due < today()) o.지연++; else o.진행++; };
-  W().forEach(t => { add(t.담당, t.종료, t.상태 === "완료", t.완료일); (t.하위 || []).forEach(x => add(x.담당 || t.담당, x.마감, x.완료, x.완료일)); });
+  const out = {}, o = d => out[`${d.t}:${d.id}`] ||= {d, 작업: 0, 완료: 0, 진행: 0, 지연: 0, 초과: 0, 하위: 0, 하위완료: 0};
+  W().forEach(t => { if (t.담당) { const x = o(t.담당), done = t.상태 === "완료"; x.작업++; if (done) x.완료++; else if (t.상태 === "지연") x.지연++; else if (["요청", "진행", "검토"].includes(t.상태)) x.진행++; if (!done && t.종료 && t.종료 < today()) x.초과++; }
+    (t.하위 || []).forEach(s => { const d = s.담당 || t.담당; if (d) { const x = o(d); x.하위++; if (s.완료) x.하위완료++; } }); });
   return Object.values(out).sort((a, b) => who(a.d).localeCompare(who(b.d), "ko"));
 }
 function editPpl(x) {
@@ -786,20 +829,13 @@ function editPpl(x) {
   $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${isNew ? "참여인력 등록" : esc(x.이름)}</h2><div class="form">${f("이름", "성명")}${f("직책", "직책", "text", ' placeholder="예) 책임, 선임, 매니저"')}${f("역할", "담당 역할", "text", ' placeholder="예) PM, 현장 운영, 디자인, 회계"')}
     ${f("참여시작", "참여 시작일", "date")}${f("참여종료", "참여 종료일", "date")}${f("참여율", "참여율 (%)", "number", ' min="0" max="100"')}<label class="wide">이메일<input type="email" data-xf="이메일" value="${esc(x.이메일)}"></label></div>
     ${x.pid ? "" : '<p class="note">예전에 모든 프로젝트 공통으로 등록한 사람입니다. 저장하면 공통으로 남습니다.</p>'}
-    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn x" value="del">삭제</button>'}<button class="btn" value="cancel">닫기</button></div>`;
+    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn x" value="del">배치 해제</button>'}<button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { const v = $("dlg").returnValue; if (!v || v === "cancel" || !db) return;
-    if (v === "del") { if (confirm("삭제할까요?")) await db.doc(`people/${x.id}`).delete().catch(() => {}); return; }
+    if (v === "del") { if (confirm(`${x.이름}님을 이 프로젝트에서 배치 해제할까요?`)) await db.doc(`people/${x.id}`).delete().catch(() => {}); return; }
     const n = x.pid ? {pid: x.pid} : {}; $("dlgForm").querySelectorAll("[data-xf]").forEach(el => n[el.dataset.xf] = el.value.trim()); if (!n.이름) return;
     await put(`people/${x.id}`, n); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
-async function pplFromBud() {
-  const have = new Set(PP().map(x => nk(x.이름))), add = BR().filter(r => /인건비/.test(r.구분) && r.내용 && !have.has(nk(r.내용)));
-  if (!add.length) { alert("새로 가져올 사람이 없습니다."); return; }
-  if (!confirm(`산출내역서 인건비에서 ${add.length}명(${add.map(r => r.내용).join(", ")})을 참여인력으로 등록할까요? 직책·기간·이메일은 따로 적어 주세요.`)) return;
-  await Promise.all(add.map((r, i) => put(`people/U${Date.now().toString(36)}${i}`, {pid: cur, 이름: r.내용, 역할: r.항목, 직책: ""})));
-}
-
 // ── 연락처: 참가기업은 프로젝트별 페이지(담당 PM 에게만 공유, 주소는 pm·view 의 연락처페이지) · 국내외 협업사(partners)는 여기서 관리자·팀장이 보고 고친다. 내려받기는 관리자만. 외부 발송에 쓰지 않는다(mailto·tel 링크만)
 const HI = ["사업", "연도", "역할", "평가"];
 const PT = ["회사명", "국가", "도시", "분야", "담당자", "직책", "모바일", "이메일", "대표번호", "웹", "메모"];
@@ -885,11 +921,14 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button, tr.click"); if (!t || (t.tagName === "TR" && e.target.closest("select, input, a"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
-  if (t.id === "pNew") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
-  if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.tasksListName = tlists?.find(x => x[0] === p.tasksList)?.[1] || p.tasksListName || ""; if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = "저장했습니다."; } drawTop(); }
-  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; draw(); }
+  if (t.id === "pNew" || t.id === "pNew2") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
+  if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.목표수익률 = p.목표수익률 === "" || !isFinite(+p.목표수익률) ? "" : +p.목표수익률;
+    if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = ""; hiP = p.id; showTab("list"); toast(`저장했습니다 — ${p.코드 ? p.코드 + " " : ""}${p.이름}`); } else drawTop(); } // 저장하면 목록으로 가서 그 행을 강조
+  if (t.id === "tgt" && admin) { const p = P(), v = prompt(`${p.이름} 목표 수익률(%) — 비우면 지웁니다`, tgt(p) ?? ""); if (v === null) return; const n = v.trim() === "" ? "" : +v.replace(/[^\d.\-]/g, "");
+    if (n !== "" && !isFinite(n)) { alert("숫자로 넣어 주세요."); return; } p.목표수익률 = n; if (await saveProj(p)) toast("목표 수익률을 저장했습니다."); draw(); }
+  if (t.dataset.pj) { cur = t.dataset.pj; hiP = null; setDirty = null; pMsg = ""; try { localStorage.setItem("pmo-proj", cur); } catch {} showTab("wbs"); setTimeout(() => lateAlert(false), 300); }
+  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다). 프로젝트별 연락처 페이지는 따로 남습니다.`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
   if (t.id === "docPick") $("docFile").click();
-  if (t.id === "loadLists") loadLists();
   if (t.id === "genWbs") genWbs();
   if (t.id === "addTask") editTask(null);
   if (t.id === "chkLate") checkLate();
@@ -918,9 +957,10 @@ document.addEventListener("click", async e => {
   if (t.dataset.le) editLed(ledger.find(x => x.id === t.dataset.le));
   if (t.id === "ledXlsx") saveXlsx(`LEDGER_장부_${today()}.xlsx`, [["전체 내역서", [["지출일", "프로젝트", "구분", "항목", "내용", "지출 항목", "과세", "영세 외화", "영세 원화", "합계", "부가세", "결제방법", "공급업체", "비고"],
     ...ledger.map(nl).map(x => [x.지출일, projects.find(p => p.id === x.pid)?.이름 || x.pid, x.구분, x.항목, x.내용, x.지출항목, num(x.과세액), x.외화, num(x.영세액), num(x.과세액) + num(x.영세액), num(x.부가세), x.결제방법, x.공급업체, x.비고])]]]);
-  if (t.id === "pplAdd") editPpl(null);
-  if (t.id === "pplBud") pplFromBud();
-  if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
+  if (t.id === "stAdd") editSt(null);
+  if (t.dataset.st) editSt(staff.find(x => x.id === t.dataset.st));
+  if (t.dataset.son) assign(t.dataset.son);
+  if (t.dataset.sun) { const u = people.find(x => x.id === t.dataset.sun); if (u && confirm(`${u.이름}님을 이 프로젝트에서 배치 해제할까요?`) && db && admin) await db.doc(`people/${u.id}`).delete().catch(() => alert("해제하지 못했습니다.")); }  if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
   if (t.id === "ptPick") $("ptFile").click();
   if (t.id === "ptAdd") editPt(null);
   if (t.dataset.pt) editPt(partners.find(x => x.id === t.dataset.pt));
@@ -931,10 +971,8 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.dataset.pf) setDirty = cur;
-  if (t.id === "pSel") { setDirty = null; pMsg = ""; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} draw(); setTimeout(() => lateAlert(false), 300); }
-  if (t.id === "fromDec") { const c = D.decoder.find(x => x.bidNtceNo === t.value); if (!c) return; setDirty = cur; const ta = document.querySelector('[data-pf="과업범위"]');
-    ta.value = [`[${c.사업명}] ${c.한줄요약}`, ...c.과업범위.map(s => `- ${s.영역}: ${s.내용}`), "", "[주요 일정]", ...c.일정.map(x => `- ${x.날짜} ${x.항목}`)].join("\n");
-    const nm = document.querySelector('[data-pf="이름"]'); if (nm.value === "새 프로젝트") nm.value = c.사업명; const bz = document.querySelector('[data-pf="발주처"]'); if (!bz.value) bz.value = c.발주기관; }
+  if (t.id === "pSel") { setDirty = null; pMsg = ""; hiP = null; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} if (tab === "list") showTab("wbs"); else draw(); setTimeout(() => lateAlert(false), 300); }
+  if (t.id === "lsY") { lsf.y = t.value; drawLs(); } if (t.id === "lsS") { lsf.st = t.value; drawLs(); }
   if (t.id === "docFile" && t.files.length) { const fs = [...t.files]; t.value = ""; readDocs(fs); }
   if (t.id === "budFile" && t.files[0]) { const f = t.files[0]; t.value = ""; if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } budLoad(f.name, XLSX.read(await f.arrayBuffer(), {type: "array"})); }
   if (t.id === "ledFile" && t.files[0]) { const f = t.files[0]; t.value = ""; if (!window.XLSX) { alert("엑셀 읽기 도구를 불러오지 못했습니다."); return; } ledLoad(f.name, XLSX.read(await f.arrayBuffer(), {type: "array"})); }
@@ -965,7 +1003,11 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("input", e => { const d = e.target.dataset;
   if (d.hi) { const [i, k] = d.hi.split("|"); if (ptDraft?.이력[+i]) ptDraft.이력[+i][k] = e.target.value; }
-  if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); } });
+  if (e.target.id === "ptQ") { pf.q = e.target.value; drawPt(); }
+  if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
+// 문서 끌어다 놓기(프로젝트 설정). 다시 그려져도 되게 문서에서 받는다
+["dragenter", "dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest?.("#docDrop"); if (!z) return; e.preventDefault();
+  z.classList.toggle("on", ev === "dragenter" || ev === "dragover"); if (ev === "drop" && e.dataTransfer?.files?.length) readDocs([...e.dataTransfer.files]); }));
 document.addEventListener("input", e => { if (e.target.dataset.pf) { setDirty = cur; pMsg = ""; } if (e.target.id === "lq") { lf.q = e.target.value; const pos = e.target.selectionStart; drawLed(); $("lq").focus(); $("lq").setSelectionRange(pos, pos); } });
 
 // ── 팀장용 사본 view/{pid}: 허용 목록 필드만 (금액·이메일·전화·메모·참여율 없음)
@@ -975,7 +1017,7 @@ let views = {};
 // ponytail: 관리자가 관제실을 열 때 사본 갱신 — 늦으면 루틴으로
 function syncView() {
   const want = {};
-  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "발주처", "상태", "시작", "종료", "연락처페이지"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""),
+  projects.forEach(p => want[p.id] = {...pick(p, ["이름", "코드", "발주처", "상태", "시작", "종료", "연락처페이지"]), 담당PM: String(people.find(x => x.id === p.PM)?.이름 ?? ""),
     인력: people.filter(x => !x.pid || x.pid === p.id).map(x => pick(x, ["id", "이름", "직책", "역할", "참여시작", "참여종료"])).sort((a, b) => a.id.localeCompare(b.id))});
   Object.entries(want).forEach(([id, v]) => { if (sj(v) !== sj(views[id] ?? null)) { views[id] = v; db.doc(`view/${id}`).set(v).catch(() => {}); } });
   Object.keys(views).filter(id => !want[id]).forEach(id => { delete views[id]; db.doc(`view/${id}`).delete().catch(() => {}); });
@@ -1002,6 +1044,7 @@ showTab(tab);
   db.collection("pm").onSnapshot(s => { const local = projects.filter(p => !s.docs.some(d => d.id === p.id) && !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...d.data()})), ...local]; if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); sync("pm"); });
   db.collection("budget").onSnapshot(s => { budget = {}; s.docs.forEach(d => budget[d.id] = d.data()); if (tab !== "bud" || !document.activeElement?.dataset?.bf) draw(); });
   db.collection("ledger").onSnapshot(s => { ledger = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab !== "led" || document.activeElement?.id !== "lq") draw(); });
+  db.collection("staff").onSnapshot(s => { staff = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") { if (document.activeElement?.id === "stQ") drawSt(); else draw(); } }, () => {});
   db.collection("people").onSnapshot(s => { people = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); sync("people"); });
   db.collection("view").onSnapshot(s => { const first = !seen.has("view"); views = {}; s.docs.forEach(d => views[d.id] = d.data()); if (first) sync("view"); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
 })();
