@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-09-25 09:48:04 KST",
+  "generated_at": "2026-09-29 11:19:47 KST",
   "status": "error",
   "window": {
-    "begin": "202609240000",
-    "end": "202609242359",
+    "begin": "202609280000",
+    "end": "202609282359",
     "how": "auto(전일)"
   },
   "query_stats": {
-    "total": 34,
+    "total": 46,
     "ok": 0,
     "failed": [
       "용역·기관·콘텐츠진흥원",
@@ -30,6 +30,10 @@
       "물품·기관·중소벤처기업진흥공단",
       "용역·기관·경기콘텐츠진흥원",
       "물품·기관·경기콘텐츠진흥원",
+      "용역·기관·디자인진흥원",
+      "물품·기관·디자인진흥원",
+      "용역·기관·경북창조경제혁신센터",
+      "물품·기관·경북창조경제혁신센터",
       "용역·키워드·투자",
       "용역·키워드·상담",
       "용역·키워드·박람회",
@@ -40,6 +44,14 @@
       "용역·키워드·비즈니스매칭",
       "용역·키워드·마켓",
       "용역·키워드·컨퍼런스",
+      "용역·키워드·공동관",
+      "용역·키워드·바이어",
+      "용역·키워드·B2B",
+      "용역·키워드·B2C",
+      "용역·키워드·IR",
+      "용역·키워드·데모데이",
+      "용역·키워드·포럼",
+      "용역·키워드·작가",
       "물품·키워드·박람회",
       "물품·키워드·전시",
       "물품·키워드·홍보관",
@@ -48,11 +60,23 @@
     "error_samples": [
       {
         "label": "용역·기관·콘텐츠진흥원",
-        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202"
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202609280000&inqryEndDt=202609282359&dminsttNm=%EC%BD%98%ED%85%9"
       },
       {
         "label": "물품·기관·콘텐츠진흥원",
-        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=2026"
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202609280000&inqryEndDt=202609282359&dminsttNm=%EC%BD%98%ED%85%90"
+      },
+      {
+        "label": "용역·기관·국가유산진흥원",
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202609280000&inqryEndDt=202609282359&dminsttNm=%EA%B5%AD%EA%B0%8"
+      },
+      {
+        "label": "물품·기관·국가유산진흥원",
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202609280000&inqryEndDt=202609282359&dminsttNm=%EA%B5%AD%EA%B0%80"
+      },
+      {
+        "label": "용역·기관·정보통신산업진흥원",
+        "error": "ConnectTimeout: HTTPConnectionPool(host='apis.data.go.kr', port=80): Max retries exceeded with url: /1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch?serviceKey=***&numOfRows=100&pageNo=1&type=json&inqryDiv=1&inqryBgnDt=202609280000&inqryEndDt=202609282359&dminsttNm=%EC%A0%95%EB%B3%B"
       }
     ]
   },
@@ -60,6 +84,7 @@
     "수집": 0,
     "집중기관": 0,
     "키워드": 0,
+    "참고": 0,
     "오탐제외": 0
   },
   "items": [],
