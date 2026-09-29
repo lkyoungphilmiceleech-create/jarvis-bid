@@ -538,7 +538,7 @@ function wTable(w) {
 function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const p = P(); if (!p) { $("tab-wbs").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
   // 글자 칸 입력(한글 조합 포함) 중에는 다시 그리지 않는다 — 조합 중 글자가 두 번 들어가지 않게. 포커스가 빠질 때 다시 그림
-  const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { wRe = true; return; }
+  const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { if (admin) { const [t, k] = wFind(fa.dataset.wi); if (t) wPut(t, k, fa.value); } wRe = true; return; } // 늦게 온 스냅샷이 입력 중인 값을 옛 값으로 되돌리지 않게
   const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
   if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
   const w = W(), late = lateList(), reps = w.flatMap((t, i) => (t.보고 || []).map((r, j) => ({t, i, j, r})));
