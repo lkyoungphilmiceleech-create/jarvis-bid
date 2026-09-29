@@ -1248,7 +1248,7 @@ const tab0 = tab; initGeo(); showTab(tab); drawHero();
   db.collection("profiles").onSnapshot(s => { profiles = {}; s.docs.forEach(d => profiles[d.id] = d.data()); drawHero(); if (tab === "prof") drawProf(); });
   if (!admin) { // 직원: 공개 사본·프로젝트·프로필만 (연락처 DB 등 루트 컬렉션은 읽지 않는다)
     db.collection("pubpipe").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...d.data()})); drawHero(); if (tab === "pipe") drawPipe(); }, () => {}); return; }
-  db.collection("pubpipe").onSnapshot(s => { pub = Object.fromEntries(s.docs.map(d => [d.id, pubJs(d.data())])); syncPub(); }, () => {});
+  db.collection("pubpipe").onSnapshot(s => { const first = !pub; pub = Object.fromEntries(s.docs.map(d => [d.id, pubJs(d.data())])); if (first) syncPub(); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
   db.collection("contacts").onSnapshot(s => { chunks = {}; s.docs.forEach(d => chunks[d.id] = d.data().rows || []); flatten(); drawHero(); if (tab === "db") drawDb(); if (PT.includes(tab)) drawProj(); if (tab === "prof") drawProf(); }, () => { $("say").textContent = "본부장님, 네트워크 DB를 불러오지 못했습니다. 새로고침해 주세요."; });
   db.collection("jobs").onSnapshot(s => { jobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "match") drawProj(); });
   db.collection("daily").orderBy("날짜", "desc").limit(7).onSnapshot(s => { daily = s.docs.map(d => d.data()); if (tab === "pipe") drawPipe(); });
