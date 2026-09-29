@@ -328,7 +328,7 @@ function showTab(t) { if (admin === false && t !== "ct") t = "wbs"; /* 팀장: �
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   ["set", "wbs", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
 function draw() { drawTop(); say(); const a = document.activeElement;
-  if (tab === "ct" && /INPUT|TEXTAREA/.test(a?.tagName) && $("tab-ct").contains(a)) { drawPt(); return; } // 연락처 입력 중에는 표를 다시 그리지 않는다
+  if (tab === "ct" && ctDirty && /INPUT|TEXTAREA/.test(a?.tagName) && $("tab-ct").contains(a)) { drawPt(); return; } // 연락처 입력 중에는 표를 다시 그리지 않는다
   ({set: drawSet, wbs: drawWbs, bud: drawBud, led: drawLed, ppl: drawPpl, ct: drawCt})[tab](); }
 
 // ── 저장
@@ -904,7 +904,7 @@ document.addEventListener("click", async e => {
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.id === "pNew") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
   if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.tasksListName = tlists?.find(x => x[0] === p.tasksList)?.[1] || p.tasksListName || ""; if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = "저장했습니다."; } drawTop(); }
-  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산도 함께 지워집니다(장부·참여인력은 남습니다).`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; draw(); }
+  if (t.id === "pDel") { const p = P(); if (!confirm(`'${p.이름}'을 삭제할까요? 공정·예산·참가기업 연락처도 함께 지워집니다(장부·참여인력은 남습니다).`)) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`, `cocontacts/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; draw(); }
   if (t.id === "docPick") $("docFile").click();
   if (t.id === "loadLists") loadLists();
   if (t.id === "genWbs") genWbs();
@@ -953,7 +953,7 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.dataset.pf) setDirty = cur;
-  if (t.id === "pSel" && ctDirty && tab === "ct" && !confirm("저장하지 않은 참가기업 연락처 변경이 있습니다. 버리고 프로젝트를 바꿀까요?")) { t.value = cur; return; }
+  if (t.id === "pSel" && ctDirty && !confirm("저장하지 않은 참가기업 연락처 변경이 있습니다. 버리고 프로젝트를 바꿀까요?")) { t.value = cur; return; }
   if (t.id === "pSel") { setDirty = null; pMsg = ""; cur = t.value; try { localStorage.setItem("pmo-proj", cur); } catch {} draw(); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "fromDec") { const c = D.decoder.find(x => x.bidNtceNo === t.value); if (!c) return; setDirty = cur; const ta = document.querySelector('[data-pf="과업범위"]');
     ta.value = [`[${c.사업명}] ${c.한줄요약}`, ...c.과업범위.map(s => `- ${s.영역}: ${s.내용}`), "", "[주요 일정]", ...c.일정.map(x => `- ${x.날짜} ${x.항목}`)].join("\n");
