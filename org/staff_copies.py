@@ -63,18 +63,19 @@ def views(pm, people):
 
 
 def design(askq, askr, people, pm):
-    # askq/{요청자 uid} = {요청id: 요청}, askr/{받는 사람 uid} = {요청id: 응답} — 받는 사람 본인의 응답만 믿는다(페이지와 같음)
+    # askq/{요청자 uid} = {요청id: 요청}, askr/{받는 사람 uid} = {"요청자uid:요청id": 응답} — 받는 사람 본인의 응답만 믿는다(페이지와 같음)
     nm = lambda i: s((people.get(i) or {}).get("이름")) if isinstance(i, str) else ""
+    by_uid = {s(x.get("uid")): s(x.get("이름")) for x in people.values() if isinstance(x, dict) and x.get("uid")}
     out = {}
-    for q in askq.values():
+    for f, q in askq.items():
         for i, a in (q.items() if isinstance(q, dict) else []):
-            if not isinstance(a, dict) or a.get("유형") != "디자인":
+            if not isinstance(a, dict) or a.get("유형") != "디자인" or a.get("취소"):
                 continue
-            r = (askr.get(s((people.get(a.get("to")) or {}).get("uid"))) or {}).get(i)
-            st = s(r.get("상태")) if isinstance(r, dict) and r.get("상태") else "요청"
-            if st in ("요청", "수락", "완료"):
-                out[i] = {"프로젝트": s((pm.get(a.get("pid")) or {}).get("이름")), "제목": scrub(s(a.get("제목"))), "내용": scrub(s(a.get("내용"))),
-                          "마감": s(a.get("마감")), "상태": st, "담당": nm(a.get("to")), "요청자": nm(a.get("fromP")), "at": s(a.get("at"))}
+            r = (askr.get(s((people.get(a.get("to")) or {}).get("uid"))) or {}).get(f"{f}:{i}")
+            st = s(r.get("상태")) if isinstance(r, dict) and r.get("상태") in ("수락", "완료", "반려") else "요청"
+            if st != "반려":
+                out[f"{f}-{i}"] = {"프로젝트": s((pm.get(a.get("pid")) or {}).get("이름")), "제목": scrub(s(a.get("제목"))), "내용": scrub(s(a.get("내용"))),
+                                   "마감": s(a.get("마감")), "상태": st, "담당": nm(a.get("to")), "요청자": by_uid.get(f, "알 수 없음"), "at": s(a.get("at"))}
     return out
 
 
@@ -110,12 +111,13 @@ def test():
     v = views({"P1": {"이름": "사업", "계약금액": 100, "PM": "u1"}}, {"u1": {"이름": "김", "이메일": "k@x.com", "인건비": 5}})
     assert v == {"P1": {"이름": "사업", "코드": "", "발주처": "", "상태": "", "시작": "", "종료": "", "연락처페이지": "", "담당PM": "김", "PM": "u1",
                         "인력": [{"id": "u1", "이름": "김", "직책": "", "역할": "", "참여시작": "", "참여종료": "", "uid": ""}]}}
-    q = {"uA": {"A1": {"유형": "디자인", "pid": "P1", "to": "u1", "fromP": "x", "제목": "키비주얼", "내용": "k@x.com 로 전달", "마감": "2026-10-01"},
-                "A2": {"유형": "일반"}, "A3": {"유형": "디자인", "to": "u1"}, "A4": {"유형": "디자인", "to": "u1"}}}
-    r = {"m1": {"A3": {"상태": "반려"}, "A4": {"상태": "수락"}}, "evil": {"A1": {"상태": "완료"}}}  # evil 은 받는 사람이 아니라 무시
-    d = design(q, r, {"u1": {"이름": "김", "uid": "m1"}}, {"P1": {"이름": "사업", "계약금액": 1}})
-    assert d["A1"] == {"프로젝트": "사업", "제목": "키비주얼", "내용": "(이메일 생략) 로 전달", "마감": "2026-10-01", "상태": "요청", "담당": "김", "요청자": "", "at": ""}
-    assert set(d) == {"A1", "A4"} and d["A4"]["상태"] == "수락"
+    q = {"uA": {"X": {"유형": "디자인", "pid": "P1", "to": "u1", "제목": "키비주얼", "내용": "k@x.com 로 전달", "마감": "2026-10-01"},
+                "A2": {"유형": "일반"}, "A3": {"유형": "디자인", "to": "u1"}, "A4": {"유형": "디자인", "to": "u1"}, "A5": {"유형": "디자인", "to": "u1", "취소": True}},
+         "evil": {"X": {"유형": "디자인", "to": "u1", "제목": "가짜"}}}
+    r = {"m1": {"uA:A3": {"상태": "반려"}, "uA:A4": {"상태": "수락"}, "uA:X": {"상태": "완료"}}, "evil": {"evil:X": {"상태": "완료"}}}
+    d = design(q, r, {"u1": {"이름": "김", "uid": "m1"}, "u2": {"이름": "이", "uid": "uA"}}, {"P1": {"이름": "사업", "계약금액": 1}})
+    assert d["uA-X"] == {"프로젝트": "사업", "제목": "키비주얼", "내용": "(이메일 생략) 로 전달", "마감": "2026-10-01", "상태": "완료", "담당": "김", "요청자": "이", "at": ""}
+    assert set(d) == {"uA-X", "uA-A4", "evil-X"} and d["evil-X"]["상태"] == "요청" and d["evil-X"]["요청자"] == "알 수 없음"  # 같은 id 의 가짜는 응답을 물려받지 못함
     print("ok")
 
 
