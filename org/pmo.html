@@ -1001,7 +1001,7 @@ function budParse() {
     let a = flag ? 0 : num(v("과세")), z = num(v("영세")), s = num(v("합계"));
     if (flag) { if (flag === "과세") a = s; else z = s; } else if (!s) s = a + z; else if (!a && !z) a = s;
     if (!s) continue;
-    if (out.length > 1 && s === out.reduce((m, x) => m + x.금액, 0)) continue; // 이름 없는 누계 줄(앞 항목들의 합과 같은 금액)도 합계로 보고 뺀다
+    if (!v("항목") && !v("내용") && out.length > 1 && s === out.reduce((m, x) => m + x.금액, 0)) continue; // 항목·내용이 빈 줄만 — 이름 있는 행은 합과 같아도 정상 항목 // 이름 없는 누계 줄(앞 항목들의 합과 같은 금액)도 합계로 보고 뺀다
     const 내용 = v("내용"), 산출 = r.slice(lo, hi).filter(Boolean).join(" · "), fk = JSON.stringify([g, it, 내용, 산출, s]); if (full.has(fk)) { out.dupN++; continue; } full.add(fk); // 구분·항목·내용·산출근거·금액이 모두 같은 줄은 한 번만
     const key = nk(`${g}|${it}|${내용}`); seen[key] = (seen[key] || 0) + 1;
     out.push({id: "R" + hash(key) + (seen[key] > 1 ? "-" + seen[key] : ""), 구분: g, 항목: it, 내용, 산출, 과세액: a, 영세액: z, 금액: s});
