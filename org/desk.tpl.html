@@ -200,6 +200,6 @@ draw();
 (async () => {
   [db, sample, downloads] = await Promise.all(["db", "sample", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   if (db && sample) { const user = await window.claude.use("user"); uid = await user?.id?.();
-    if (uid) db.doc(`data/users/${uid}/desk`).get().then(s => { if (s.exists) { hist = s.data().hist || []; drawHist(); } }).catch(() => {}); }
+    if (uid) db.doc(`data/users/${uid}/desk`).get().then(s => { if (s.exists) { hist = structuredClone(s.data()).hist || []; drawHist(); } }).catch(() => {}); }
 })();
 </script>

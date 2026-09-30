@@ -207,7 +207,7 @@ const markRef = () => db && cur ? db.doc("cases/" + cur) : null;
 function watchMarks() {
   unsubMarks?.(); marks = {q: {}, docs: {}};
   const r = markRef(); if (!r) { try { marks = JSON.parse(localStorage.getItem("decoder-marks-" + cur) || "") || marks; } catch {} return; }
-  unsubMarks = r.onSnapshot(s => { const d = s.exists ? s.data() : {}; marks = {q: {...(d.q || {})}, docs: {...(d.docs || {})}}; render(); });
+  unsubMarks = r.onSnapshot(s => { const d = s.exists ? structuredClone(s.data()) : {}; marks = {q: {...(d.q || {})}, docs: {...(d.docs || {})}}; render(); });
 }
 
 function pillFor(e) {
@@ -331,7 +331,7 @@ function drawChat() {
 const chatRef = () => db && uid && cur ? db.doc(`data/users/${uid}/chat-${cur}`) : null;
 let saveTimer;
 const saveChat = () => { const r = chatRef(); if (!r) return; clearTimeout(saveTimer); saveTimer = setTimeout(() => r.set({turns: turns.slice(-60), updatedAt: new Date().toISOString()}).catch(() => {}), 400); };
-const loadChat = () => { const r = chatRef(), id = cur; r?.get().then(s => { if (s.exists && id === cur && !turns.length) { turns = (s.data().turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {}); };
+const loadChat = () => { const r = chatRef(), id = cur; r?.get().then(s => { if (s.exists && id === cur && !turns.length) { turns = (structuredClone(s.data()).turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {}); };
 async function ask(text) {
   if (!sample || ctl) return;
   turns.push({role: "user", content: text}); const think = {role: "assistant", content: "해독 중…"}; turns.push(think); drawChat();
@@ -358,8 +358,8 @@ render();
 (async () => {
   [db, sample, downloads] = await Promise.all(["db", "sample", "downloads"].map(n => window.claude?.use?.(n) ?? null));
   watchMarks(); render();
-  db?.collection("assign").onSnapshot(s => { assigns = {}; s.docs.forEach(d => assigns[d.id] = d.data()); render(); });
+  db?.collection("assign").onSnapshot(s => { assigns = {}; s.docs.forEach(d => assigns[d.id] = structuredClone(d.data())); render(); });
   if (sample) { $("chat").hidden = false; const user = await window.claude.use("user"); uid = await user?.id?.(); loadChat(); }
-  db?.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; lastLine = ""; render(); } });
+  db?.doc("config/profile").onSnapshot(s => { if (s.exists && structuredClone(s.data()).honorific) { honor = structuredClone(s.data()).honorific; lastLine = ""; render(); } });
 })();
 </script>

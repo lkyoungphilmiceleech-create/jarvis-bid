@@ -559,14 +559,14 @@ document.addEventListener("click", async e => {
     const user = await window.claude.use("user"); const uid = await user?.id?.();
     if (db && uid) {
       chatRef = db.doc("data/users/" + uid + "/chat");
-      chatRef.get().then(s => { if (s.exists && !turns.length) { turns = (s.data().turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {});
+      chatRef.get().then(s => { if (s.exists && !turns.length) { turns = (structuredClone(s.data()).turns || []).map(t => ({...t})); drawChat(); } }).catch(() => {});
     }
   }
   if (!db) { render(); return; }
-  db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); render(); },
+  db.collection("decisions").onSnapshot(s => { decisions = Object.fromEntries(s.docs.map(d => [d.id, structuredClone(d.data())])); render(); },
     () => { $("dbStatus").textContent = "저장소 연결이 끊겼습니다. 새로고침해 주세요."; });
-  db.doc("config/profile").onSnapshot(s => { if (s.exists && s.data().honorific) { honor = s.data().honorific; $("honor").value = honor; lastLine = ""; render(); } });
-  db.doc("config/radar").onSnapshot(s => { if (s.exists) { const d = s.data(); cfg = {institutions: d.institutions, keywords: d.keywords, synced: !!d.synced}; } render(); });
+  db.doc("config/profile").onSnapshot(s => { if (s.exists && structuredClone(s.data()).honorific) { honor = structuredClone(s.data()).honorific; $("honor").value = honor; lastLine = ""; render(); } });
+  db.doc("config/radar").onSnapshot(s => { if (s.exists) { const d = structuredClone(s.data()); cfg = {institutions: d.institutions, keywords: d.keywords, synced: !!d.synced}; } render(); });
   render();
 })();
 </script>

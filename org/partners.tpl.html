@@ -208,6 +208,6 @@ drawCt();
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("staff", !admin); drawCt();
   if (!db) return;
-  db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...d.data()})); $("ptBox") ? drawPt() : drawCt(); }, () => { $("tab-ct").innerHTML = '<p class="empty">협업사 자료를 불러오지 못했습니다. 새로고침해 주세요.</p>'; });
+  db.collection("partners").onSnapshot(s => { partners = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); $("ptBox") ? drawPt() : drawCt(); }, () => { $("tab-ct").innerHTML = '<p class="empty">협업사 자료를 불러오지 못했습니다. 새로고침해 주세요.</p>'; });
 })();
 </script>

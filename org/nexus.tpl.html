@@ -1244,18 +1244,18 @@ const tab0 = tab; initGeo(); showTab(tab); drawHero();
   document.body.classList.toggle("admin", admin); showTab(tab0);
   if (!admin) { $("pNote").textContent = "행을 누르면 프로필·근거·매칭 이유를 봅니다. 연락처·상태 변경·내려받기는 관리자에게 요청해 주세요."; $("prNote").textContent = "공유된 바이어 프로필을 봅니다. 새 프로필 만들기·내려받기는 관리자만 할 수 있습니다."; }
   if (!db) { drawHero(); return; }
-  db.collection("projects").onSnapshot(s => { const local = projects.filter(p => !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...d.data()})), ...local.filter(l => !s.docs.some(d => d.id === l.id))]; drawHero(); if (PT.includes(tab) && !document.activeElement?.dataset?.cell) drawProj(); if (tab === "up") drawUpload(); if (tab === "prof") drawProf(); });
-  db.collection("profiles").onSnapshot(s => { profiles = {}; s.docs.forEach(d => profiles[d.id] = d.data()); drawHero(); if (tab === "prof") drawProf(); });
+  db.collection("projects").onSnapshot(s => { const local = projects.filter(p => !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})), ...local.filter(l => !s.docs.some(d => d.id === l.id))]; drawHero(); if (PT.includes(tab) && !document.activeElement?.dataset?.cell) drawProj(); if (tab === "up") drawUpload(); if (tab === "prof") drawProf(); });
+  db.collection("profiles").onSnapshot(s => { profiles = {}; s.docs.forEach(d => profiles[d.id] = structuredClone(d.data())); drawHero(); if (tab === "prof") drawProf(); });
   if (!admin) { // 직원: 공개 사본·프로젝트·프로필만 (연락처 DB 등 루트 컬렉션은 읽지 않는다)
-    db.collection("pubpipe").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...d.data()})); drawHero(); if (tab === "pipe") drawPipe(); }, () => {}); return; }
-  db.collection("pubpipe").onSnapshot(s => { const first = !pub; pub = Object.fromEntries(s.docs.map(d => [d.id, pubJs(d.data())])); if (first) syncPub(); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
-  db.collection("contacts").onSnapshot(s => { chunks = {}; s.docs.forEach(d => chunks[d.id] = d.data().rows || []); flatten(); drawHero(); if (tab === "db") drawDb(); if (PT.includes(tab)) drawProj(); if (tab === "prof") drawProf(); }, () => { $("say").textContent = "본부장님, 네트워크 DB를 불러오지 못했습니다. 새로고침해 주세요."; });
-  db.collection("jobs").onSnapshot(s => { jobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "match") drawProj(); });
-  db.collection("daily").orderBy("날짜", "desc").limit(7).onSnapshot(s => { daily = s.docs.map(d => d.data()); if (tab === "pipe") drawPipe(); });
-  db.doc("config/focus").onSnapshot(d => { focus = d.exists ? d.data() : {}; if (tab === "pipe") drawPipe(); });
-  db.collection("candidates").onSnapshot(s => { cands = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "pipe") drawPipe(); });
-  db.collection("pipeline").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...d.data()})); pipeOk = true; if (tab === "pipe") drawPipe(); syncPub(); });
-  db.collection("discover").onSnapshot(s => { disc = {}; s.docs.forEach(d => disc[d.id] = d.data()); if (tab === "match" || tab === "co") drawProj(); });
-  db.collection("uploads").orderBy("at", "desc").limit(50).onSnapshot(s => { uploads = s.docs.map(d => d.data()); if (tab === "up") drawUpload(); });
+    db.collection("pubpipe").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); drawHero(); if (tab === "pipe") drawPipe(); }, () => {}); return; }
+  db.collection("pubpipe").onSnapshot(s => { const first = !pub; pub = Object.fromEntries(s.docs.map(d => [d.id, pubJs(structuredClone(d.data()))])); if (first) syncPub(); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
+  db.collection("contacts").onSnapshot(s => { chunks = {}; s.docs.forEach(d => chunks[d.id] = structuredClone(d.data()).rows || []); flatten(); drawHero(); if (tab === "db") drawDb(); if (PT.includes(tab)) drawProj(); if (tab === "prof") drawProf(); }, () => { $("say").textContent = "본부장님, 네트워크 DB를 불러오지 못했습니다. 새로고침해 주세요."; });
+  db.collection("jobs").onSnapshot(s => { jobs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "match") drawProj(); });
+  db.collection("daily").orderBy("날짜", "desc").limit(7).onSnapshot(s => { daily = s.docs.map(d => structuredClone(d.data())); if (tab === "pipe") drawPipe(); });
+  db.doc("config/focus").onSnapshot(d => { focus = d.exists ? structuredClone(d.data()) : {}; if (tab === "pipe") drawPipe(); });
+  db.collection("candidates").onSnapshot(s => { cands = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "pipe") drawPipe(); });
+  db.collection("pipeline").onSnapshot(s => { pipe = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); pipeOk = true; if (tab === "pipe") drawPipe(); syncPub(); });
+  db.collection("discover").onSnapshot(s => { disc = {}; s.docs.forEach(d => disc[d.id] = structuredClone(d.data())); if (tab === "match" || tab === "co") drawProj(); });
+  db.collection("uploads").orderBy("at", "desc").limit(50).onSnapshot(s => { uploads = s.docs.map(d => structuredClone(d.data())); if (tab === "up") drawUpload(); });
 })();
 </script>

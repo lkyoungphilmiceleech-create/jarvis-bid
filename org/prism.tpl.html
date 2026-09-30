@@ -475,11 +475,11 @@ showTab(tab);
   [db, sample, mcp, assets] = await Promise.all(["db", "sample", "mcp", "assets"].map(n => Promise.resolve(window.claude?.use?.(n)).catch(() => null).then(x => x ?? null)));
   if (!db) { drawHero(); return; }
   const busyDlg = () => ["kvP", "rfUrl", "rfImg", "rfTitle", "rfTags", "fq", "upProj"].includes(document.activeElement?.id);
-  db.collection("briefs").onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
-  db.collection("designtasks").onSnapshot(s => { tasks = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
-  db.collection("refs").onSnapshot(s => { refs = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
-  db.collection("rjobs").onSnapshot(s => { rjobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "work" && !busyDlg()) drawWork(); if (tab === "find") drawFind(); });
-  db.collection("finds").onSnapshot(s => { finds = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => String(b.at).localeCompare(String(a.at))); if (tab === "find") drawFind(); });
-  db.doc("config/prism").onSnapshot(d => { cfg = d.exists ? d.data() : {}; });
+  db.collection("briefs").onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (!busyDlg()) draw(); else drawHero(); });
+  db.collection("designtasks").onSnapshot(s => { tasks = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (!busyDlg()) draw(); else drawHero(); });
+  db.collection("refs").onSnapshot(s => { refs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (!busyDlg()) draw(); else drawHero(); });
+  db.collection("rjobs").onSnapshot(s => { rjobs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "work" && !busyDlg()) drawWork(); if (tab === "find") drawFind(); });
+  db.collection("finds").onSnapshot(s => { finds = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})).sort((a, b) => String(b.at).localeCompare(String(a.at))); if (tab === "find") drawFind(); });
+  db.doc("config/prism").onSnapshot(d => { cfg = d.exists ? structuredClone(d.data()) : {}; });
 })();
 </script>

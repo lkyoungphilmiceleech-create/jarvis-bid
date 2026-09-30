@@ -167,7 +167,7 @@ addEventListener("beforeunload", e => { if (ctDirty) { e.preventDefault(); e.ret
   admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   document.body.classList.toggle("staff", !admin); drawHead(); draw();
   if (!db) return;
-  db.doc("config/project").onSnapshot(s => { proj = s.exists ? s.data() : null; drawHead(); }, () => {});
-  db.doc("contacts/list").onSnapshot(s => { saved = s.exists ? s.data() : null; redraw(); }, () => { ctMsg = "연락처를 불러오지 못했습니다. 새로고침해 주세요."; redraw(); });
+  db.doc("config/project").onSnapshot(s => { proj = s.exists ? structuredClone(s.data()) : null; drawHead(); }, () => {});
+  db.doc("contacts/list").onSnapshot(s => { saved = s.exists ? structuredClone(s.data()) : null; redraw(); }, () => { ctMsg = "연락처를 불러오지 못했습니다. 새로고침해 주세요."; redraw(); });
 })();
 </script>
