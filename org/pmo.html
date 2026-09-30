@@ -213,6 +213,7 @@ body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
 .sum6{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .sum6>div{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--glass2)}
 .sum6 b{display:block;font:700 16px var(--hud);font-variant-numeric:tabular-nums}
+.tag.dz{color:var(--t5);border-color:var(--t5);font-weight:700}.ev.ask{background:var(--amber-soft);cursor:default}
 </style>
 
 <div class="wrap">
@@ -272,7 +273,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 
 const STAT = ["대기", "요청", "진행", "검토", "완료", "지연"];
 const TAX = ["과세", "영세"];
-let db = null, sample = null, mcp = null, downloads = null, admin = null, uid = null, files = [], preqs = []; // admin: null=확인 전, false=팀장(공정·지표만)
+let db = null, sample = null, mcp = null, downloads = null, admin = null, uid = null, files = [], preqs = [], asks = []; // admin: null=확인 전, false=팀장(공정·지표만)
 let projects = [], people = [], staff = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "list"; // 첫 화면은 프로젝트 목록(마지막으로 본 탭이 있으면 그 탭)
 try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "list"; } catch {}
 const P = () => projects.find(p => p.id === cur);
@@ -523,6 +524,9 @@ const STG = ["착수", "준비", "실행", "사후·정산"];
 let wStg = "실행", wT, wSaved = "", wRe = false, wCal = false, drag = null; // wRe: 입력 중이라 미룬 다시 그리기
 const wMark = m => { wSaved = m; if ($("wSaved")) $("wSaved").textContent = m; };
 const wSave = (ms = 600) => { wTouch(); clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
+// 행 추가: 같은 단계 끝에 넣는다 (+ 행 추가·업무 요청 → 공정일정에 넣기)
+const wNew = (g, o = {}) => { const a = (wbs[cur] ||= {items: []}).items, k = a.findLastIndex(x => x.단계 === g) + 1 || a.length, id = nid();
+  a.splice(k, 0, {id, 단계: g, 작업: "", 산출물: "", 시작: "", 종료: "", 담당: null, 상태: "대기", 하위: [], 예산항목: [], 기록: [], 보고: [], ...o}); wSave(0); return id; };
 const nid = () => "T" + String(W().reduce((m, x) => Math.max(m, +String(x.id).slice(1) || 0), 0) + 1).padStart(3, "0");
 const wFind = k => { const j = k.lastIndexOf("|"), id = k.slice(0, j); return [W().find(x => x.id === id), k.slice(j + 1)]; };
 function wPut(t, k, v) { if (k === "담당") t.담당 = pw(v); else t[k] = v; if (k === "상태") { if (v === "완료") t.완료일 ||= today(); else delete t.완료일; } }
@@ -533,7 +537,7 @@ function wTable(w) {
     const g = t.단계 || "", st = effStat(t), sub = t.하위 || [], f = x => esc(`${t.id}|${x}`); let h = "";
     if (g !== prev) { prev = g; let n = i; while (w[n] && (w[n].단계 || "") === g) n++; const run = w.slice(i, n), nl = run.filter(x => effStat(x) === "지연").length;
       h = `<tr class="grp"><td colspan="5">${esc(g || "(구분 없음)")} · 작업 ${run.length} · 완료 ${run.filter(x => x.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</td><td colspan="${ps.length}"></td></tr>`; }
-    return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${i}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button></div></td>
+    return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${W().indexOf(t)}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button></div></td>
       <td><select data-wi="${f("담당")}" aria-label="담당자"${dis}>${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}${admin ? '<option value="+add">+ 인력 배치…</option>' : ""}</select></td>
       ${dt(t, "시작", "시작일")}${dt(t, "종료", "마감일")}
       <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>${tlCells(t, ps)}</tr>`; }).join("")}</tbody></table></div>`;
@@ -545,13 +549,14 @@ function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { if (admin) { const [t, k] = wFind(fa.dataset.wi); if (t) wPut(t, k, fa.value); } wRe = true; return; } // 늦게 온 스냅샷이 입력 중인 값을 옛 값으로 되돌리지 않게
   const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
   if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
-  const w = W(), late = lateList(), reps = w.flatMap((t, i) => (t.보고 || []).map((r, j) => ({t, i, j, r})));
-  $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span><span style="flex:1"></span>
+  const w = myW(), late = lateList(), reps = w.flatMap(t => (t.보고 || []).map((r, j) => ({t, i: W().indexOf(t), j, r})));
+  $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span>${mineSeg()}${canAsk() ? '<button class="btn" type="button" id="akNew">✉ 업무 요청</button>' : ""}<span style="flex:1"></span>
       <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span><button class="btn" type="button" id="wbsCsv">엑셀 저장</button><button class="btn" type="button" id="wCal" aria-pressed="${wCal}">${wCal ? "▦ 간트 표" : "📅 월력"}</button></div>
     ${healthHtml()}
     ${late.length ? `<div class="alarm" role="alert">⚠ 지연 ${late.length}건 · 지연 보고 미작성 ${new Set(late.filter(x => !x.t.보고?.some(r => !r.해결)).map(x => x.i)).size}건<button class="btn adm" type="button" id="lateOpen">확인·알림</button></div>` : ""}
     <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [열기]를 누르면 세부 내용(과업내용·하위 할 일·자료·지연 보고)을 봅니다. 오른쪽 막대는 오늘 이후 주 단위 일정입니다." : "표에서 바로 고치면 자동 저장됩니다. [열기]를 누르면 세부 패널(과업내용·하위 할 일·자료·지연 보고·작업 요청)이 열립니다. ⋮⋮ 를 끌면 순서, 막대를 끌면 기간(가운데)·시작/마감(양 끝)이 주 단위로 바뀝니다."}</p>
-    ${wCal ? calHtml(w) : w.length ? wTable(w) : '<p class="empty">아직 공정표가 없습니다. 과업범위를 넣고 [공정표 1차 생성]을 누르거나 아래에서 행을 추가해 주세요.</p>'}
+    ${askHtml()}
+    ${wCal ? calHtml(w) : w.length ? wTable(w) : isMine() ? '<p class="empty">내가 담당한 작업이 없습니다.</p>' : '<p class="empty">아직 공정표가 없습니다. 과업범위를 넣고 [공정표 1차 생성]을 누르거나 아래에서 행을 추가해 주세요.</p>'}
     <div class="row adm"><select id="wStg" aria-label="추가할 구분">${opt(STG, wStg)}</select><button class="btn" type="button" id="wAdd">+ 행 추가</button></div>
     ${reps.length ? `<h2>지연 보고</h2><div class="tw"><table><thead><tr><th>작업</th><th>보고일</th><th>원인</th><th>조치</th><th>새 마감</th><th>해결</th></tr></thead><tbody>${reps.map(({t, i, j, r}) => `<tr><td>${esc(t.작업)}</td><td>${esc(kst(r.at).slice(0, 10))}</td><td>${esc(r.원인)}</td><td>${esc(r.조치)}</td><td>${esc(r.새마감)}</td>
       <td><label class="chk"><input type="checkbox" data-rchk="${i}|${j}"${r.해결 ? " checked" : ""}${admin ? "" : " disabled"}> ${r.해결 ? `해결 ${esc(r.해결일)}` : "해결 완료"}</label></td></tr>`).join("")}</tbody></table></div>` : ""}`;
@@ -592,20 +597,21 @@ function pickStaff(tid) {
 let calM = today().slice(0, 7);
 function calHtml(w) {
   const [y, mo] = calM.split("-").map(Number), first = new Date(y, mo - 1, 1), d = new Date(first.getTime() - (first.getDay() + 6) % 7 * 864e5), ev = {}, cells = [];
-  w.forEach((t, i) => { if (t.종료) (ev[t.종료] ||= []).push(`<button type="button" class="ev ${effStat(t)}" data-t="${i}" title="${esc(`${t.작업} · ${who(t.담당)}`)}">${esc(t.작업 || "(이름 없음)")}<br><small>${esc(who(t.담당))}</small></button>`); });
+  w.forEach(t => { if (t.종료) (ev[t.종료] ||= []).push(`<button type="button" class="ev ${effStat(t)}" data-t="${W().indexOf(t)}" title="${esc(`${t.작업} · ${who(t.담당)}`)}">${esc(t.작업 || "(이름 없음)")}<br><small>${esc(who(t.담당))}</small></button>`); });
+  asks.filter(a => a.pid === cur && a.마감 && OPEN(a) && (!isMine() || recv(a))).forEach(a => (ev[a.마감] ||= []).push(`<span class="ev ask" title="${esc(`업무 요청 · ${a.제목} → ${pn(a.to)}`)}">✉ ${esc(a.제목)}<br><small>→ ${esc(pn(a.to))}</small></span>`));
   do { for (let k = 0; k < 7; k++) { const x = d8(d); cells.push(`<div class="cd${d.getMonth() !== mo - 1 ? " out" : ""}${x === today() ? " today" : ""}"><span class="dn">${d.getDate()}</span>${(ev[x] || []).slice(0, 3).join("")}${(ev[x] || []).length > 3 ? `<span class="note">+${ev[x].length - 3}건</span>` : ""}</div>`); d.setDate(d.getDate() + 1); } } while (d.getMonth() === mo - 1);
-  return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료</span></div>
+  return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료 · ✉ = 업무 요청</span></div>
     <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`;
 }
 // ── 일정 보기: 간트 + 체크리스트(하위 할 일). 팀장도 읽기로
 function drawSch() {
   const p = P(); if (!p) { $("tab-sch").innerHTML = '<p class="empty">프로젝트를 먼저 고르세요.</p>'; return; }
-  const w = W(), {ps} = periods(w), dis = admin ? "" : " disabled";
-  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2></div><p class="note">오늘(${today()})이 든 주부터 보여 줍니다(지난 주 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
-    <div class="wt"><table class="gt"><thead><tr><th style="min-width:220px">작업 · 체크리스트</th><th style="min-width:110px">담당</th><th>상태</th>${tlHead(ps)}</tr></thead><tbody>${w.map((t, i) => { const st = effStat(t);
-      return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><span class="note">${esc(t.단계)} · ${esc(mw(t.시작))} ~ ${esc(mw(t.종료))}</span><br><button class="lnk" type="button" data-t="${i}">${esc(t.작업 || "(이름 없음)")}</button></td><td>${esc(who(t.담당))}</td><td><span class="st ${st}">${SL(st)}</span></td>${tlCells(t, ps)}</tr>`
+  const w = myW(), {ps} = periods(w), dis = admin ? "" : " disabled";
+  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2>${mineSeg()}</div><p class="note">오늘(${today()})이 든 주부터 보여 줍니다(지난 주 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
+    <div class="wt"><table class="gt"><thead><tr><th style="min-width:220px">작업 · 체크리스트</th><th style="min-width:110px">담당</th><th>상태</th>${tlHead(ps)}</tr></thead><tbody>${w.map(t => { const st = effStat(t);
+      return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><span class="note">${esc(t.단계)} · ${esc(mw(t.시작))} ~ ${esc(mw(t.종료))}</span><br><button class="lnk" type="button" data-t="${W().indexOf(t)}">${esc(t.작업 || "(이름 없음)")}</button></td><td>${esc(who(t.담당))}</td><td><span class="st ${st}">${SL(st)}</span></td>${tlCells(t, ps)}</tr>`
       + (t.하위 || []).map((s, j) => { const ss = subStat(s); return `<tr class="sub"><td><label class="chk"><input type="checkbox" data-sc="${esc(t.id)}|${j}"${s.완료 ? " checked" : ""}${dis}> ${esc(s.할일)}</label></td><td class="note">${esc(s.담당 ? who(s.담당) : "")}</td><td>${s.마감 ? `<span class="st ${ss}">${esc(mw(s.마감))}</span>` : ""}</td>${ps.map(x => `<td class="tl${s.마감 && s.마감 >= x.s && s.마감 <= x.e ? " dot " + ss : ""}"></td>`).join("")}</tr>`; }).join(""); }).join("")
-      || `<tr><td colspan="${3 + ps.length}" class="empty">공정표가 없습니다.</td></tr>`}</tbody></table></div>`;
+      || `<tr><td colspan="${3 + ps.length}" class="empty">${isMine() ? "내가 담당한 작업이 없습니다." : "공정표가 없습니다."}</td></tr>`}</tbody></table></div>${askHtml()}`;
 }
 let wMsg = "";
 const wn = m => { wMsg = m; if ($("wNote")) $("wNote").textContent = m; };
@@ -687,10 +693,10 @@ function editTask(i, toRep) {
       <label>새 마감일 (적으면 일정이 바뀝니다)<input type="date" id="rDue"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="button" id="repAI">CHRONOS 초안</button></div></div>
     ${rec.map(r => `<p class="note">${esc(kst(r.at))} · ${esc(r.내용)}</p>`).join("")}</details>
     ${t.결과 && admin ? `<details><summary class="note">AI 결과물</summary><div class="out" style="max-height:240px;overflow:auto">${esc(t.결과)}</div></details>` : ""}
-    <div class="row" style="margin-top:6px"><span class="row adm"><button class="btn primary" value="save">저장</button><button class="btn" value="req" title="담당에게 작업 요청">${t.담당?.t === "ai" ? "🤖 AI 실행" : "✉ 요청 메일"}</button><button class="btn x" value="del">삭제</button></span><span class="note" id="dNote"></span></div>`;
+    <div class="row" style="margin-top:6px"><span class="row adm"><button class="btn primary" value="save">저장</button><button class="btn" value="req" title="담당에게 작업 요청">${t.담당?.t === "ai" ? "🤖 AI 실행" : "✉ 요청 메일"}</button><button class="btn x" value="del">삭제</button></span>${canAsk() ? '<button class="btn" value="ask">✉ 업무 요청</button>' : ""}<span class="note" id="dNote"></span></div>`;
   drawSubs(); drawAtt(); if (!admin) $("dlgForm").querySelectorAll("input, select, textarea").forEach(el => el.disabled = !el.closest("#attBox")); // 비관리자는 보기 + 자료 올리기만
   $("dlg").onclose = async () => {
-    const v = $("dlg").returnValue; dlgT = null; if (!admin) return; // 닫으면(Esc·✕ 포함) 저장
+    const v = $("dlg").returnValue; dlgT = null; if (v === "ask") setTimeout(() => askDlg(t.id)); if (!admin) return; // 닫으면(Esc·✕ 포함) 저장. 업무 요청 창은 패널 값을 읽은 뒤에 연다
     t = W().find(x => x.id === t.id) || t;
     if (v === "del") { if (!confirm("이 작업을 삭제할까요?")) return; const k = W().indexOf(t); if (k >= 0) wbs[cur].items.splice(k, 1); await saveWbs(); draw(); return; }
     const now = new Date().toISOString(), log = m => (t.기록 ||= []).push({at: now, 내용: m});
@@ -765,6 +771,52 @@ async function requestTask(t) {
   catch (e) { log.push("메일 실패: " + mcpMsg(e)); }
   t.상태 = "요청"; t.요청 = {at: new Date().toISOString(), tag}; /* wbs 는 팀장도 읽으므로 이메일은 남기지 않는다 */ t.기록.push({at: new Date().toISOString(), 내용: `${u.이름}에게 요청 — ${log.join(", ")}`});
   wn(`${u.이름}에게 요청했습니다: ${log.join(", ")}`); await saveWbs(); draw();
+}
+// ── 업무 요청 asks/{id}: 관리자·투입 인력이 이 프로젝트 인력에게. 받은 사람 수락·완료·반려, 요청자 취소, 관리자 전부 — 화면 판단, db 규칙은 interact
+// '내 업무' 보기(담당이 나인 작업 + 받은·보낸 요청)는 화면 필터일 뿐 보안이 아니다(공유받은 사람은 db 전체를 읽는다)
+let mineV = false; try { mineV = localStorage.getItem("pmo-mine") === "1"; } catch {}
+const isMine = () => mineV && !!me();
+const myW = () => isMine() ? W().filter(t => t.담당?.t === "real" && t.담당.id === me().id) : W();
+const mineSeg = () => me() ? `<div class="seg" role="group" aria-label="보기"><button type="button" data-mine="0" aria-pressed="${!isMine()}">전체</button><button type="button" data-mine="1" aria-pressed="${isMine()}">내 업무</button></div>` : "";
+const canAsk = () => !!db && (admin || !!me());
+const OPEN = a => a.상태 === "요청" || a.상태 === "수락";
+const recv = a => !!uid && people.find(x => x.id === a.to)?.uid === uid;
+const pn = id => people.find(x => x.id === id)?.이름 || (id ? "?" : "관리자");
+const AST = {요청: "요청", 수락: "진행", 완료: "완료", 반려: "지연"}; // 상태 → .st 색
+function akRow(a) {
+  const r = admin || recv(a), b = (k, l, c = "") => `<button class="btn${c}" type="button" data-ak="${esc(a.id)}|${k}">${l}</button>`, late = OPEN(a) && a.마감 && a.마감 < today();
+  return `<div class="rep${OPEN(a) ? "" : " done"}"><div class="row"><span class="tag${a.유형 === "디자인" ? " dz" : ""}">${a.유형 === "디자인" ? "🎨 디자인" : "일반"}</span><b>${esc(a.제목)}</b><span class="st ${AST[a.상태] || ""}">${esc(a.상태)}</span></div>
+    <span class="note">${esc(pn(a.fromP))} → ${esc(pn(a.to))}${a.마감 ? ` · 마감 <span class="${late ? "err" : ""}">${esc(a.마감)}${late ? " (지남)" : ""}</span>` : ""}${a.tid ? ` · 공정: ${esc(W().find(t => t.id === a.tid)?.작업 || a.tid)}` : ""}</span>
+    ${a.내용 ? `<div style="white-space:pre-wrap">${esc(a.내용)}</div>` : ""}${a.사유 ? `<div class="note">반려 사유: ${esc(a.사유)}</div>` : ""}
+    <div class="row">${r && a.상태 === "요청" ? b("수락", "수락") : ""}${r && a.상태 === "수락" ? b("완료", "완료") : ""}${r && OPEN(a) ? b("반려", "반려", " x") : ""}${admin && !a.tid && a.상태 !== "반려" ? b("wbs", "공정일정에 넣기") : ""}${admin || a.from === uid ? b("del", "취소", " x") : ""}</div></div>`;
+}
+function askHtml() {
+  const all = asks.filter(a => a.pid === cur).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (isMine()) { const rc = all.filter(a => recv(a) && OPEN(a)), sn = all.filter(a => a.from === uid);
+    return `<h2>받은 요청 ${rc.length}</h2>${rc.map(akRow).join("") || '<p class="empty">받은 요청이 없습니다.</p>'}<h2>보낸 요청 ${sn.length}</h2>${sn.map(akRow).join("") || '<p class="empty">보낸 요청이 없습니다.</p>'}`; }
+  return admin && all.length ? `<details class="fold"${all.some(OPEN) ? " open" : ""}><summary>업무 요청 ${all.length}건 (진행 중 ${all.filter(OPEN).length})</summary>${all.map(akRow).join("")}</details>` : "";
+}
+function askDlg(tid) {
+  const t = W().find(x => x.id === tid), to = PP().filter(x => x.id !== me()?.id);
+  $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">업무 요청${t ? ` — ${esc(t.작업)}` : ""}</h2><div class="form">
+    <label>받는 사람<select id="akTo">${opt(to.map(x => [x.id, [x.이름, x.직책].filter(Boolean).join(" · ")]), "", "선택")}</select></label><label>유형<select id="akK">${opt(["일반", "디자인"])}</select></label>
+    <label>마감<input type="date" id="akD"></label><label class="wide">제목<input id="akT" maxlength="100"></label><label class="wide">내용<textarea id="akB" maxlength="2000"></textarea></label></div>
+    <p class="note">관제실을 공유받은 사람은 모두 볼 수 있습니다. 연락처·금액은 적지 마세요.</p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" value="ok">요청 보내기</button><button class="btn" value="cancel">닫기</button></div>`;
+  $("dlg").onclose = async () => { if ($("dlg").returnValue !== "ok" || !canAsk()) return;
+    const a = {pid: cur, tid: tid || "", from: uid || "", fromP: me()?.id || "", to: $("akTo").value, 제목: $("akT").value.trim(), 내용: $("akB").value.trim(), 마감: $("akD").value, 유형: $("akK").value === "디자인" ? "디자인" : "일반", 상태: "요청", at: new Date().toISOString(), 처리: ""};
+    if (!a.to || !a.제목) { alert("받는 사람과 제목을 넣어 주세요."); return; }
+    try { await db.collection("asks").add(a); toast("요청을 보냈습니다."); } catch { alert("요청을 보내지 못했습니다."); } };
+  $("dlg").returnValue = ""; $("dlg").showModal();
+}
+async function askDo(id, k) {
+  const a = asks.find(x => x.id === id); if (!a || !db) return; const {id: _, ...r} = a, set = v => db.doc(`asks/${id}`).set({...r, ...v}).catch(() => alert("저장하지 못했습니다."));
+  if (k === "del") { if ((admin || a.from === uid) && confirm(`'${a.제목}' 요청을 취소할까요?`)) await db.doc(`asks/${id}`).delete().catch(() => alert("취소하지 못했습니다.")); return; }
+  if (k === "wbs") { if (!admin || a.tid) return; const tid = wNew(wStg, {작업: a.제목, 산출물: a.내용 || "", 시작: today(), 종료: a.마감 || "", 담당: {t: "real", id: a.to}, 기록: [{at: new Date().toISOString(), 내용: "업무 요청에서 추가"}]});
+    await set({tid}); toast("공정일정에 넣었습니다."); draw(); return; }
+  if (!(admin || recv(a)) || !["수락", "완료", "반려"].includes(k)) return;
+  const why = k === "반려" ? prompt("반려 사유 (한 줄)") : ""; if (why === null) return;
+  await set({상태: k, 처리: new Date().toISOString(), ...(k === "반려" ? {사유: why.trim().slice(0, 200)} : {})});
 }
 async function repAI() {
   const t = dlgT, note = $("dNote"); if (!t) return;
@@ -1094,10 +1146,12 @@ document.addEventListener("click", async e => {
   if (t.dataset.rqok || t.dataset.rqno) reqDo(t.dataset.rqok || t.dataset.rqno, !!t.dataset.rqok);
   if (t.dataset.fdel) attDel(t.dataset.fdel);
   if (t.id === "genWbs") genWbs();
+  if (t.dataset.mine) { mineV = t.dataset.mine === "1"; try { localStorage.setItem("pmo-mine", t.dataset.mine); } catch {} draw(); }
+  if (t.id === "akNew") askDlg("");
+  if (t.dataset.ak) { const [id, k] = t.dataset.ak.split("|"); askDo(id, k); }
   if (t.id === "wCal") { wCal = !wCal; drawWbs(true); }
   if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawWbs(true); }
-  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; const a = (wbs[cur] ||= {items: []}).items, k = a.findLastIndex(x => x.단계 === wStg) + 1 || a.length; // 같은 단계 끝에 넣고 세부 패널을 연다
-    const id = nid(); a.splice(k, 0, {id, 단계: wStg, 작업: "", 산출물: "", 시작: "", 종료: "", 담당: null, 상태: "대기", 하위: [], 예산항목: [], 기록: [], 보고: []}); wCal = false; wSave(0); drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
+  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; const id = wNew(wStg); wCal = false; drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
   if (t.id === "chkLate") checkLate();
   if (t.id === "lateOpen") lateAlert(true);
   if (t.id === "lateMail") lateMail();
@@ -1188,6 +1242,7 @@ showTab(tab);
     v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
     Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
   db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...d.data()})); if (dlgT) drawAtt(); }, () => {});
+  db.collection("asks").onSnapshot(s => { asks = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "wbs" || tab === "sch") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
   db.collection("peoplereq").onSnapshot(s => { preqs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
     db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...d.data()})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));
