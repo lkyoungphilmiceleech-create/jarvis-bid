@@ -409,19 +409,56 @@ function drawLs() {
 async function put(path, data, note) { if (!db || !admin) return false; try { await db.doc(path).set(data); if (note) note.textContent = "저장했습니다."; return true; } catch { if (note) note.textContent = "저장하지 못했습니다."; return false; } }
 // 목표 수익률: 상단 ✎ 와 예산 탭 입력칸이 같이 쓴다. 숫자가 아니면 0 으로 저장하지 않고 거절
 async function setTgt(v) { const p = P(); if (!p || !admin) return; const n = String(v).trim() === "" ? "" : Number(String(v).trim().replace(/[%,\s]/g, ""));
-  if (n !== "" && !Number.isFinite(n)) { alert("숫자로 넣어 주세요."); draw(); return; } if (n === (tgt(p) ?? "")) return; p.목표수익률 = n; if (await saveProj(p)) toast("목표 수익률을 저장했습니다."); draw(); }
+  if (n !== "" && !Number.isFinite(n)) { alert("숫자로 넣어 주세요."); draw(); return; } if (n === (tgt(p) ?? "")) return; if (await pmUpd(p, {목표수익률: n})) toast("목표 수익률을 저장했습니다."); draw(); }
 // 확인 팝업: 아티팩트 화면에서는 confirm() 이 막히거나 바로 넘어갈 수 있어 페이지 안 <dialog>(#dlg 와 별도)로 묻는다. need = 그대로 입력해야 확인 버튼이 켜지는 글자
 function askYes(title, body, ok = "확인", need = "") { return new Promise(res => { const d = $("yes");
   $("yesForm").innerHTML = `<h2 style="margin:0 0 8px">${esc(title)}</h2><p style="white-space:pre-wrap;margin:0">${esc(body)}</p>${need ? `<label class="note" style="display:block;margin-top:10px">확인하려면 <b>${esc(need)}</b> 을(를) 그대로 입력해 주세요<input id="yesIn" autocomplete="off" style="display:block;width:100%;margin-top:4px"></label>` : ""}
     <div class="row" style="margin-top:12px"><button class="btn danger" value="yes"${need ? " disabled" : ""}>${esc(ok)}</button><button class="btn" value="no" autofocus>취소</button></div>`;
   if (need) $("yesIn").oninput = e => d.querySelector('[value="yes"]').disabled = e.target.value.trim() !== String(need).trim();
   d.returnValue = ""; d.onclose = () => res(d.returnValue === "yes"); d.showModal(); }); }
-const saveProj = (p, note) => { const {id, ...r} = p; r.updatedAt = new Date().toISOString(); return put(`pm/${id}`, r, note); };
-// 로컬 수정 보호: 저장이 반영되기 전에 온 옛 스냅샷이 방금 고친 값을 되돌리고, 그 옛 값이 다음 저장에 실려 덮어쓰던 문제(인라인 수정이 반영 안 됨) 방지
-const wPend = {}; // pid → {t: 마지막 로컬 수정, s: 마지막 저장, j: 저장한 items}
-const wTouch = () => { if (cur) (wPend[cur] ||= {}).t = Date.now(); };
-const saveWbs = () => { const pd = wPend[cur] ||= {}; pd.t = pd.s = Date.now(); pd.j = sj(W()); return put(`wbs/${cur}`, {items: W(), updatedAt: new Date().toISOString()}); };
-const saveBud = () => put(`budget/${cur}`, {...B(), updatedAt: new Date().toISOString()});
+// ── 여러 명 동시 저장: 짧은 임대(acquire) → 최신본 get → 기준(마지막으로 받은 본문)·내 것·최신본 3-way 병합 → set
+// 칸 단위로 합친다: 내가 바꾼 칸만 내 값, 나머지는 최신본. id 가 있는 배열(공정 items·예산 rows)은 행별로 — 내 추가·삭제와 남의 추가·삭제를 모두 살리고,
+// 순서는 내가 바꿨으면 내 순서(남이 넣은 행은 그 앞 행 뒤에), 아니면 최신본 순서. 둘 다 같은 칸을 바꾸면 나중에 저장한 쪽
+const TABID = "t" + Math.random().toString(36).slice(2, 10), wBase = {}, sQ = {}; // wBase: 경로 → 마지막으로 받은(또는 쓴) 본문, sQ: 경로별 저장 줄
+const isO = v => !!v && typeof v === "object" && !Array.isArray(v), idArr = a => Array.isArray(a) && a.every(x => isO(x) && x.id != null);
+let mLost = 0; // 내가 고친 행을 남이 그 사이 지운 수(알림용)
+function m3(b, l, t) {
+  const sb = sj(b), sl = sj(l), st = sj(t); if (sl === sb) return t; if (st === sb || sl === st) return l;
+  if (isO(l) && isO(t)) { const bb = isO(b) ? b : {}, o = {}; new Set([...Object.keys(l), ...Object.keys(t)]).forEach(k => { const v = m3(bb[k], l[k], t[k]); if (v !== undefined) o[k] = v; }); return o; }
+  if (idArr(l) && idArr(t) && (l.length || t.length)) return mArr(idArr(b) ? b : [], l, t);
+  if (Array.isArray(l) && Array.isArray(t) && Array.isArray(b) && [l, t].every(a => a.length >= b.length && sj(a.slice(0, b.length)) === sb)) { const h = new Set(t.map(x => sj(x))); return [...t, ...l.slice(b.length).filter(x => !h.has(sj(x)))]; } // 둘 다 뒤에 덧붙인 기록
+  return l;
+}
+function mArr(b, l, t) {
+  const M = a => new Map(a.map(x => [x.id, x])), B = M(b), Lm = M(l), T = M(t), keep = id => Lm.has(id) && T.has(id) || (Lm.has(id) ? !B.has(id) : T.has(id) && !B.has(id));
+  l.forEach(x => { if (B.has(x.id) && !T.has(x.id) && sj(x) !== sj(B.get(x.id))) mLost++; });
+  const bo = b.filter(x => Lm.has(x.id)).map(x => x.id).join("|"), lo = l.filter(x => B.has(x.id)).map(x => x.id).join("|"), [bb, oo] = bo !== lo ? [l, t] : [t, l];
+  const out = bb.filter(x => keep(x.id)).map(x => x.id);
+  oo.forEach((x, i) => { if (!keep(x.id) || out.includes(x.id)) return; let j = -1; for (let k = i - 1; k >= 0 && j < 0; k--) j = out.indexOf(oo[k].id); out.splice(j + 1, 0, x.id); });
+  return out.map(id => Lm.has(id) && T.has(id) ? m3(B.get(id), Lm.get(id), T.get(id)) : Lm.get(id) || T.get(id));
+}
+const zz = ms => new Promise(res => setTimeout(res, ms));
+async function lease(ref) { if (!ref.acquire) return; for (let i = 0; i < 40; i++) { const r = await ref.acquire({holder: TABID, ttlMs: 3000}).catch(() => ({acquired: true})); if (r.acquired) return;
+  await zz(Math.min(1500, Math.max(80, (Date.parse(r.expiresAt) - Date.now()) || 300)) + Math.random() * 120); } } // 임대는 스스로 끝난다(푸는 동작 없음) — 끝날 때까지 기다렸다 다시
+// 경로별로 한 번에 하나씩. need = 먼저 있어야 하는 문서(지워진 프로젝트의 공정·예산을 되살리지 않게). 결과 본문(병합본)을 돌려준다
+function mergeSave(path, local, need) { const run = async () => { if (!db || !admin) return null; const ref = db.doc(path);
+    try { if (need && !(await db.doc(need).get()).exists) return null; await lease(ref); const g = await ref.get(), t = g.exists ? structuredClone(g.data()) : null, b = wBase[path];
+      if (!t && b) return null; mLost = 0; const out = t ? m3(b, local, t) : local; await ref.set(out); wBase[path] = structuredClone(out);
+      if (mLost) toast(`다른 사람이 그 사이 지운 행 ${mLost}개의 수정은 저장하지 못했습니다.`); return out; } catch { return null; } };
+  return sQ[path] = (sQ[path] || Promise.resolve()).then(run, run); }
+// 같은 행(id)은 같은 객체를 유지한다 — 열린 창·끌기·AI 작업 중인 행이 새 본문에 끊기지 않게
+const keepObj = (prev = [], next = []) => next.map(it => { const o = prev.find(x => x.id === it.id); if (!o || o === it) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); });
+// 스냅숏이 오면 로컬의 저장 안 된 변경을 그 위에 다시 얹는다(rebase)
+const rebase = (path, mine, v) => { const b = wBase[path]; wBase[path] = structuredClone(v); return mine && sj(mine) !== sj(b) ? m3(b, mine, v) : v; };
+async function saveWbs() { const pid = cur; if (!P() || !wbs[pid]) return false; const L1 = structuredClone(wbs[pid]);
+  const out = await mergeSave(`wbs/${pid}`, {...L1, updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!out) return false;
+  const now = wbs[pid], v = now ? m3(L1, now, out) : out; v.items = keepObj(now?.items, v.items || []); wbs[pid] = v; draw(); return true; }
+async function saveBud() { const pid = cur; if (!P() || !budget[pid]) return false; const L1 = structuredClone(budget[pid]);
+  const out = await mergeSave(`budget/${pid}`, {...L1, updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!out) return false; budget[pid] = budget[pid] ? m3(L1, budget[pid], out) : out; return true; }
+// pm: 새 프로젝트만 set, 그 밖은 바꾼 칸만 update(문서가 없으면 거절 — 지운 프로젝트가 되살아나지 않음), 지우기가 섞이면 병합 저장
+const dm = (o, v) => { Object.entries(v).forEach(([k, x]) => { if (isO(x) && isO(o[k])) dm(o[k], x); else o[k] = x; }); return o; }; // update 와 같은 재귀 병합(로컬 반영용)
+const pmUpd = async (p, ch, note) => { if (!db || !admin || !p) return false; try { await db.doc(`pm/${p.id}`).update({...ch, updatedAt: new Date().toISOString()}); dm(p, structuredClone(ch)); if (note) note.textContent = "저장했습니다."; return true; } catch { if (note) note.textContent = "저장하지 못했습니다(그 사이 프로젝트가 지워졌을 수 있습니다)."; return false; } };
+const saveProj = async (p, note) => { const {id, ...r} = p; r.updatedAt = new Date().toISOString(); const out = await mergeSave(`pm/${id}`, r); if (note) note.textContent = out ? "저장했습니다." : "저장하지 못했습니다."; if (out) Object.assign(p, out); return !!out; };
 
 // ── 파일 읽기 (PDF·DOCX·HWPX·엑셀·사진). 원본 파일은 저장하지 않고 읽기만 한다
 const libs = {};
@@ -464,7 +501,7 @@ const col = (h, ...res) => { for (const re of res) { const j = h.findIndex(x => 
 const TOTAL = /소\s*계|합\s*계|총\s*계|총\s*금\s*액|총\s*액|계약\s*금\s*액|^계$|^(\d+\s*[.)]\s*)?부가(가치)?세/; // 소계·합계·총액·계약 금액은 다시 계산, 부가세 줄은 공급가 예산이 아님
 
 // ── 프로젝트 설정 (문서로 채우기)
-let setDirty = null, pMsg = "", xres = null; // setDirty: 저장 전 입력 중인 프로젝트 id — 다른 기기 갱신으로 입력이 지워지지 않게
+let setDirty = null, pMsg = "", xres = null, pForm = {pid: null, v: {}}; // setDirty: 저장 전 입력 중인 프로젝트 id — 다른 기기 갱신으로 입력이 지워지지 않게
 function drawSet() {
   const p = P(); if (p && setDirty === p.id && $("pSave")) return; if (!p) { $("tab-set").innerHTML = '<p class="empty">위에서 [+ 새 프로젝트]를 눌러 주세요.</p>'; return; }
   const pmOpts = PP().map(x => [x.id, `${x.이름}${x.직책 ? ` · ${x.직책}` : ""}`]), g = tgt(p);
@@ -482,6 +519,7 @@ function drawSet() {
     <label>담당 PM (인력 탭에서 등록)<select data-pf="PM">${opt(pmOpts, p.PM, "선택 안 함")}</select></label>
     <label class="wide">과업범위 (제안요청서·과업지시서의 과업 내용)<textarea data-pf="과업범위" style="min-height:160px">${esc(p.과업범위)}</textarea></label></div>
     <div class="row"><button class="btn primary" type="button" id="pSave">저장</button><button class="btn x" type="button" id="pDel">프로젝트 삭제</button><span class="note" id="pNote">${esc(pMsg)}</span></div>`;
+  pForm = {pid: p.id, v: Object.fromEntries([...document.querySelectorAll("#tab-set [data-pf]")].map(el => [el.dataset.pf, el.value]))}; // 저장 때 바뀐 칸만 보내려고 그린 값을 기억
 }
 const EXF = [["이름", "프로젝트명"], ["발주처", "발주처"], ["계약금액", "계약 금액(공급가)"], ["계약총액", "계약 총액"], ["계약일", "계약일"], ["시작", "착수일"], ["종료", "계약 종료일"], ["상태", "상태"]];
 const extHtml = x => `<div class="ext"><b>CHRONOS 검토 결과</b> — ${esc(x.files.join(", "))}<br>${EXF.filter(([k]) => x.r[k]).map(([k, l]) => `${l}: <b>${esc(/금액|총액/.test(k) ? won(x.r[k]) : x.r[k])}</b>${x.r.근거?.[k] ? ` <span class="note">(${esc(x.r.근거[k])})</span>` : ""}`).join("<br>")}
@@ -539,13 +577,14 @@ const mw = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? wkL(mon(new Date(v + "T00:
 const addW = (v, n) => { if (!v) return v; const x = new Date(v + "T00:00:00"); x.setDate(x.getDate() + 7 * n); return d8(x); };
 // 공정일정: 표(항목·담당자·시작일·마감일·진행 내용). 항목을 누르면 오른쪽 세부 패널, 표 안에서 바로 고치면 자동 저장
 const STG = ["착수", "준비", "실행", "사후·정산"];
+const wEd = new Set(); // 입력(input)이 있었던 공정 칸
 let wStg = "실행", wT, wSaved = "", wRe = false, wCal = false, drag = null; // wRe: 입력 중이라 미룬 다시 그리기
 const wMark = m => { wSaved = m; if ($("wSaved")) $("wSaved").textContent = m; };
-const wSave = (ms = 600) => { wTouch(); clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
+const wSave = (ms = 600) => { clearTimeout(wT); wMark("저장 중…"); wT = setTimeout(async () => wMark(await saveWbs() ? `저장됨 ${new Date().toLocaleTimeString("en-GB", {hour12: false, timeZone: "Asia/Seoul"}).slice(0, 5)}` : "저장하지 못했습니다"), ms); };
 // 행 추가: 같은 단계 끝에 넣는다 (+ 행 추가·업무 요청 → 공정일정에 넣기)
 const wNew = (g, o = {}) => { const a = (wbs[cur] ||= {items: []}).items, k = a.findLastIndex(x => x.단계 === g) + 1 || a.length, id = nid();
   a.splice(k, 0, {id, 단계: g, 작업: "", 산출물: "", 시작: "", 종료: "", 담당: null, 상태: "대기", 하위: [], 예산항목: [], 기록: [], 보고: [], ...o}); wSave(0); return id; };
-const nid = () => "T" + String(W().reduce((m, x) => Math.max(m, +String(x.id).slice(1) || 0), 0) + 1).padStart(3, "0");
+const nid = () => "T" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); // 두 사람이 동시에 추가해도 겹치지 않게
 const wFind = k => { const j = k.lastIndexOf("|"), id = k.slice(0, j); return [W().find(x => x.id === id), k.slice(j + 1)]; };
 function wPut(t, k, v) { if (k === "담당") t.담당 = pw(v); else t[k] = v; if (k === "상태") { if (v === "완료") t.완료일 ||= today(); else delete t.완료일; } }
 function wTable(w) {
@@ -564,9 +603,9 @@ function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const p = P(); if (!p) { $("tab-wbs").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
   if (drag && !force) return; // 끄는 중에는 다시 그리지 않는다(놓을 때 그림)
   // 글자 칸 입력(한글 조합 포함) 중에는 다시 그리지 않는다 — 조합 중 글자가 두 번 들어가지 않게. 포커스가 빠질 때 다시 그림
-  const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { if (admin) { const [t, k] = wFind(fa.dataset.wi); if (t) wPut(t, k, fa.value); } wRe = true; return; } // 늦게 온 스냅샷이 입력 중인 값을 옛 값으로 되돌리지 않게
+  const fa = document.activeElement; if (!force && fa?.dataset?.wi && fa.tagName === "INPUT" && fa.type !== "date" && $("tab-wbs").contains(fa)) { if (admin && wEd.has(fa.dataset.wi)) { const [t, k] = wFind(fa.dataset.wi); if (t) wPut(t, k, fa.value); } wRe = true; return; } // 늦게 온 스냅샷이 입력 중인 값을 옛 값으로 되돌리지 않게
   const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop, sl = document.querySelector("#tab-wbs .wt")?.scrollLeft;
-  if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
+  if (fk && admin && wEd.has(fk) && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); } // 사용자가 실제로 입력한 칸만 다시 얹는다(포커스만 있는 칸이 남의 새 값을 덮지 않게)
   const w = myW(), late = lateList(), reps = w.flatMap(t => (t.보고 || []).map((r, j) => ({t, i: W().indexOf(t), j, r})));
   $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span>${mineSeg()}${whoSel()}${canAsk() ? '<button class="btn" type="button" id="akNew">✉ 업무 요청</button>' : ""}<span style="flex:1"></span>
       <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span><button class="btn" type="button" id="wbsCsv">엑셀 저장</button><button class="btn" type="button" id="wCal" aria-pressed="${wCal}">${wCal ? "▦ 표" : "📅 월력"}</button></div>
@@ -839,9 +878,9 @@ const akPut = (p, v, has) => has ? db.doc(p).update(v) : db.doc(p).set(v);
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function askDo(from0, id, k) {
   const a = AK().find(x => x.from === from0 && x.id === id); if (!a || !db) return; const {id: _, from, 상태, 사유, 처리, ...q} = a, ru = people.find(x => x.id === a.to)?.uid;
-  if (k === "del") { if ((admin || from === uid) && (await askYes("요청 취소", `'${a.제목}' 요청을 취소할까요?`, "요청 취소"))) await db.doc(`askq/${from}`).update({[id]: {...askQ[from][id], 취소: true}}).catch(() => alert("취소하지 못했습니다.")); return; }
+  if (k === "del") { if ((admin || from === uid) && (await askYes("요청 취소", `'${a.제목}' 요청을 취소할까요?`, "요청 취소"))) await db.doc(`askq/${from}`).update({[id]: {취소: true}}).catch(() => alert("취소하지 못했습니다.")); return; }
   if (k === "wbs") { if (!admin || a.tid) return; const tid = wNew(wStg, {작업: a.제목, 산출물: a.내용 || "", 시작: today(), 종료: a.마감 || "", 담당: {t: "real", id: a.to}, 기록: [{at: new Date().toISOString(), 내용: "업무 요청에서 추가"}]});
-    await db.doc(`askq/${from}`).update({[id]: {...q, tid}}).then(() => toast("공정일정에 넣었습니다."), () => alert("저장하지 못했습니다.")); draw(); return; }
+    await db.doc(`askq/${from}`).update({[id]: {tid}}).then(() => toast("공정일정에 넣었습니다."), () => alert("저장하지 못했습니다.")); draw(); return; }
   if (!ru || !(admin || recv(a)) || !["수락", "완료", "반려"].includes(k)) return;
   const why = k === "반려" ? prompt("반려 사유 (한 줄)") : ""; if (why === null) return;
   await akPut(`askr/${ru}`, {[`${from}:${id}`]: {상태: k, 처리: new Date().toISOString(), 사유: k === "반려" ? why.trim().slice(0, 200) : "", by: uid || ""}}, !!askR[ru]).catch(() => alert("저장하지 못했습니다."));
@@ -915,25 +954,28 @@ function drawBud(force) {
     <div id="bStage"></div>`;
   if (bup) budStage();
 }
-// 수금(선금·중도금·잔금): pm/{pid}.수금 배열(관리자 전용 문서, 팀장 사본 view 에는 넣지 않음). 금액은 부가세 포함 원
+// 수금(선금·중도금·잔금): pm/{pid}.수금 = {id: {구분, 입금일, 금액, 비고}} (관리자 전용 문서, 팀장 사본 view 에는 넣지 않음). 금액은 부가세 포함 원
+// 추가·수정은 update({수금: {[id]: …}}) 재귀 병합이라 동시에 넣어도 서로 안 덮는다. 옛 배열 형식도 읽고, 처음 쓸 때 map 으로 바꾼다
+const rcvList = p => Array.isArray(p?.수금) ? p.수금 : Object.entries(p?.수금 || {}).map(([id, x]) => ({...x, id}));
+const rcvMap = p => Object.fromEntries(rcvList(p).map(({id, ...x}) => [id, x]));
 const RCV = ["선금", "중도금", "잔금", "기타"];
-const rcvOf = p => { const cs = (p?.수금 || []).slice().sort((a, b) => String(a.입금일).localeCompare(String(b.입금일))), sum = cs.reduce((a, x) => a + num(x.금액), 0), base = cAmt(p)[0];
+const rcvOf = p => { const cs = rcvList(p).slice().sort((a, b) => String(a.입금일).localeCompare(String(b.입금일))), sum = cs.reduce((a, x) => a + num(x.금액), 0), base = cAmt(p)[0];
   return {cs, sum, base, left: base - sum, q: base ? sum / base * 100 : null, adv: cs.find(x => x.구분 === "선금")}; };
 let rcvOpen = false;
 function editRcv(id) {
-  const p = P(); if (!admin || !p) return; const x = id ? (p.수금 || []).find(c => c.id === id) : {구분: "선금", 입금일: today(), 금액: "", 비고: ""}; if (!x) return;
+  const p = P(); if (!admin || !p) return; const x = id ? rcvList(p).find(c => c.id === id) : {구분: "선금", 입금일: today(), 금액: "", 비고: ""}; if (!x) return;
   $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${id ? "수금 수정" : "수금 추가"}</h2><div class="form"><label>구분<select data-rf="구분">${opt(RCV, x.구분)}</select></label><label>입금일<input type="date" data-rf="입금일" value="${esc(x.입금일)}"></label>
     <label>금액 (부가세 포함, 원)<input data-rf="금액" inputmode="numeric" value="${esc(x.금액 ? won(x.금액) : "")}"></label><label class="wide">비고<input data-rf="비고" value="${esc(x.비고 ?? "")}" maxlength="200"></label></div>
     <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button><button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { if ($("dlg").returnValue !== "save") return; const n = {}; $("dlgForm").querySelectorAll("[data-rf]").forEach(el => n[el.dataset.rf] = el.value.trim());
     n.금액 = num(n.금액); if (!RCV.includes(n.구분)) n.구분 = "기타"; if (!n.금액) { alert("금액을 넣어 주세요."); return; }
-    const q = P(); if (!q) return; q.수금 = (q.수금 || []).slice(); const i = q.수금.findIndex(c => c.id === id); if (i >= 0) q.수금[i] = {...q.수금[i], ...n}; else q.수금.push({id: "C" + Date.now().toString(36), ...n});
-    if (await saveProj(q)) toast("수금을 저장했습니다."); draw(); };
+    const q = P(); if (!q) return; const cid = id || "C" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), {id: _i, ...old} = rcvList(q).find(c => c.id === cid) || {};
+    if (await pmUpd(q, {수금: Array.isArray(q.수금) ? {...rcvMap(q), [cid]: {...old, ...n}} : {[cid]: n}})) toast("수금을 저장했습니다."); draw(); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
-async function delRcv(id) { const p = P(), x = (p?.수금 || []).find(c => c.id === id); if (!admin || !x) return;
+async function delRcv(id) { const p = P(), x = rcvList(p).find(c => c.id === id); if (!admin || !x) return;
   if (!(await askYes("수금 삭제", `${x.구분} ${won(x.금액)}원 (${x.입금일 || "입금일 없음"}) 기록을 삭제할까요?`, "삭제"))) return;
-  const q = P(); q.수금 = (q.수금 || []).filter(c => c.id !== id); if (await saveProj(q)) toast("삭제했습니다."); draw(); }
+  const q = P(); if (!q) return; const m = rcvMap(q); delete m[id]; q.수금 = m; if (await saveProj(q)) toast("삭제했습니다."); draw(); } // 지우기는 병합 저장(남이 넣은 수금은 남김)
 // 산출내역서 행 편집(관리자): 기존 행 id(rid)는 바꾸지 않는다 — 장부 연결 유지. 새 행 id = "R"+hash(구분|항목|내용), 겹치면 -n
 const bLog = (b, t) => { (b.log ||= []).push({at: new Date().toISOString(), by: uid || "", 내용: t}); b.log = b.log.slice(-50); };
 const bLbl = r => `${[r.구분, r.항목, r.내용].filter(Boolean).join(" / ")} (${won(r.금액)})`;
@@ -945,10 +987,12 @@ function editBudRow(id, g) {
     <p class="note">금액 = 과세 + 영세(공급가). ${old ? "행 번호는 그대로라 집행내역 연결이 유지됩니다." : ""}</p><div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button><button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { if ($("dlg").returnValue !== "save") return; const n = {}; $("dlgForm").querySelectorAll("[data-bf]").forEach(el => n[el.dataset.bf] = el.value.trim());
     n.과세액 = num(n.과세액); n.영세액 = num(n.영세액); n.금액 = n.과세액 + n.영세액; if (!n.항목 && !n.내용) { alert("항목이나 내용을 넣어 주세요."); return; }
-    if (old) { const keep = L().filter(e => !e.rid && ridOf(nl(e), BR()) === id).map(e => e.id); // 글자로만 이어진 장부는 rid 를 고정해 연결 유지
-      const {과세: _, ...o} = old; Object.assign(old, o, n); delete old.과세; bLog(b, `행 수정: ${bLbl(br(old))}`); if (await saveBud() && keep.length) await ulink(keep, id); }
-    else { const base = "R" + hash(nk(`${n.구분}|${n.항목}|${n.내용}`)); let nid = base, k = 1; while (raw.some(x => x.id === nid)) nid = `${base}-${++k}`;
-      const at = raw.findLastIndex(x => x.구분 === n.구분); raw.splice(at < 0 ? raw.length : at + 1, 0, {id: nid, ...n}); bLog(b, `행 추가: ${bLbl(n)}`); await saveBud(); }
+    const b2 = B(), raw2 = b2?.rows; if (!b2 || !raw2) return; // 창을 연 사이 스냅숏이 바뀌었을 수 있어 대상을 다시 찾는다
+    if (id) { const o2 = raw2.find(x => x.id === id); if (!o2) { alert("그 사이 다른 사람이 이 행을 지웠습니다."); draw(); return; }
+      const keep = L().filter(e => !e.rid && ridOf(nl(e), BR()) === id).map(e => e.id); // 글자로만 이어진 장부는 rid 를 고정해 연결 유지
+      Object.assign(o2, n); delete o2.과세; bLog(b2, `행 수정: ${bLbl(br(o2))}`); if (await saveBud() && keep.length) await ulink(keep, id); }
+    else { const base = "R" + hash(nk(`${n.구분}|${n.항목}|${n.내용}`)); let nid = base, k = 1; while (raw2.some(x => x.id === nid)) nid = `${base}-${++k}`;
+      const at = raw2.findLastIndex(x => x.구분 === n.구분); raw2.splice(at < 0 ? raw2.length : at + 1, 0, {id: nid, ...n}); bLog(b2, `행 추가: ${bLbl(n)}`); await saveBud(); }
     draw(); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
@@ -1061,8 +1105,8 @@ function budStage() {
 }
 async function budCommit() {
   const out = budParse(), old = B(), p = P();
-  budget[cur] = {file: bup.name, v: 2, rows: out}; bup = null; await saveBud();
-  if (!num(p.계약금액)) { p.계약금액 = out.reduce((a, r) => a + r.금액, 0); await saveProj(p); }
+  budget[cur] = {file: bup.name, v: 2, rows: out, log: [...(old?.log || []), {at: new Date().toISOString(), by: uid || "", 내용: `산출내역서 새로 올림: ${bup.name}`}]}; bup = null; await saveBud();
+  if (!num(p.계약금액)) await pmUpd(p, {계약금액: out.reduce((a, r) => a + r.금액, 0)});
   draw();
 }
 
@@ -1196,8 +1240,11 @@ async function ledCommit() {
   const miss = all.filter(e => !e.지출일 || !e.합계).length; if (miss) { alert(`지출일·금액이 빈 줄 ${miss}개를 채우거나 ✕로 빼 주세요.`); return; }
   const rows = all.filter(e => (e._i ? haveI.has(lkeyI(e)) : have.has(lkey(e))) ? (dup++, false) : true).map(({_i, ...e}) => e); $("lCommit").disabled = true; // 고친 뒤 다시 중복 검사
   if (!rows.length) { lup = null; drawLed(true); alert(`모두 이미 집행내역서에 있습니다 (${dup}건).`); return; }
-  for (let i = 0; i < rows.length; i += 20) { const r = await Promise.allSettled(rows.slice(i, i + 20).map(e => db.collection("ledger").add({...e, at}))); ok += r.filter(x => x.status === "fulfilled").length; if ($("lNote")) $("lNote").textContent = `${ok}/${rows.length}건 저장…`; }
-  lup = null; drawLed(true); alert(ok === rows.length ? `${ok}건을 집행내역서에 넣었습니다.` : `${rows.length}건 중 ${ok}건만 저장했습니다. 다시 올리면 빠진 것만 추가됩니다.`);
+  // 같은 파일을 두 사람이 동시에 올려도 한 번만: id = "L"+hash(pid|lkey|파일 안 같은 거래 순번), 이미 있으면 건너뜀
+  const sq = {}, ids = rows.map(e => { const k = `${e.pid}|${lkey(e)}`; sq[k] = (sq[k] || 0) + 1; return "L" + hash(`${k}|${sq[k]}`); });
+  const put1 = async (e, id) => { const ref = db.doc(`ledger/${id}`); if ((await ref.get()).exists) { dup++; return; } await ref.set({...e, at}); ok++; };
+  for (let i = 0; i < rows.length; i += 20) { await Promise.allSettled(rows.slice(i, i + 20).map((e, j) => put1(e, ids[i + j]))); if ($("lNote")) $("lNote").textContent = `${ok}/${rows.length}건 저장…`; }
+  lup = null; drawLed(true); alert(ok + dup >= rows.length ? `${ok}건을 집행내역서에 넣었습니다.${dup ? ` (이미 있는 ${dup}건 건너뜀)` : ""}` : `${rows.length}건 중 ${ok}건만 저장했습니다. 다시 올리면 빠진 것만 추가됩니다.`);
 }
 
 // ── 참여인력: 사내 직원 명부(staff, 관리자만)에서 골라 프로젝트에 배치 → people 문서(pid·staffId). 배치 해제 = 그 people 문서 삭제
@@ -1231,13 +1278,14 @@ function reqDlg(kind, target) { // kind: 참여(본인)·추가·수정·해제
     catch { alert("요청을 보내지 못했습니다."); } };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
-async function reqDo(id, ok) { const r = preqs.find(x => x.id === id); if (!r || !admin || r.상태 !== "대기") return;
+async function reqDo(id, ok) { let r = preqs.find(x => x.id === id); if (!r || !admin || r.상태 !== "대기") return;
+  const rq = db.doc(`peoplereq/${id}`); await lease(rq); const g = await rq.get().catch(() => null); if (!g?.exists || g.data().상태 !== "대기") { toast("다른 관리자가 이미 처리했습니다."); return; } r = {id, ...structuredClone(g.data())}; // 처리 직전 최신 상태 확인
   const {id: _, ...base} = r, x = people.find(u => u.id === r.대상), c = r.내용 || {}, p = projects.find(q => q.id === r.pid);
   if (ok) { let done = true;
     if (r.종류 === "해제") done = !x || await db.doc(`people/${x.id}`).delete().then(() => true, () => false);
     else if (r.종류 === "수정") { if (!x) return alert("대상 인력이 없습니다."); const {id: xid, ...o} = x; RQE.forEach(k => { if (c[k] !== undefined) o[k] = c[k]; }); done = await put(`people/${xid}`, o); }
     else if (x) { const {id: xid, ...o} = x; if (r.본인) o.uid = r.by; RQF.forEach(k => { if (c[k] && !o[k]) o[k] = c[k]; }); done = await put(`people/${xid}`, o); }
-    else done = await put(`people/U${Date.now().toString(36)}`, {pid: r.pid, 이름: c.이름 || "", 부서: c.부서 || "", 직책: c.직책 || "", 역할: c.역할 || "", 참여시작: p?.시작 || "", 참여종료: p?.종료 || "", 이메일: "", ...(r.본인 ? {uid: r.by} : {})});
+    else done = await put(`people/U${id}`, {pid: r.pid, 이름: c.이름 || "", 부서: c.부서 || "", 직책: c.직책 || "", 역할: c.역할 || "", 참여시작: p?.시작 || "", 참여종료: p?.종료 || "", 이메일: "", ...(r.본인 ? {uid: r.by} : {})});
     if (!done) { alert("반영하지 못했습니다."); return; } }
   await put(`peoplereq/${id}`, {...base, 상태: ok ? "승인" : "반려", 처리: new Date().toISOString()}); toast(ok ? "승인해 참여인력에 반영했습니다." : "반려했습니다.");
 }
@@ -1324,15 +1372,17 @@ async function ctSave(el) {
   try { await db.doc(`pcon/${id}`).update({[k]: k === "구분" && !CTK.includes(v) ? "참가기업" : v, at, by}); } catch { toast("저장하지 못했습니다."); }
 }
 const ctAddRow = () => { const tid = `new:${++ctN}`; ctNew.push({tid, pid: cur, 구분: ctf.k || "참가기업"}); drawCt(true); return tid; };
-async function ctDel(id) { const nw = ctNew.find(y => y.tid === id && !y.id); if (nw) { ctNew = ctNew.filter(y => y !== nw); drawCt(true); return; }
-  const x = pcon.find(y => y.id === id); if (!x || !canCt(x) || !db) return;
-  if (await askYes("연락처 삭제", `${x.소속 || ""} ${x.성명 || ""} 연락처를 삭제할까요?`, "삭제")) await db.doc(`pcon/${id}`).delete().catch(() => alert("삭제하지 못했습니다.")); }
+async function ctDel(id) { const nw = ctNew.find(y => y.tid === id || (y.id && y.id === id)); if (nw && !nw.id) { ctNew = ctNew.filter(y => y !== nw); drawCt(true); return; }
+  const x = pcon.find(y => y.id === (nw?.id || id)) || (nw && {...nw, pid: nw.pid}); if (!x || !canCt(x) || !db) return; id = nw?.id || id; // 막 저장돼 스냅숏이 아직 안 온 행도 로컬 정보로 지운다
+  if (await askYes("연락처 삭제", `${x.소속 || ""} ${x.성명 || ""} 연락처를 삭제할까요?`, "삭제")) { await db.doc(`pcon/${id}`).delete().catch(() => alert("삭제하지 못했습니다.")); ctNew = ctNew.filter(y => y !== nw); drawCt(true); } }
 let pcon = [], ctf = {k: "참가기업", q: "", all: false}, cup = null, ctRe = false, ctRows = [];
 const canCt = x => !!db && (admin || ((!x || x.pid === cur) && amPM()));
 const ctKey = x => [nk(x.소속), nk(x.성명), nk(x.이메일)].join("|");
 const ctBad = n => !n.소속 && !n.성명 ? "소속이나 성명을 넣어 주세요." : n.이메일 && !okMail(n.이메일) ? "이메일 형식을 확인해 주세요." : [n.연락처1, n.연락처2].some(v => v && !okTel(v)) ? "전화번호 형식을 확인해 주세요(숫자·+·-)." : "";
 function drawCt(force) {
-  const fa = document.activeElement; if (!force && fa?.closest?.("#tab-ct") && fa.matches("input:not([type=checkbox]):not([type=file]),select,textarea")) { ctRe = true; return; }
+  const fa = document.activeElement; if (!force && fa?.closest?.("#tab-ct") && fa.matches("input:not([type=checkbox]):not([type=file]),select,textarea")) { ctRe = true; // 표를 다시 그리지는 않고, 편집 중이 아닌 칸의 값만 새로 넣는다
+    document.querySelectorAll("#tab-ct tr[data-cid] [data-ce]").forEach(el => { if (el === fa || el.classList.contains("bad")) return; const cid = el.closest("tr").dataset.cid, x = pcon.find(y => y.id === (ctNew.find(d => d.tid === cid)?.id || cid)), v = String(x?.[el.dataset.ce] ?? ""); if (x && el.value !== v) { el.value = v; el.classList.toggle("bad", !ctOk(el.dataset.ce, v)); } });
+    return; }
   const p = P(), u = String(p?.연락처페이지 || ""), q = nk(ctf.q), pn = id => projects.find(x => x.id === id)?.이름 || "";
   const rows = ctRows = pcon.filter(x => (ctf.all || x.pid === cur) && (!ctf.k || x.구분 === ctf.k) && (!q || [x.소속, x.성명, x.분야].some(v => nk(v).includes(q))))
     .sort((a, b) => String(a.소속).localeCompare(String(b.소속), "ko") || String(a.성명).localeCompare(String(b.성명), "ko"));
@@ -1366,7 +1416,8 @@ const cupHtml = () => `<div class="co"><h3>${esc(cup.name)} 확인</h3><p class=
   <div class="tw" style="max-height:260px;overflow:auto"><table class="ct"><tbody>${cup.rows.map(x => `<tr><td data-l="구분">${esc(x.구분)}</td><td data-l="소속">${esc(x.소속)}</td><td data-l="성명">${esc(x.성명)}</td><td data-l="이메일">${esc(x.이메일)}</td><td data-l="연락처">${esc([x.연락처1, x.연락처2].filter(Boolean).join(" / "))}</td></tr>`).join("")}</tbody></table></div>
   <div class="row"><button class="btn primary" type="button" id="cCommit"${cup.rows.length ? "" : " disabled"}>연락처에 추가</button><button class="btn x" type="button" id="cCancel">취소</button></div></div>`;
 async function ctCommit() { if (!db || !cup || !canCt()) return; const at = new Date().toISOString(), rs = cup.rows; $("cCommit").disabled = true;
-  const r = await Promise.allSettled(rs.map(x => db.collection("pcon").add({...x, at, by: uid || ""}))), ok = r.filter(x => x.status === "fulfilled").length; cup = null; drawCt(true); toast(ok === rs.length ? `${ok}건을 추가했습니다.` : `${rs.length}건 중 ${ok}건만 추가했습니다.`); }
+  let ok = 0, dup = 0; await Promise.allSettled(rs.map(async x => { const ref = db.doc(`pcon/C${hash(`${x.pid}|${ctKey(x)}`)}`); if ((await ref.get()).exists) { dup++; return; } await ref.set({...x, at, by: uid || ""}); ok++; })); // 같은 사람은 한 번만(동시 올리기)
+  cup = null; drawCt(true); toast(ok + dup >= rs.length ? `${ok}건을 추가했습니다.${dup ? ` (이미 있는 ${dup}건 건너뜀)` : ""}` : `${rs.length}건 중 ${ok}건만 추가했습니다.`); }
 // ── 공통
 const askErr = e => ({not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 눌러 주세요.", prompt_too_large: "자료가 너무 깁니다. 문서를 줄여 주세요.", image_rejected: "사진을 읽지 못했습니다(형식·크기 확인)."}[e?.code] || "답을 받지 못했습니다. 다시 눌러 주세요.");
 const mcpMsg = e => ({needs_reauth: "연결이 만료되었습니다. claude.ai 설정 → 커넥터에서 다시 연결해 주세요.", server_not_connected: "커넥터가 연결되어 있지 않습니다.", not_in_manifest: "이 페이지에 허용되지 않았습니다.", tool_error: "요청이 거절되었습니다" + (e?.message ? `: ${e.message.slice(0, 120)}` : "")}[e?.code] || "실패했습니다" + (e?.message ? `: ${e.message.slice(0, 120)}` : ""));
@@ -1380,9 +1431,10 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button, tr.click, tr[data-bid]"); if (!t || (t.tagName === "TR" && e.target.closest("select, input, a"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
-  if (t.id === "pNew" || t.id === "pNew2") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
-  if (t.id === "pSave") { const p = P(); document.querySelectorAll("[data-pf]").forEach(el => p[el.dataset.pf] = el.value.trim()); p.계약금액 = num(p.계약금액); p.계약총액 = num(p.계약총액); p.목표수익률 = p.목표수익률 === "" || !isFinite(+p.목표수익률) ? "" : +p.목표수익률;
-    if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = ""; hiP = p.id; showTab("list"); toast(`저장했습니다 — ${p.코드 ? p.코드 + " " : ""}${p.이름}`); } else drawTop(); } // 저장하면 목록으로 가서 그 행을 강조
+  if (t.id === "pNew" || t.id === "pNew2") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await put(`pm/${id}`, {이름: "새 프로젝트", 상태: "준비", updatedAt: new Date().toISOString()}); showTab("set"); }
+  if (t.id === "pSave") { const p = P(), ch = {}; document.querySelectorAll("[data-pf]").forEach(el => { const k = el.dataset.pf; if (pForm.pid !== p.id || el.value !== pForm.v[k]) ch[k] = el.value.trim(); }); // 화면을 그린 뒤 바뀐 칸만
+    if ("계약금액" in ch) ch.계약금액 = num(ch.계약금액); if ("계약총액" in ch) ch.계약총액 = num(ch.계약총액); if ("목표수익률" in ch) ch.목표수익률 = ch.목표수익률 === "" || !isFinite(+ch.목표수익률) ? "" : +ch.목표수익률;
+    if (!Object.keys(ch).length || await pmUpd(p, ch, $("pNote"))) { setDirty = null; pMsg = ""; hiP = p.id; showTab("list"); toast(`저장했습니다 — ${p.코드 ? p.코드 + " " : ""}${p.이름}`); } else drawTop(); } // 저장하면 목록으로 가서 그 행을 강조
   if (t.id === "tgt" && admin) { const v = prompt(`${P().이름} 목표 수익률(%) — 비우면 지웁니다`, tgt(P()) ?? ""); if (v !== null) setTgt(v); }
   if (t.dataset.pj) { cur = t.dataset.pj; hiP = null; setDirty = null; pMsg = ""; try { localStorage.setItem("pmo-proj", cur); } catch {} showTab("wbs"); setTimeout(() => lateAlert(false), 300); }
   if (t.id === "pDel") { const p = P(); if (!p || !(await askYes("프로젝트 삭제", `'${p.이름}' 프로젝트를 삭제합니다. 되돌릴 수 없습니다.\n\n지워지는 것: 프로젝트 정보·공정일정·예산(산출내역서)\n남는 것: 집행내역서·참여인력·프로젝트별 연락처 페이지`, "프로젝트 삭제", p.이름 || "삭제"))) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
@@ -1475,11 +1527,11 @@ document.addEventListener("change", async e => {
       if (r) { h.value = r.id; rp.value = rName(r.id, rp.dataset.rp); ["구분", "항목", "내용"].forEach(k => f.querySelector(`[data-lf="${k}"]`).value = e[k]); } } }
 });
 document.addEventListener("compositionend", e => { const d = e.target.dataset; if (!d?.wi || !admin) return; const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); wSave(); } });
-document.addEventListener("focusout", e => { if (wRe && e.target.dataset?.wi) setTimeout(() => { if (!wRe) return; wRe = false; if (tab === "wbs") drawWbs(); }); });
+document.addEventListener("focusout", e => { if (e.target.dataset?.wi) wEd.delete(e.target.dataset.wi); if (wRe && e.target.dataset?.wi) setTimeout(() => { if (!wRe) return; wRe = false; if (tab === "wbs") drawWbs(); }); });
 // 구글 시트 붙여넣기 칸
 document.addEventListener("paste", e => { if (e.target.id === "budTsv") { e.preventDefault(); budTsv(e.clipboardData?.getData("text") || ""); } });
 document.addEventListener("input", e => { const d = e.target.dataset;
-  if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); if (!e.isComposing) wSave(); } }
+  if (d.wi && admin && e.target.tagName === "INPUT" && e.target.type !== "date") { wEd.add(d.wi); const [x, k] = wFind(d.wi); if (x) { wPut(x, k, e.target.value); if (!e.isComposing) wSave(); } }
   if (e.target.id === "lsQ") { lsf.q = e.target.value; drawLs(); } if (e.target.id === "stQ") { sq = e.target.value; drawSt(); } });
 // 파일 올리기 공통: [파일 선택] 버튼 + 끌어다 놓기 영역(프로젝트 문서·산출내역서·장부·작업 자료). id = k+Drop/Pick/File
 const dropBox = (k, what, accept, multi, tip = "") => `<div class="drop" id="${k}Drop" data-drop="${k}">${what}를 여기로 끌어다 놓거나 <button class="btn primary" type="button" id="${k}Pick" data-pick="${k}">파일 선택</button><input type="file" id="${k}File" data-file="${k}"${accept ? ` accept="${accept}"` : ""}${multi ? " multiple" : ""} hidden>${tip ? `<br><span class="note">${tip}</span>` : ""}</div>`;
@@ -1530,10 +1582,8 @@ showTab(tab);
   if (!db) { draw(); return; }
   const got = new Set(), ready = k => { got.add(k); if (got.size === 2 && !got.has("done")) { got.add("done"); setTimeout(() => lateAlert(false), 500); } }; // 프로젝트·공정이 모두 들어온 뒤 한 번
   // 같은 작업(id)은 같은 객체를 유지한다 — 열린 창·AI 작업 중인 작업이 새 스냅샷에 끊기지 않게
-  db.collection("wbs").onSnapshot(s => { const old = wbs, now = Date.now(); wbs = {}; s.docs.forEach(d => { const v = structuredClone(d.data()), prev = old[d.id]?.items || [], pd = wPend[d.id];
-    if (pd) { if ((pd.j === sj(v.items || []) && pd.t <= pd.s) || now - pd.t > 15000) delete wPend[d.id]; else if (old[d.id]) { wbs[d.id] = old[d.id]; return; } } // 내 저장이 돌아오기 전 스냅샷은 건너뜀
-    v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
-    Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
+  db.collection("wbs").onSnapshot(s => { const old = wbs; wbs = {}; s.docs.forEach(d => { const v = rebase(`wbs/${d.id}`, old[d.id], structuredClone(d.data())); v.items = keepObj(old[d.id]?.items, v.items || []); wbs[d.id] = v; });
+    Object.keys(old).forEach(id => { if (!wbs[id] && wBase[`wbs/${id}`] === undefined) wbs[id] = old[id]; }); draw(); ready("wbs"); }); // 아직 한 번도 저장 안 된 새 공정표는 유지
   db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (dlgT) drawAtt(); }, () => {});
   const akSub = (c, set) => db.collection(c).onSnapshot(s => { set(Object.fromEntries(s.docs.map(d => [d.id, structuredClone(d.data())]))); if (tab === "wbs") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
   akSub("askq", v => { askQ = v; askOK = true; }); akSub("askr", v => askR = v);
@@ -1545,8 +1595,8 @@ showTab(tab);
     return;
   }
   const seen = new Set(), sync = k => { seen.add(k); if (seen.size === 3) syncView(); }; // pm·people·view 가 모두 들어온 뒤부터
-  db.collection("pm").onSnapshot(s => { const local = projects.filter(p => !s.docs.some(d => d.id === p.id) && !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})), ...local]; if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); sync("pm"); });
-  db.collection("budget").onSnapshot(s => { budget = {}; s.docs.forEach(d => budget[d.id] = structuredClone(d.data())); draw(); });
+  db.collection("pm").onSnapshot(s => { const local = projects.filter(p => !s.docs.some(d => d.id === p.id) && !p.updatedAt); projects = [...s.docs.map(d => { const v = structuredClone(d.data()); wBase[`pm/${d.id}`] = structuredClone(v); return {id: d.id, ...v}; }), ...local]; if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); sync("pm"); });
+  db.collection("budget").onSnapshot(s => { const old = budget; budget = {}; s.docs.forEach(d => budget[d.id] = rebase(`budget/${d.id}`, old[d.id], structuredClone(d.data()))); Object.keys(old).forEach(id => { if (!budget[id] && wBase[`budget/${id}`] === undefined) budget[id] = old[id]; }); draw(); });
   db.collection("ledger").onSnapshot(s => { ledger = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); draw(); }); // drawLed 가 입력 중 다시 그리기를 미룬다
   db.collection("staff").onSnapshot(s => { staff = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "ppl") { if (document.activeElement?.id === "stQ") drawSt(); else draw(); } }, () => {});
   db.collection("people").onSnapshot(s => { people = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); draw(); sync("people"); });
