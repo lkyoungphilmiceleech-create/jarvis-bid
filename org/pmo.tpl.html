@@ -861,15 +861,16 @@ function drawBud(force) {
   if (!b) { $("tab-bud").innerHTML = up + '<p class="note" id="bNote">계약 당시 산출내역서를 올리면 구분·항목·내용·산출근거·계약 금액(과세·영세·합계)을 그대로 옮깁니다. 집행 금액은 장부에 적은 내역을 항목별로 더해 자동으로 채웁니다.</p><div id="bStage"></div>'; if (bup) budStage(); return; }
   const ex = r => m.by[r.id] || {과세: 0, 영세: 0, n: 0}, sum = (rs, f) => rs.reduce((a, r) => a + f(r), 0);
   // 4칸: 계약(A)·집행(B)·잔액+집행률 막대. data-l = 휴대폰 카드 보기의 칸 이름
-  const cells = (a, tx, zr, e, tip = "") => { const q = a ? e / a * 100 : null; return `<td class="num" data-l="계약 (A)"><b>${won(a)}</b><div class="sm">과세 ${won(tx)} · 영세 ${won(zr)}</div></td><td class="num" data-l="집행 (B)"${tip ? ` title="${esc(tip)}"` : ""}>${won(e)}</td>
+  const cells = (a, tx, zr, e, tip = "", aH = "") => { const q = a ? e / a * 100 : null; return `<td class="num" data-l="계약 (A)">${aH || `<b>${won(a)}</b>`}<div class="sm">과세 ${won(tx)} · 영세 ${won(zr)}</div></td><td class="num" data-l="집행 (B)"${tip ? ` title="${esc(tip)}"` : ""}>${won(e)}</td>
     <td class="num${a - e < 0 ? " neg" : ""}" data-l="잔액·집행률">${won(a - e)}<div class="hbar"><i class="${q > 100 ? "stop" : "amber"}" style="width:${Math.min(100, q || 0)}%"></i></div><div class="sm">${pct(q)}</div></td>`; };
   const nums = rs => cells(sum(rs, r => num(r.금액)), sum(rs, r => num(r.과세액)), sum(rs, r => num(r.영세액)), sum(rs, r => ex(r).과세 + ex(r).영세));
   const groups = []; rows.forEach(r => { const x = groups.at(-1); if (x && x.name === r.구분) x.rows.push(r); else groups.push({name: r.구분, rows: [r]}); });
+  const vat = Math.round(m.과세.예산 * .1), tot = m.예산 + vat; // 총액은 보기용(절사 없음). 잔액·집행률·수익률은 공급가(m.예산) 기준 — 장부 집행도 공급가
   const left = m.예산 - m.집행, un = L().filter(e => !ridOf(nl(e), rows));
   const lab = r => [r.구분, r.항목, r.내용].filter(Boolean).join(" / "), ropt = rec => opt([...(rec ? [[rec.id, `★ 추천: ${lab(rec)}`]] : []), ...rows.map(r => [r.id, lab(r)])], "", "예산 항목 선택");
   $("tab-bud").innerHTML = up + `<div class="sum6">
       <div><span class="hudlabel">${esc(cl)}</span><b>${won(ca)}</b><div class="note">공급가 ${won(m.계약)}${m.계약 && Math.abs(m.계약 - m.예산) > 1 ? ` · <span class="warn">내역서와 ${won(m.예산 - m.계약)} 차이</span>` : ""}</div></div>
-      <div><span class="hudlabel">예산 합계 (A)</span><b>${won(m.예산)}</b><div class="note">과세 ${won(m.과세.예산)} / 영세 ${won(m.영세.예산)}</div></div>
+      <div><span class="hudlabel">예산 총액 (부가세 포함)</span><b>${won(tot)}</b><div class="note">공급가 ${won(m.예산)} + 부가세 ${won(vat)} (과세 × 10%)<br>과세 ${won(m.과세.예산)} / 영세 ${won(m.영세.예산)}${num(p.계약총액) && tot !== num(p.계약총액) ? `<br><span class="warn">계약 금액과 ${won(tot - num(p.계약총액))} 차이${tot > num(p.계약총액) ? "(계약 금액 절사)" : ""}</span>` : ""}</div></div>
       <div><span class="hudlabel">집행 (B) · 장부</span><b>${won(m.집행)}</b></div>
       <div><span class="hudlabel">잔액 (A−B)</span><b${left < 0 ? ' class="err"' : ""}>${won(left)}</b></div>
       <div><span class="hudlabel">목표 수익률</span>${admin ? `<label class="row" style="gap:4px;flex-wrap:nowrap"><input id="tgtIn" inputmode="decimal" value="${esc(g ?? "")}" placeholder="예: 15" aria-label="목표 수익률(%)" style="width:90px;padding:3px 6px"> %</label>` : `<b>${pct(g)}</b>`}</div></div>
@@ -878,7 +879,7 @@ function drawBud(force) {
     <div class="sheet"><table class="bt"><thead><tr><th>항목 · 내용 <span class="sm">(산출근거)</span></th><th>계약 (A)</th><th>집행 (B)</th><th>잔액 · 집행률</th></tr></thead><tbody>
     ${groups.map(x => `<tr class="head click${bShut.has(x.name) ? " shut" : ""}" data-gh="${esc(x.name)}"><td>${esc(x.name || "(구분 없음)")} 소계 <span class="sm">${x.rows.length}항목</span></td>${nums(x.rows)}</tr>` + (bShut.has(x.name) ? "" : x.rows.map(r => { const e = ex(r), a = num(r.금액), en = e.과세 + e.영세;
       return `<tr class="${en > a + 1 ? "warn" : ""}"><td><b>${esc(r.항목)}</b>${r.내용 ? ` · ${esc(r.내용)}` : ""}${r.산출 ? `<div class="sm">${esc(r.산출)}</div>` : ""}</td>${cells(a, num(r.과세액), num(r.영세액), en, `장부 ${e.n}건 · 과세 ${won(e.과세)} / 영세 ${won(e.영세)}`)}</tr>`; }).join(""))).join("")}
-    </tbody><tfoot><tr class="head total"><td>총계 <span class="sm">${rows.length}항목</span></td>${nums(rows)}</tr></tfoot></table></div>
+    </tbody><tfoot><tr class="head total"><td>총계 <span class="sm">${rows.length}항목</span></td>${cells(m.예산, m.과세.예산, m.영세.예산, m.집행 - m.미연결, "", `<div>공급가 합계 <b>${won(m.예산)}</b></div><div>부가세 <b>${won(vat)}</b></div><div>총액(절사 없음) <b>${won(tot)}</b></div>`)}</tr></tfoot></table></div>
     ${un.length ? `<div class="co"><h3>미연결 집행 ${un.length}건 · ${won(m.미연결)}원 <span class="note">— 장부에서 예산 항목과 연결되지 않은 집행입니다. 항목을 고르면 바로 연결합니다.</span></h3>
       <div class="tw"><table><thead><tr><th><input type="checkbox" id="ulAll" aria-label="모두 선택"${un.every(e => ulSel.has(e.id)) ? " checked" : ""}></th><th>지출일</th><th>구분·항목·내용</th><th>지출 항목</th><th>공급업체</th><th>금액</th><th>예산 항목 연결</th></tr></thead><tbody>${un.map(e => { const n = nl(e);
         return `<tr><td><input type="checkbox" data-ulc="${esc(e.id)}" aria-label="선택"${ulSel.has(e.id) ? " checked" : ""}></td><td>${esc(n.지출일)}</td><td>${esc(lab(n))}</td><td>${esc(n.지출항목)}</td><td>${esc(n.공급업체)}</td><td class="num">${won(num(n.과세액) + num(n.영세액))}</td><td><select data-ul="${esc(e.id)}" aria-label="예산 항목">${ropt(recOf(n, rows))}</select></td></tr>`; }).join("")}</tbody></table></div>
