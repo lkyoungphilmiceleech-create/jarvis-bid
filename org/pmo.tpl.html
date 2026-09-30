@@ -796,7 +796,7 @@ function loadHtml() { if (isMine() || !PP().length) return ""; const d7 = addW(t
     return `<tr><td><button class="lnk" type="button" data-whof="${esc(x.id)}">${esc(x.이름 || "?")}</button></td><td>${w.length}</td><td>${st.filter(v => ["요청", "진행", "검토"].includes(v)).length}</td><td>${st.filter(v => v === "지연").length}</td><td>${w.filter(t => t.상태 !== "완료" && t.종료 >= today() && t.종료 <= d7).length}</td><td>${AK().filter(a => a.pid === cur && a.to === x.id && OPEN(a)).length}</td></tr>`; }).join("")}</tbody></table></div></details>`; }
 // 페이지 안 알림: 마지막 확인(pmo-seen) 뒤 받은 요청(새것·남이 바꾼 상태)과 보낸 요청의 상대 응답. 내가 한 응답(by == 나)은 빼고, 이 프로젝트만 센다
 let seen = ""; try { seen = localStorage.getItem("pmo-seen") || ""; } catch {}
-const bellN = () => AK().filter(a => a.pid === cur && ((recv(a) && a.at > seen) || ((recv(a) || a.from === uid) && a.처리 > seen && a.by !== uid))).length;
+const bellN = (now = new Date().toISOString()) => AK().filter(a => a.pid === cur && ((recv(a) && a.at > seen && a.at <= now) || ((recv(a) || a.from === uid) && a.처리 > seen && a.처리 <= now && a.by !== uid))).length; // 미래 시각은 무시(배지 고정 방지)
 const mineSeg = () => me() ? `<div class="seg" role="group" aria-label="보기"><button type="button" data-mine="0" aria-pressed="${!isMine()}">전체</button><button type="button" data-mine="1" aria-pressed="${isMine()}">내 업무</button></div><button class="btn" type="button" id="bell" aria-label="새 알림 ${bellN()}건 — 내 업무 보기">🔔 ${bellN()}</button>` : "";
 const canAsk = () => !!db && !!uid && askOK && (admin || !!me()); // uid 가 없으면 자기 askq 문서가 없으므로, askq 를 받기 전에는 set 덮어쓰기를 피하려고 숨긴다
 const OPEN = a => a.상태 === "요청" || a.상태 === "수락";
@@ -805,7 +805,7 @@ const pn = id => people.find(x => x.id === id)?.이름 || (id ? "?" : "관리자
 const AST = {요청: "요청", 수락: "진행", 완료: "완료", 반려: "지연"}; // 상태 → .st 색
 function akRow(a) {
   const r = (admin && !!people.find(x => x.id === a.to)?.uid) || recv(a), b = (k, l, c = "") => `<button class="btn${c}" type="button" data-ak="${esc(a.id)}|${k}" data-akf="${esc(a.from)}">${l}</button>`, late = OPEN(a) && a.마감 && a.마감 < today();
-  return `<div class="rep${OPEN(a) ? "" : " done"}"><div class="row"><span class="tag${a.유형 === "디자인" ? " dz" : ""}">${a.유형 === "디자인" ? "🎨 디자인" : "일반"}</span><b>${esc(a.제목)}</b><span class="st ${AST[a.상태] || ""}">${esc(a.상태)}</span></div>
+  return `<div class="rep${OPEN(a) ? "" : " done"}"><div class="row"><span class="tag${a.유형 === "디자인" ? " dz" : ""}">${a.유형 === "디자인" ? "🎨 디자인" : "일반"}</span><b style="overflow-wrap:anywhere;min-width:0">${esc(a.제목)}</b><span class="st ${AST[a.상태] || ""}">${esc(a.상태)}</span></div>
     <span class="note">${esc(pu(a.from))} → ${esc(pn(a.to))}${a.마감 ? ` · 마감 <span class="${late ? "err" : ""}">${esc(a.마감)}${late ? " (지남)" : ""}</span>` : ""}${a.tid ? ` · 공정: ${esc(W().find(t => t.id === a.tid)?.작업 || a.tid)}` : ""}</span>
     ${a.내용 ? `<div style="white-space:pre-wrap">${esc(a.내용)}</div>` : ""}${a.사유 ? `<div class="note">반려 사유: ${esc(a.사유)}</div>` : ""}
     <div class="row">${r && a.상태 === "요청" ? b("수락", "수락") : ""}${r && a.상태 === "수락" ? b("완료", "완료") : ""}${r && OPEN(a) ? b("반려", "반려", " x") : ""}${admin && !a.tid && a.상태 !== "반려" ? b("wbs", "공정일정에 넣기") : ""}${admin || a.from === uid ? b("del", "취소", " x") : ""}</div></div>`;
