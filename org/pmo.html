@@ -905,7 +905,7 @@ function drawCmt() { const t = dlgT; if (!t || !$("cmts")) return;
 async function cmtAdd() { const t = dlgT, g = $("cmtT").value.trim(); if (!t || !g || !canCmt()) return; $("cmtAdd").disabled = true;
   const c = {pid: cur, tid: t.id, 글: g, 받는사람: [...document.querySelectorAll("#cmtTo input:checked")].map(x => x.value), at: new Date().toISOString()};
   try { await akPut(`cmt/${uid}`, {[rid()]: c}, !!cmts[uid]); cmts[uid] ||= {}; $("cmtT").value = ""; } catch { alert("댓글을 남기지 못했습니다."); } finally { if ($("cmtAdd")) $("cmtAdd").disabled = false; } }
-async function cmtDel(id) { if (!canCmt() || !cmts[uid]?.[id] || !(await askYes("댓글 삭제", "이 댓글을 삭제할까요?", "삭제"))) return; await db.doc(`cmt/${uid}`).update({[id]: {삭제: true}}).catch(() => alert("삭제하지 못했습니다.")); }
+async function cmtDel(id) { if (!canCmt() || !cmts[uid]?.[id] || !(await askYes("댓글 삭제", "이 댓글을 삭제할까요?", "삭제"))) return; await db.doc(`cmt/${uid}`).update({[id]: {삭제: true, 글: "", 받는사람: []}}).catch(() => alert("삭제하지 못했습니다.")); }
 // AI 직원에게 묻기: 공정 정보만 맥락으로 넣는다(예산·금액·연락처·이메일 없음 — 팀장도 보는 화면). 답은 저장하지 않는다
 async function aiAsk() { const t = dlgT, q = $("aiQ").value.trim(), out = $("aiA"), p = P() || {}; if (!t || !q || !sample) return; const i = W().indexOf(t), line = x => `${x.작업}(${x.단계 || "-"}, ${x.시작 || "?"}~${x.종료 || "?"}, ${effStat(x)})`;
   $("aiAsk").disabled = true; out.hidden = false; out.textContent = "CHRONOS가 답을 쓰는 중…";
