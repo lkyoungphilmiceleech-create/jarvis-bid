@@ -444,13 +444,16 @@ async function lease(ref) { if (!ref.acquire) return; for (let i = 0; i < 40; i+
 // 내 것(mine)은 임대·get 뒤에 읽는다 — 기다리는 사이 온 스냅숏이 기준과 내 것에 함께 반영돼야 남의 추가를 내 삭제로 오해하지 않는다. 돌려주는 값 = {L: 보낸 내 것, out: 병합본}
 function mergeSave(path, mine, need) { const run = async () => { if (!db || !admin) return null; const ref = db.doc(path);
     try { if (need && !(await db.doc(need).get()).exists) return null; await lease(ref); const g = await ref.get(), t = g.exists ? structuredClone(g.data()) : null, b = wBase[path], L = mine();
-      if (!L || (!t && b)) return null; mLost = 0; const out = t ? m3(b, L, t) : L; await ref.set(out); wBase[path] = structuredClone(out);
-      if (mLost) toast(`다른 사람이 그 사이 지운 행 ${mLost}개의 수정은 저장하지 못했습니다.`); return {L, out}; } catch { return null; } };
+      if (!L || (!t && b)) return null; mLost = 0; const out = t ? m3(b, L, t) : L;
+      const hb = ref.acquire && setInterval(() => ref.acquire({holder: TABID, ttlMs: 1500}).catch(() => {}), 700); // 쓰기가 늦어지면(느린 망) 임대를 이어서 남이 그 사이 끼어들지 않게
+      try { await ref.set(out); } finally { clearInterval(hb); } wBase[path] = structuredClone(out);
+      lostMsg(); return {L, out}; } catch { return null; } };
   return sQ[path] = (sQ[path] || Promise.resolve()).then(run, run); }
 // 같은 행(id)은 같은 객체를 유지한다 — 열린 창·끌기·AI 작업 중인 행이 새 본문에 끊기지 않게
 const keepObj = (prev = [], next = []) => next.map(it => { const o = prev.find(x => x.id === it.id); if (!o || o === it) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); });
 // 스냅숏이 오면 로컬의 저장 안 된 변경을 그 위에 다시 얹는다(rebase)
-const rebase = (path, mine, v) => { const b = wBase[path]; wBase[path] = structuredClone(v); return mine && sj(mine) !== sj(b) ? m3(b, mine, v) : v; };
+const lostMsg = () => { if (mLost) toast(`다른 사람이 그 사이 지운 행 ${mLost}개의 수정은 저장하지 못했습니다.`); };
+const rebase = (path, mine, v) => { const b = wBase[path]; wBase[path] = structuredClone(v); if (!mine || sj(mine) === sj(b)) return v; mLost = 0; const r = m3(b, mine, v); lostMsg(); return r; };
 // 저장 뒤 로컬 = 병합본 + 보내는 사이 더 고친 것(m3(보낸 것, 지금, 병합본))
 async function saveWbs() { const pid = cur; if (!P() || !wbs[pid]) return false; const r = await mergeSave(`wbs/${pid}`, () => wbs[pid] && {...structuredClone(wbs[pid]), updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!r) return false;
   const now = wbs[pid], v = now ? m3(r.L, now, r.out) : r.out; v.items = keepObj(now?.items, v.items || []); wbs[pid] = v; draw(); return true; }
