@@ -438,27 +438,29 @@ function mArr(b, l, t) {
   return out.map(id => Lm.has(id) && T.has(id) ? m3(B.get(id), Lm.get(id), T.get(id)) : Lm.get(id) || T.get(id));
 }
 const zz = ms => new Promise(res => setTimeout(res, ms));
-async function lease(ref) { if (!ref.acquire) return; for (let i = 0; i < 40; i++) { const r = await ref.acquire({holder: TABID, ttlMs: 3000}).catch(() => ({acquired: true})); if (r.acquired) return;
+async function lease(ref) { if (!ref.acquire) return; for (let i = 0; i < 40; i++) { const r = await ref.acquire({holder: TABID, ttlMs: 1500}).catch(() => ({acquired: true})); if (r.acquired) return;
   await zz(Math.min(1500, Math.max(80, (Date.parse(r.expiresAt) - Date.now()) || 300)) + Math.random() * 120); } } // 임대는 스스로 끝난다(푸는 동작 없음) — 끝날 때까지 기다렸다 다시
-// 경로별로 한 번에 하나씩. need = 먼저 있어야 하는 문서(지워진 프로젝트의 공정·예산을 되살리지 않게). 결과 본문(병합본)을 돌려준다
-function mergeSave(path, local, need) { const run = async () => { if (!db || !admin) return null; const ref = db.doc(path);
-    try { if (need && !(await db.doc(need).get()).exists) return null; await lease(ref); const g = await ref.get(), t = g.exists ? structuredClone(g.data()) : null, b = wBase[path];
-      if (!t && b) return null; mLost = 0; const out = t ? m3(b, local, t) : local; await ref.set(out); wBase[path] = structuredClone(out);
-      if (mLost) toast(`다른 사람이 그 사이 지운 행 ${mLost}개의 수정은 저장하지 못했습니다.`); return out; } catch { return null; } };
+// 경로별로 한 번에 하나씩. need = 먼저 있어야 하는 문서(지워진 프로젝트의 공정·예산을 되살리지 않게).
+// 내 것(mine)은 임대·get 뒤에 읽는다 — 기다리는 사이 온 스냅숏이 기준과 내 것에 함께 반영돼야 남의 추가를 내 삭제로 오해하지 않는다. 돌려주는 값 = {L: 보낸 내 것, out: 병합본}
+function mergeSave(path, mine, need) { const run = async () => { if (!db || !admin) return null; const ref = db.doc(path);
+    try { if (need && !(await db.doc(need).get()).exists) return null; await lease(ref); const g = await ref.get(), t = g.exists ? structuredClone(g.data()) : null, b = wBase[path], L = mine();
+      if (!L || (!t && b)) return null; mLost = 0; const out = t ? m3(b, L, t) : L; await ref.set(out); wBase[path] = structuredClone(out);
+      if (mLost) toast(`다른 사람이 그 사이 지운 행 ${mLost}개의 수정은 저장하지 못했습니다.`); return {L, out}; } catch { return null; } };
   return sQ[path] = (sQ[path] || Promise.resolve()).then(run, run); }
 // 같은 행(id)은 같은 객체를 유지한다 — 열린 창·끌기·AI 작업 중인 행이 새 본문에 끊기지 않게
 const keepObj = (prev = [], next = []) => next.map(it => { const o = prev.find(x => x.id === it.id); if (!o || o === it) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); });
 // 스냅숏이 오면 로컬의 저장 안 된 변경을 그 위에 다시 얹는다(rebase)
 const rebase = (path, mine, v) => { const b = wBase[path]; wBase[path] = structuredClone(v); return mine && sj(mine) !== sj(b) ? m3(b, mine, v) : v; };
-async function saveWbs() { const pid = cur; if (!P() || !wbs[pid]) return false; const L1 = structuredClone(wbs[pid]);
-  const out = await mergeSave(`wbs/${pid}`, {...L1, updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!out) return false;
-  const now = wbs[pid], v = now ? m3(L1, now, out) : out; v.items = keepObj(now?.items, v.items || []); wbs[pid] = v; draw(); return true; }
-async function saveBud() { const pid = cur; if (!P() || !budget[pid]) return false; const L1 = structuredClone(budget[pid]);
-  const out = await mergeSave(`budget/${pid}`, {...L1, updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!out) return false; budget[pid] = budget[pid] ? m3(L1, budget[pid], out) : out; return true; }
+// 저장 뒤 로컬 = 병합본 + 보내는 사이 더 고친 것(m3(보낸 것, 지금, 병합본))
+async function saveWbs() { const pid = cur; if (!P() || !wbs[pid]) return false; const r = await mergeSave(`wbs/${pid}`, () => wbs[pid] && {...structuredClone(wbs[pid]), updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!r) return false;
+  const now = wbs[pid], v = now ? m3(r.L, now, r.out) : r.out; v.items = keepObj(now?.items, v.items || []); wbs[pid] = v; draw(); return true; }
+async function saveBud() { const pid = cur; if (!P() || !budget[pid]) return false; const r = await mergeSave(`budget/${pid}`, () => budget[pid] && {...structuredClone(budget[pid]), updatedAt: new Date().toISOString()}, `pm/${pid}`); if (!r) return false;
+  budget[pid] = budget[pid] ? m3(r.L, budget[pid], r.out) : r.out; return true; }
 // pm: 새 프로젝트만 set, 그 밖은 바꾼 칸만 update(문서가 없으면 거절 — 지운 프로젝트가 되살아나지 않음), 지우기가 섞이면 병합 저장
 const dm = (o, v) => { Object.entries(v).forEach(([k, x]) => { if (isO(x) && isO(o[k])) dm(o[k], x); else o[k] = x; }); return o; }; // update 와 같은 재귀 병합(로컬 반영용)
 const pmUpd = async (p, ch, note) => { if (!db || !admin || !p) return false; try { await db.doc(`pm/${p.id}`).update({...ch, updatedAt: new Date().toISOString()}); dm(p, structuredClone(ch)); if (note) note.textContent = "저장했습니다."; return true; } catch { if (note) note.textContent = "저장하지 못했습니다(그 사이 프로젝트가 지워졌을 수 있습니다)."; return false; } };
-const saveProj = async (p, note) => { const {id, ...r} = p; r.updatedAt = new Date().toISOString(); const out = await mergeSave(`pm/${id}`, r); if (note) note.textContent = out ? "저장했습니다." : "저장하지 못했습니다."; if (out) Object.assign(p, out); return !!out; };
+const saveProj = async (p, note) => { const id = p.id, r = await mergeSave(`pm/${id}`, () => { const {id: _, ...b} = P()?.id === id ? P() : p; return {...structuredClone(b), updatedAt: new Date().toISOString()}; }, `pm/${id}`);
+  if (note) note.textContent = r ? "저장했습니다." : "저장하지 못했습니다."; if (r) Object.assign(projects.find(x => x.id === id) || p, r.out); return !!r; };
 
 // ── 파일 읽기 (PDF·DOCX·HWPX·엑셀·사진). 원본 파일은 저장하지 않고 읽기만 한다
 const libs = {};
