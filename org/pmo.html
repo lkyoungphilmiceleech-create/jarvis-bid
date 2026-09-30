@@ -207,14 +207,14 @@ select option{background:var(--bg2);color:var(--ink)}
 .sheet tfoot td:first-child{z-index:3}
 .sheet th:first-child,.sheet td:first-child{white-space:nowrap}
 .sheet td.neg{color:var(--stop);font-weight:700}
-table.ct td{overflow-wrap:anywhere}
+table.ct td{overflow-wrap:anywhere}table.ct tr[data-cte]{cursor:default}table.ct .ctq input,table.ct .ctq select{width:100%;min-width:0;padding:3px 5px;font-size:12px}table.ct input.bad{border-color:var(--stop);box-shadow:0 0 0 1px var(--stop)}
 .tag.stop{color:var(--stop);border-color:var(--stop)}
 /* 장부 4칸(가로 스크롤 없음), 휴대폰은 카드 */
 table.lt{width:100%}table.lt td{vertical-align:top;overflow-wrap:anywhere}table.lt td.num,table.lt th.num{text-align:right;white-space:nowrap}table.lt td:first-child{white-space:nowrap}
 table.lt .sm{display:block;font-size:11px;color:var(--muted)}table.lt .sm.one{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px}
 @media (max-width:600px){table.lt thead{display:none}table.lt,table.lt tbody,table.lt tr,table.lt td{display:block}table.lt tr{border-bottom:1px solid var(--line);padding:6px 8px}table.lt td{border:0;padding:1px 0}
   table.lt td.num{text-align:left;white-space:normal}table.lt .sm.one{max-width:100%}}
-@media (max-width:600px){table.ct thead{display:none}table.ct,table.ct tbody,table.ct tr,table.ct td{display:block}table.ct tr{border-bottom:1px solid var(--line);padding:6px 8px}table.ct td{border:0;padding:1px 0}
+@media (max-width:600px){table.ct thead{display:none}table.ct,table.ct tbody,table.ct tfoot,table.ct tr,table.ct td{display:block}table.ct tr{border-bottom:1px solid var(--line);padding:6px 8px}table.ct td{border:0;padding:1px 0}
   table.ct td[data-l]::before{content:attr(data-l);display:inline-block;min-width:70px;font-size:11px;color:var(--muted)}table.ct td:empty{display:none}}
 /* 예산표 4칸(가로 스크롤 없음), 휴대폰은 항목별 카드 */
 .sheet table.bt{min-width:0;width:100%}.sheet .bt td:first-child{white-space:normal}
@@ -963,7 +963,8 @@ function budPanel(id) {
   $("dlg").onclose = null; $("dlg").returnValue = ""; $("dlg").classList.add("side"); $("dlg").showModal();
 }
 const dlgThen = f => { if ($("dlg").open) { $("dlg").close(); setTimeout(f); } else f(); }; // 패널을 닫고 다른 창을 연다
-document.addEventListener("dblclick", e => { if (admin && !e.target.closest?.("button")) { const rt = e.target.closest?.("#tab-bud tr[data-rce]"); if (rt) return editRcv(rt.dataset.rce); if (e.target.closest?.("#rcvCard")) return editRcv(""); } // 수금: 카드 = 새 입력, 행 = 수정
+document.addEventListener("dblclick", e => { const ct = !e.target.closest?.("button, a, input, select") && e.target.closest?.("#tab-ct tr[data-cte]"); if (ct) { const x = pcon.find(y => y.id === ct.dataset.cte); if (x && canCt(x)) editCt(x); return; }
+  if (admin && !e.target.closest?.("button")) { const rt = e.target.closest?.("#tab-bud tr[data-rce]"); if (rt) return editRcv(rt.dataset.rce); if (e.target.closest?.("#rcvCard")) return editRcv(""); } // 수금: 카드 = 새 입력, 행 = 수정
   const tr = e.target.closest?.("#tab-bud tr[data-bid]"); if (!tr || !admin || e.target.closest(".hd")) return; clearTimeout(bClickT); editBudRow(tr.dataset.bid); });
 // 산출내역서 행 끌기(관리자, ⋮⋮): budget.rows 순서만 바꾸고 id 는 그대로. 다른 구분으로 옮기면 그 구분을 따른다
 document.addEventListener("pointerdown", e => { if (!admin || tab !== "bud" || e.button) return; const tr = e.target.closest?.("#tab-bud .hd")?.closest("tr[data-bid]"); if (!tr) return; e.preventDefault(); bdrag = {id: tr.dataset.bid, tr}; tr.classList.add("drag"); });
@@ -1305,6 +1306,16 @@ const telA = v => v ? (okTel(v) ? `<a href="tel:${esc(v.replace(/[^\d+]/g, ""))}
 const mailA = v => v ? (okMail(v) ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : esc(v)) : "";
 // 연락처 pcon/{id}: 참가기업·협업사. 관제실을 공유받은 사람 모두 읽음(db 규칙 interact). 추가·수정 버튼은 관리자·이 프로젝트 담당 PM 에게만(화면 제한 — db 규칙은 interact), 내려받기는 관리자만
 const CTK = ["참가기업", "협업사"], CTF = [["분야", "분야"], ["소속", "소속"], ["성명", "성명"], ["직책", "직책"], ["이메일", "이메일"], ["연락처1", "연락처1 (유선)"], ["연락처2", "연락처2 (모바일)"]];
+let ctDraft = {}, ctQMsg = "";
+// 빠른 입력 줄: Enter·[추가] → ctBad 검사 → 저장 후 줄을 비움. 틀린 칸은 빨간 테두리
+async function ctQuick() { if (!db || !canCt() || !P()) return; const n = {pid: cur, 구분: CTK.includes(ctDraft.구분) ? ctDraft.구분 : ctf.k || "참가기업"}; CTF.forEach(([k]) => n[k] = String(ctDraft[k] ?? "").trim());
+  const bad = ctBad(n), f = !n.소속 && !n.성명 ? "소속" : n.이메일 && !okMail(n.이메일) ? "이메일" : ["연락처1", "연락처2"].find(k => n[k] && !okTel(n[k]));
+  document.querySelectorAll("#tab-ct [data-cq].bad").forEach(el => el.classList.remove("bad"));
+  if (bad) { const el = document.querySelector(`#tab-ct [data-cq="${f}"]`); if (el) { el.classList.add("bad"); el.setAttribute("aria-invalid", "true"); el.focus(); } ctQMsg = bad; if ($("ctQNote")) $("ctQNote").textContent = bad; return; }
+  try { await db.collection("pcon").add({...n, 비고: "", at: new Date().toISOString(), by: uid || ""}); ctDraft = {구분: n.구분}; ctQMsg = `${n.소속 || ""} ${n.성명 || ""} 추가했습니다.`; drawCt(true); document.querySelector('#tab-ct [data-cq="분야"]')?.focus(); }
+  catch { ctQMsg = "저장하지 못했습니다."; if ($("ctQNote")) $("ctQNote").textContent = ctQMsg; } }
+async function ctDel(id) { const x = pcon.find(y => y.id === id); if (!x || !canCt(x) || !db) return;
+  if (await askYes("연락처 삭제", `${x.소속 || ""} ${x.성명 || ""} 연락처를 삭제할까요?`, "삭제")) await db.doc(`pcon/${id}`).delete().catch(() => alert("삭제하지 못했습니다.")); }
 let pcon = [], ctf = {k: "참가기업", q: "", all: false}, cup = null, ctRe = false, ctRows = [];
 const canCt = x => !!db && (admin || ((!x || x.pid === cur) && amPM()));
 const ctKey = x => [nk(x.소속), nk(x.성명), nk(x.이메일)].join("|");
@@ -1318,9 +1329,11 @@ function drawCt(force) {
     <div class="row"><h2>연락처</h2><div class="seg" role="group" aria-label="구분">${[["참가기업", "참가기업"], ["협업사", "협업사"], ["", "전체"]].map(([v, l]) => `<button type="button" data-ctk="${v}" aria-pressed="${ctf.k === v}">${l}</button>`).join("")}</div>
       <label class="chk"><input type="checkbox" id="ctAll"${ctf.all ? " checked" : ""}> 전체 프로젝트</label><input type="search" id="ctQ" placeholder="소속·성명·분야 검색" value="${esc(ctf.q)}" aria-label="연락처 검색" style="flex:1;min-width:160px">
       ${p && canCt() ? '<button class="btn primary" type="button" id="ctAdd">+ 연락처 추가</button>' : ""}${admin ? '<button class="btn" type="button" id="ctXlsx">엑셀 내려받기</button>' : ""}</div>
-    ${p && canCt() ? dropBox("ct", "연락처 엑셀(XLSX·XLS·CSV, 여러 행)", ".xlsx,.xls,.csv", false, "머리 줄(구분·분야·소속·성명·직책·이메일·연락처1·연락처2·비고)을 맞춰 읽고, 확인 후 추가합니다. 소속+성명+이메일이 같은 줄은 건너뜁니다.") + `<div id="ctStage">${cup?.pid === cur ? cupHtml() : ""}</div>` : ""}
+    ${p && canCt() ? '<p class="note"><b>엑셀로 여러 명 한 번에</b> · 아래 표 맨 끝 줄에서 한 명씩 직접 입력 (행을 두 번 누르면 수정)</p>' + dropBox("ct", "연락처 엑셀(XLSX·XLS·CSV, 여러 행)", ".xlsx,.xls,.csv", false, "머리 줄(구분·분야·소속·성명·직책·이메일·연락처1·연락처2·비고)을 맞춰 읽고, 확인 후 추가합니다. 소속+성명+이메일이 같은 줄은 건너뜁니다.") + `<div id="ctStage">${cup?.pid === cur ? cupHtml() : ""}</div>` : ""}
     <div class="tw"><table class="ct"><thead><tr>${ctf.all ? "<th>프로젝트</th>" : ""}<th>구분</th><th>분야</th><th>소속</th><th>성명</th><th>직책</th><th>이메일</th><th>연락처1</th><th>연락처2</th><th></th></tr></thead><tbody>
-    ${rows.map(x => `<tr>${ctf.all ? `<td data-l="프로젝트">${esc(pn(x.pid))}</td>` : ""}<td data-l="구분">${esc(x.구분)}</td><td data-l="분야">${esc(x.분야)}</td><td data-l="소속">${esc(x.소속)}</td><td data-l="성명"><b>${esc(x.성명)}</b></td><td data-l="직책">${esc(x.직책)}</td><td data-l="이메일">${mailA(x.이메일)}</td><td data-l="연락처1">${telA(x.연락처1)}</td><td data-l="연락처2">${telA(x.연락처2)}</td><td>${canCt(x) ? `<button class="btn" type="button" data-cte="${esc(x.id)}">수정</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="10" class="empty">연락처가 없습니다.</td></tr>'}</tbody></table></div>
+    ${rows.map(x => `<tr data-cte="${esc(x.id)}"${canCt(x) ? ' title="두 번 누르면 수정"' : ""}>${ctf.all ? `<td data-l="프로젝트">${esc(pn(x.pid))}</td>` : ""}<td data-l="구분">${esc(x.구분)}</td><td data-l="분야">${esc(x.분야)}</td><td data-l="소속">${esc(x.소속)}</td><td data-l="성명"><b>${esc(x.성명)}</b></td><td data-l="직책">${esc(x.직책)}</td><td data-l="이메일">${mailA(x.이메일)}</td><td data-l="연락처1">${telA(x.연락처1)}</td><td data-l="연락처2">${telA(x.연락처2)}</td><td>${canCt(x) ? `<button class="btn op x" type="button" data-ctx="${esc(x.id)}" aria-label="연락처 삭제">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="10" class="empty">연락처가 없습니다.</td></tr>'}</tbody>
+    ${p && canCt() ? `<tfoot><tr class="ctq">${ctf.all ? "<td></td>" : ""}<td data-l="구분"><select data-cq="구분" aria-label="구분">${opt(CTK, ctDraft.구분 || ctf.k || "참가기업")}</select></td>${CTF.map(([k, l]) => `<td data-l="${l}"><input data-cq="${k}" value="${esc(ctDraft[k] ?? "")}" placeholder="${l}" aria-label="${l}" maxlength="200"${k === "이메일" ? ' type="email"' : /연락처/.test(k) ? ' type="tel"' : ""}></td>`).join("")}<td><button class="btn primary op" type="button" id="ctQAdd">추가</button></td></tr>
+      <tr><td colspan="10" class="note" id="ctQNote" role="status">${esc(ctQMsg)}</td></tr></tfoot>` : ""}</table></div>
     <details class="fold"><summary>별도 페이지 (관리자·PM 전용)</summary><div class="row"><h2>참가기업 연락처</h2><span class="note">참가기업 연락처는 프로젝트별 페이지에서 관리합니다. 그 프로젝트의 담당 PM·관리자만 공유받습니다.</span></div>
     <p>${!p ? '<span class="note">프로젝트를 먼저 고르세요.</span>' : /^https:\/\/claude\.ai\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(p.이름)} 연락처 페이지 열기</a>` : `<span class="note">아직 없음 — JARVIS 에게 '${esc(p.이름)} 연락처 페이지 만들어줘'라고 요청해 주세요.</span>`}</p>
     <div class="row"><h2>국내외 협업사</h2><span class="note">국내외 협업사 DB(연락처·협업 이력)는 관리자·담당 PM 만 공유받는 별도 페이지에서 관리합니다.</span></div></details>`;
@@ -1418,7 +1431,8 @@ document.addEventListener("click", async e => {
   if (t.id === "lReset") { lf = {...LF0}; drawLed(true); }
   if (t.dataset.ctk !== undefined) { ctf.k = t.dataset.ctk; drawCt(true); }
   if (t.id === "ctAdd") editCt(null);
-  if (t.dataset.cte) editCt(pcon.find(x => x.id === t.dataset.cte));
+  if (t.dataset.ctx) ctDel(t.dataset.ctx);
+  if (t.id === "ctQAdd") ctQuick();
   if (t.id === "cCommit") ctCommit();
   if (t.id === "cCancel") { cup = null; drawCt(true); }
   if (t.id === "ctXlsx" && admin) saveXlsx(`연락처_${P()?.이름 || "전체"}_${today()}.xlsx`, [["연락처", [["프로젝트", "구분", "분야", "소속", "성명", "직책", "이메일", "연락처1", "연락처2", "비고"], ...ctRows.map(x => [projects.find(p => p.id === x.pid)?.이름 || x.pid, x.구분, x.분야, x.소속, x.성명, x.직책, x.이메일, x.연락처1, x.연락처2, x.비고])]]]);
@@ -1475,8 +1489,10 @@ const onFiles = {ct: async fs => { if (!window.XLSX) { alert("엑셀 읽기 도�
     if (im.length) await ledImgs(im, pre); }};
 ["dragenter", "dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest?.("[data-drop]"); if (!z) return; e.preventDefault();
   z.classList.toggle("on", ev === "dragenter" || ev === "dragover"); if (ev === "drop" && e.dataTransfer?.files?.length) onFiles[z.dataset.drop]([...e.dataTransfer.files]); }));
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.dataset?.cq && !e.isComposing) { e.preventDefault(); ctQuick(); } });
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "attUrl") { e.preventDefault(); attLink(); } });
 document.addEventListener("input", e => { const t = e.target, d = t.dataset; if (d.pf) { setDirty = cur; pMsg = ""; }
+  if (d.cq) { ctDraft[d.cq] = t.value; t.classList.remove("bad"); t.removeAttribute("aria-invalid"); }
   if (t.id === "ctQ") { ctf.q = t.value; const pos = t.selectionStart; drawCt(true); $("ctQ").focus(); $("ctQ").setSelectionRange(pos, pos); }
   if (d.lff && t.type === "search") { lf[d.lff] = t.value; const pos = t.selectionStart; drawLed(true); const el = document.querySelector(`[data-lff="${d.lff}"]`); el.focus(); el.setSelectionRange(pos, pos); }
   if (d.lu && lup) { const [i, k] = d.lu.split("|"), x = lup.rows[+i]; if (!x) return; // 확인 목록 칸: 다시 그리지 않고 값만 담는다
