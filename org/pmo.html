@@ -550,9 +550,9 @@ function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const fk = fa?.closest?.("#tab-wbs") && fa.dataset?.wi, fs = fk && fa.selectionStart, sx = document.querySelector("#tab-wbs .wt")?.scrollTop;
   if (fk && admin && fa.value !== "+add") { const [t, k] = wFind(fk); if (t) wPut(t, k, fa.value); }
   const w = myW(), late = lateList(), reps = w.flatMap(t => (t.보고 || []).map((r, j) => ({t, i: W().indexOf(t), j, r})));
-  $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span>${mineSeg()}${canAsk() ? '<button class="btn" type="button" id="akNew">✉ 업무 요청</button>' : ""}<span style="flex:1"></span>
+  $("tab-wbs").innerHTML = `<div class="row"><h2>공정일정표</h2><span class="saved" id="wSaved" role="status">${esc(wSaved)}</span>${mineSeg()}${whoSel()}${canAsk() ? '<button class="btn" type="button" id="akNew">✉ 업무 요청</button>' : ""}<span style="flex:1"></span>
       <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span><button class="btn" type="button" id="wbsCsv">엑셀 저장</button><button class="btn" type="button" id="wCal" aria-pressed="${wCal}">${wCal ? "▦ 간트 표" : "📅 월력"}</button></div>
-    ${healthHtml()}
+    ${healthHtml()}${loadHtml()}
     ${late.length ? `<div class="alarm" role="alert">⚠ 지연 ${late.length}건 · 지연 보고 미작성 ${new Set(late.filter(x => !x.t.보고?.some(r => !r.해결)).map(x => x.i)).size}건<button class="btn adm" type="button" id="lateOpen">확인·알림</button></div>` : ""}
     <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [열기]를 누르면 세부 내용(과업내용·하위 할 일·자료·지연 보고)을 봅니다. 오른쪽 막대는 오늘 이후 주 단위 일정입니다." : "표에서 바로 고치면 자동 저장됩니다. [열기]를 누르면 세부 패널(과업내용·하위 할 일·자료·지연 보고·작업 요청)이 열립니다. ⋮⋮ 를 끌면 순서, 막대를 끌면 기간(가운데)·시작/마감(양 끝)이 주 단위로 바뀝니다."}</p>
     ${askHtml()}
@@ -598,7 +598,7 @@ let calM = today().slice(0, 7);
 function calHtml(w) {
   const [y, mo] = calM.split("-").map(Number), first = new Date(y, mo - 1, 1), d = new Date(first.getTime() - (first.getDay() + 6) % 7 * 864e5), ev = {}, cells = [];
   w.forEach(t => { if (t.종료) (ev[t.종료] ||= []).push(`<button type="button" class="ev ${effStat(t)}" data-t="${W().indexOf(t)}" title="${esc(`${t.작업} · ${who(t.담당)}`)}">${esc(t.작업 || "(이름 없음)")}<br><small>${esc(who(t.담당))}</small></button>`); });
-  AK().filter(a => a.pid === cur && a.마감 && OPEN(a) && (!isMine() || recv(a))).forEach(a => (ev[a.마감] ||= []).push(`<span class="ev ask" title="${esc(`업무 요청 · ${a.제목} → ${pn(a.to)}`)}">✉ ${esc(a.제목)}<br><small>→ ${esc(pn(a.to))}</small></span>`));
+  AK().filter(a => a.pid === cur && a.마감 && OPEN(a) && (!isMine() || recv(a)) && (!whoId() || a.to === whoId())).forEach(a => (ev[a.마감] ||= []).push(`<span class="ev ask" title="${esc(`업무 요청 · ${a.제목} → ${pn(a.to)}`)}">✉ ${esc(a.제목)}<br><small>→ ${esc(pn(a.to))}</small></span>`));
   do { for (let k = 0; k < 7; k++) { const x = d8(d); cells.push(`<div class="cd${d.getMonth() !== mo - 1 ? " out" : ""}${x === today() ? " today" : ""}"><span class="dn">${d.getDate()}</span>${(ev[x] || []).slice(0, 3).join("")}${(ev[x] || []).length > 3 ? `<span class="note">+${ev[x].length - 3}건</span>` : ""}</div>`); d.setDate(d.getDate() + 1); } } while (d.getMonth() === mo - 1);
   return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료 · ✉ = 업무 요청</span></div>
     <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`;
@@ -607,7 +607,7 @@ function calHtml(w) {
 function drawSch() {
   const p = P(); if (!p) { $("tab-sch").innerHTML = '<p class="empty">프로젝트를 먼저 고르세요.</p>'; return; }
   const w = myW(), {ps} = periods(w), dis = admin ? "" : " disabled";
-  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2>${mineSeg()}</div><p class="note">오늘(${today()})이 든 주부터 보여 줍니다(지난 주 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
+  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2>${mineSeg()}${whoSel()}</div>${loadHtml()}<p class="note">오늘(${today()})이 든 주부터 보여 줍니다(지난 주 열 없음). ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
     <div class="wt"><table class="gt"><thead><tr><th style="min-width:220px">작업 · 체크리스트</th><th style="min-width:110px">담당</th><th>상태</th>${tlHead(ps)}</tr></thead><tbody>${w.map(t => { const st = effStat(t);
       return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><span class="note">${esc(t.단계)} · ${esc(mw(t.시작))} ~ ${esc(mw(t.종료))}</span><br><button class="lnk" type="button" data-t="${W().indexOf(t)}">${esc(t.작업 || "(이름 없음)")}</button></td><td>${esc(who(t.담당))}</td><td><span class="st ${st}">${SL(st)}</span></td>${tlCells(t, ps)}</tr>`
       + (t.하위 || []).map((s, j) => { const ss = subStat(s); return `<tr class="sub"><td><label class="chk"><input type="checkbox" data-sc="${esc(t.id)}|${j}"${s.완료 ? " checked" : ""}${dis}> ${esc(s.할일)}</label></td><td class="note">${esc(s.담당 ? who(s.담당) : "")}</td><td>${s.마감 ? `<span class="st ${ss}">${esc(mw(s.마감))}</span>` : ""}</td>${ps.map(x => `<td class="tl${s.마감 && s.마감 >= x.s && s.마감 <= x.e ? " dot " + ss : ""}"></td>`).join("")}</tr>`; }).join(""); }).join("")
@@ -779,12 +779,25 @@ async function requestTask(t) {
 // 위조 방지: 응답은 그 요청의 받는 사람(people[to].uid) 문서에 있는 것만 믿는다. 다른 사람 askr 에 같은 요청id 가 있어도 무시한다
 const AK = () => Object.entries(askQ).flatMap(([from, m]) => Object.entries(m || {}).filter(([id, v]) => v && typeof v === "object" && !v.취소 && !id.includes(":")).map(([id, v]) => {
   const ru = people.find(x => x.id === v.to)?.uid, r = ru ? askR[ru]?.[`${from}:${id}`] : null, st = ["수락", "완료", "반려"].includes(r?.상태) ? r.상태 : "요청";
-  return {...v, id, from, 상태: st, 사유: st === "반려" ? r.사유 || "" : "", 처리: st === "요청" ? "" : r.처리 || ""}; }));
+  return {...v, id, from, 상태: st, 사유: st === "반려" ? r.사유 || "" : "", 처리: st === "요청" ? "" : r.처리 || "", by: st === "요청" ? "" : r.by || ""}; }));
 // '내 업무' 보기(담당이 나인 작업 + 받은·보낸 요청)는 화면 필터일 뿐 보안이 아니다(공유받은 사람은 db 전체를 읽는다)
 let mineV = false; try { mineV = localStorage.getItem("pmo-mine") === "1"; } catch {}
 const isMine = () => mineV && !!me();
-const myW = () => isMine() ? W().filter(t => t.담당?.t === "real" && t.담당.id === me().id) : W();
-const mineSeg = () => me() ? `<div class="seg" role="group" aria-label="보기"><button type="button" data-mine="0" aria-pressed="${!isMine()}">전체</button><button type="button" data-mine="1" aria-pressed="${isMine()}">내 업무</button></div>` : "";
+// 담당자별 보기('전체'에서만): 표·간트·월력이 같은 myW() 를 쓰고, 행 번호는 늘 W().indexOf(t)
+let whoF = "", loadOpen = false;
+const whoId = () => !isMine() && PP().some(x => x.id === whoF) ? whoF : "";
+const byWho = id => W().filter(t => t.담당?.t === "real" && t.담당.id === id);
+const myW = () => isMine() ? byWho(me().id) : whoId() ? byWho(whoId()) : W();
+const PPn = () => [...PP()].sort((a, b) => String(a.이름).localeCompare(String(b.이름), "ko"));
+const whoSel = () => isMine() ? "" : `<select id="whoF" aria-label="담당자별 보기" style="max-width:100%">${opt(PPn().map(x => [x.id, x.이름 || "?"]), whoId(), "전체 담당자")}</select>`;
+// 사람별 업무량: 건수·진행·지연·7일 안 마감·받은 요청만(개인 점수·순위 없음, 이름순). 공정 정보만 쓴다
+function loadHtml() { if (isMine() || !PP().length) return ""; const d7 = addW(today(), 1);
+  return `<details class="fold" id="wLoad"${loadOpen ? " open" : ""}><summary>사람별 업무량</summary><div class="tw"><table><thead><tr><th>이름</th><th>담당</th><th>진행 중</th><th>지연</th><th>7일 안 마감</th><th>받은 요청</th></tr></thead><tbody>${PPn().map(x => { const w = byWho(x.id), st = w.map(effStat);
+    return `<tr><td><button class="lnk" type="button" data-whof="${esc(x.id)}">${esc(x.이름 || "?")}</button></td><td>${w.length}</td><td>${st.filter(v => ["요청", "진행", "검토"].includes(v)).length}</td><td>${st.filter(v => v === "지연").length}</td><td>${w.filter(t => t.상태 !== "완료" && t.종료 >= today() && t.종료 <= d7).length}</td><td>${AK().filter(a => a.pid === cur && a.to === x.id && OPEN(a)).length}</td></tr>`; }).join("")}</tbody></table></div></details>`; }
+// 페이지 안 알림: 마지막 확인(pmo-seen) 뒤 받은 요청(새것·남이 바꾼 상태)과 보낸 요청의 상대 응답. 내가 한 응답(by == 나)은 빼고, 이 프로젝트만 센다
+let seen = ""; try { seen = localStorage.getItem("pmo-seen") || ""; } catch {}
+const bellN = () => AK().filter(a => a.pid === cur && ((recv(a) && a.at > seen) || ((recv(a) || a.from === uid) && a.처리 > seen && a.by !== uid))).length;
+const mineSeg = () => me() ? `<div class="seg" role="group" aria-label="보기"><button type="button" data-mine="0" aria-pressed="${!isMine()}">전체</button><button type="button" data-mine="1" aria-pressed="${isMine()}">내 업무</button></div><button class="btn" type="button" id="bell" aria-label="새 알림 ${bellN()}건 — 내 업무 보기">🔔 ${bellN()}</button>` : "";
 const canAsk = () => !!db && !!uid && askOK && (admin || !!me()); // uid 가 없으면 자기 askq 문서가 없으므로, askq 를 받기 전에는 set 덮어쓰기를 피하려고 숨긴다
 const OPEN = a => a.상태 === "요청" || a.상태 === "수락";
 const recv = a => !!uid && people.find(x => x.id === a.to)?.uid === uid;
@@ -826,7 +839,7 @@ async function askDo(from0, id, k) {
     await db.doc(`askq/${from}`).update({[id]: {...q, tid}}).then(() => toast("공정일정에 넣었습니다."), () => alert("저장하지 못했습니다.")); draw(); return; }
   if (!ru || !(admin || recv(a)) || !["수락", "완료", "반려"].includes(k)) return;
   const why = k === "반려" ? prompt("반려 사유 (한 줄)") : ""; if (why === null) return;
-  await akPut(`askr/${ru}`, {[`${from}:${id}`]: {상태: k, 처리: new Date().toISOString(), 사유: k === "반려" ? why.trim().slice(0, 200) : ""}}, !!askR[ru]).catch(() => alert("저장하지 못했습니다."));
+  await akPut(`askr/${ru}`, {[`${from}:${id}`]: {상태: k, 처리: new Date().toISOString(), 사유: k === "반려" ? why.trim().slice(0, 200) : "", by: uid || ""}}, !!askR[ru]).catch(() => alert("저장하지 못했습니다."));
 }
 async function repAI() {
   const t = dlgT, note = $("dNote"); if (!t) return;
@@ -1158,10 +1171,12 @@ document.addEventListener("click", async e => {
   if (t.id === "genWbs") genWbs();
   if (t.dataset.mine) { mineV = t.dataset.mine === "1"; try { localStorage.setItem("pmo-mine", t.dataset.mine); } catch {} draw(); }
   if (t.id === "akNew") askDlg("");
+  if (t.dataset.whof) { whoF = t.dataset.whof; draw(); }
+  if (t.id === "bell") { seen = new Date().toISOString(); mineV = true; try { localStorage.setItem("pmo-seen", seen); localStorage.setItem("pmo-mine", "1"); } catch {} draw(); }
   if (t.dataset.ak) { const [id, k] = t.dataset.ak.split("|"); askDo(t.dataset.akf, id, k); }
   if (t.id === "wCal") { wCal = !wCal; drawWbs(true); }
   if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawWbs(true); }
-  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; const id = wNew(wStg); wCal = false; drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
+  if (t.id === "wAdd" && admin) { wStg = $("wStg").value; whoF = ""; /* 새 행(담당 없음)이 필터에 가려지지 않게 */ const id = wNew(wStg); wCal = false; drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
   if (t.id === "chkLate") checkLate();
   if (t.id === "lateOpen") lateAlert(true);
   if (t.id === "lateMail") lateMail();
@@ -1189,9 +1204,11 @@ document.addEventListener("click", async e => {
   if (t.dataset.son) assign(t.dataset.son);
   if (t.dataset.sun) { const u = people.find(x => x.id === t.dataset.sun); if (u && confirm(`${u.이름}님을 이 프로젝트에서 배치 해제할까요?`) && db && admin) await db.doc(`people/${u.id}`).delete().catch(() => alert("해제하지 못했습니다.")); }  if (t.dataset.pp) editPpl(people.find(x => x.id === t.dataset.pp));
 });
+document.addEventListener("toggle", e => { if (e.target.id === "wLoad") loadOpen = e.target.open; }, true);
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.dataset.pf) setDirty = cur;
+  if (t.id === "whoF") { whoF = t.value; draw(); return; }
   if (t.dataset.wi && admin && t.value === "+add") { const [x] = wFind(t.dataset.wi); t.blur(); drawWbs(); if (x) pickStaff(x.id); return; }
   if (t.dataset.sc && admin) { const [x, j] = wFind(t.dataset.sc), sb = x?.하위?.[+j]; if (!sb) return; sb.완료 = t.checked; sb.완료일 = t.checked ? today() : ""; wSave(0); draw(); }
   if (t.dataset.wi && admin) { const [x, k] = wFind(t.dataset.wi); if (!x) return; wPut(x, k, t.value); wSave(0); if (t.tagName === "SELECT" || t.type === "date") { drawWbs(true); drawTop(); } }
