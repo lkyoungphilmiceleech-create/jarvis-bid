@@ -273,7 +273,7 @@ const tick = () => $("clock").textContent = new Date().toLocaleTimeString("en-GB
 
 const STAT = ["대기", "요청", "진행", "검토", "완료", "지연"];
 const TAX = ["과세", "영세"];
-let db = null, sample = null, mcp = null, downloads = null, admin = null, uid = null, files = [], preqs = [], asks = []; // admin: null=확인 전, false=팀장(공정·지표만)
+let db = null, sample = null, mcp = null, downloads = null, admin = null, uid = null, files = [], preqs = [], askQ = {}, askR = {}; // admin: null=확인 전, false=팀장(공정·지표만)
 let projects = [], people = [], staff = [], wbs = {}, budget = {}, ledger = [], cur = null, tab = "list"; // 첫 화면은 프로젝트 목록(마지막으로 본 탭이 있으면 그 탭)
 try { cur = localStorage.getItem("pmo-proj"); tab = localStorage.getItem("pmo-tab") || "list"; } catch {}
 const P = () => projects.find(p => p.id === cur);
@@ -598,7 +598,7 @@ let calM = today().slice(0, 7);
 function calHtml(w) {
   const [y, mo] = calM.split("-").map(Number), first = new Date(y, mo - 1, 1), d = new Date(first.getTime() - (first.getDay() + 6) % 7 * 864e5), ev = {}, cells = [];
   w.forEach(t => { if (t.종료) (ev[t.종료] ||= []).push(`<button type="button" class="ev ${effStat(t)}" data-t="${W().indexOf(t)}" title="${esc(`${t.작업} · ${who(t.담당)}`)}">${esc(t.작업 || "(이름 없음)")}<br><small>${esc(who(t.담당))}</small></button>`); });
-  asks.filter(a => a.pid === cur && a.마감 && OPEN(a) && (!isMine() || recv(a))).forEach(a => (ev[a.마감] ||= []).push(`<span class="ev ask" title="${esc(`업무 요청 · ${a.제목} → ${pn(a.to)}`)}">✉ ${esc(a.제목)}<br><small>→ ${esc(pn(a.to))}</small></span>`));
+  AK().filter(a => a.pid === cur && a.마감 && OPEN(a) && (!isMine() || recv(a))).forEach(a => (ev[a.마감] ||= []).push(`<span class="ev ask" title="${esc(`업무 요청 · ${a.제목} → ${pn(a.to)}`)}">✉ ${esc(a.제목)}<br><small>→ ${esc(pn(a.to))}</small></span>`));
   do { for (let k = 0; k < 7; k++) { const x = d8(d); cells.push(`<div class="cd${d.getMonth() !== mo - 1 ? " out" : ""}${x === today() ? " today" : ""}"><span class="dn">${d.getDate()}</span>${(ev[x] || []).slice(0, 3).join("")}${(ev[x] || []).length > 3 ? `<span class="note">+${ev[x].length - 3}건</span>` : ""}</div>`); d.setDate(d.getDate() + 1); } } while (d.getMonth() === mo - 1);
   return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료 · ✉ = 업무 요청</span></div>
     <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`;
@@ -772,26 +772,31 @@ async function requestTask(t) {
   t.상태 = "요청"; t.요청 = {at: new Date().toISOString(), tag}; /* wbs 는 팀장도 읽으므로 이메일은 남기지 않는다 */ t.기록.push({at: new Date().toISOString(), 내용: `${u.이름}에게 요청 — ${log.join(", ")}`});
   wn(`${u.이름}에게 요청했습니다: ${log.join(", ")}`); await saveWbs(); draw();
 }
-// ── 업무 요청 asks/{id}: 관리자·투입 인력이 이 프로젝트 인력에게. 받은 사람 수락·완료·반려, 요청자 취소, 관리자 전부 — 화면 판단, db 규칙은 interact
+// ── 업무 요청: 보낸 요청 askq/{요청자 uid} = {요청id: {pid, tid, fromP, to, 제목, 내용, 마감, 유형, at}}, 응답 askr/{받는 사람 uid} = {요청id: {상태, 사유, 처리}}
+// db 규칙({self})으로 본인 문서만 쓰기 — 요청자는 자기 askq, 받은 사람은 자기 askr. 관리자(admin)는 prefix 규칙으로 누구 문서든 대신 쓴다
+// 위조 방지: 응답은 그 요청의 받는 사람(people[to].uid) 문서에 있는 것만 믿는다. 다른 사람 askr 에 같은 요청id 가 있어도 무시한다
+const AK = () => Object.entries(askQ).flatMap(([from, m]) => Object.entries(m || {}).filter(([, v]) => v && typeof v === "object").map(([id, v]) => {
+  const ru = people.find(x => x.id === v.to)?.uid, r = ru ? askR[ru]?.[id] : null, st = ["수락", "완료", "반려"].includes(r?.상태) ? r.상태 : "요청";
+  return {...v, id, from, 상태: st, 사유: st === "반려" ? r.사유 || "" : "", 처리: st === "요청" ? "" : r.처리 || ""}; }));
 // '내 업무' 보기(담당이 나인 작업 + 받은·보낸 요청)는 화면 필터일 뿐 보안이 아니다(공유받은 사람은 db 전체를 읽는다)
 let mineV = false; try { mineV = localStorage.getItem("pmo-mine") === "1"; } catch {}
 const isMine = () => mineV && !!me();
 const myW = () => isMine() ? W().filter(t => t.담당?.t === "real" && t.담당.id === me().id) : W();
 const mineSeg = () => me() ? `<div class="seg" role="group" aria-label="보기"><button type="button" data-mine="0" aria-pressed="${!isMine()}">전체</button><button type="button" data-mine="1" aria-pressed="${isMine()}">내 업무</button></div>` : "";
-const canAsk = () => !!db && (admin || !!me());
+const canAsk = () => !!db && !!uid && (admin || !!me()); // uid 가 없으면 자기 askq 문서가 없으므로 요청 버튼을 숨긴다
 const OPEN = a => a.상태 === "요청" || a.상태 === "수락";
 const recv = a => !!uid && people.find(x => x.id === a.to)?.uid === uid;
 const pn = id => people.find(x => x.id === id)?.이름 || (id ? "?" : "관리자");
 const AST = {요청: "요청", 수락: "진행", 완료: "완료", 반려: "지연"}; // 상태 → .st 색
 function akRow(a) {
-  const r = admin || recv(a), b = (k, l, c = "") => `<button class="btn${c}" type="button" data-ak="${esc(a.id)}|${k}">${l}</button>`, late = OPEN(a) && a.마감 && a.마감 < today();
+  const r = (admin && !!people.find(x => x.id === a.to)?.uid) || recv(a), b = (k, l, c = "") => `<button class="btn${c}" type="button" data-ak="${esc(a.id)}|${k}">${l}</button>`, late = OPEN(a) && a.마감 && a.마감 < today();
   return `<div class="rep${OPEN(a) ? "" : " done"}"><div class="row"><span class="tag${a.유형 === "디자인" ? " dz" : ""}">${a.유형 === "디자인" ? "🎨 디자인" : "일반"}</span><b>${esc(a.제목)}</b><span class="st ${AST[a.상태] || ""}">${esc(a.상태)}</span></div>
     <span class="note">${esc(pn(a.fromP))} → ${esc(pn(a.to))}${a.마감 ? ` · 마감 <span class="${late ? "err" : ""}">${esc(a.마감)}${late ? " (지남)" : ""}</span>` : ""}${a.tid ? ` · 공정: ${esc(W().find(t => t.id === a.tid)?.작업 || a.tid)}` : ""}</span>
     ${a.내용 ? `<div style="white-space:pre-wrap">${esc(a.내용)}</div>` : ""}${a.사유 ? `<div class="note">반려 사유: ${esc(a.사유)}</div>` : ""}
     <div class="row">${r && a.상태 === "요청" ? b("수락", "수락") : ""}${r && a.상태 === "수락" ? b("완료", "완료") : ""}${r && OPEN(a) ? b("반려", "반려", " x") : ""}${admin && !a.tid && a.상태 !== "반려" ? b("wbs", "공정일정에 넣기") : ""}${admin || a.from === uid ? b("del", "취소", " x") : ""}</div></div>`;
 }
 function askHtml() {
-  const all = asks.filter(a => a.pid === cur).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const all = AK().filter(a => a.pid === cur).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   if (isMine()) { const rc = all.filter(a => recv(a) && OPEN(a)), sn = all.filter(a => a.from === uid);
     return `<h2>받은 요청 ${rc.length}</h2>${rc.map(akRow).join("") || '<p class="empty">받은 요청이 없습니다.</p>'}<h2>보낸 요청 ${sn.length}</h2>${sn.map(akRow).join("") || '<p class="empty">보낸 요청이 없습니다.</p>'}`; }
   return admin && all.length ? `<details class="fold"${all.some(OPEN) ? " open" : ""}><summary>업무 요청 ${all.length}건 (진행 중 ${all.filter(OPEN).length})</summary>${all.map(akRow).join("")}</details>` : "";
@@ -804,19 +809,22 @@ function askDlg(tid) {
     <p class="note">관제실을 공유받은 사람은 모두 볼 수 있습니다. 연락처·금액은 적지 마세요.</p>
     <div class="row" style="margin-top:12px"><button class="btn primary" value="ok">요청 보내기</button><button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { if ($("dlg").returnValue !== "ok" || !canAsk()) return;
-    const a = {pid: cur, tid: tid || "", from: uid || "", fromP: me()?.id || "", to: $("akTo").value, 제목: $("akT").value.trim(), 내용: $("akB").value.trim(), 마감: $("akD").value, 유형: $("akK").value === "디자인" ? "디자인" : "일반", 상태: "요청", at: new Date().toISOString(), 처리: ""};
+    const a = {pid: cur, tid: tid || "", fromP: me()?.id || "", to: $("akTo").value, 제목: $("akT").value.trim(), 내용: $("akB").value.trim(), 마감: $("akD").value, 유형: $("akK").value === "디자인" ? "디자인" : "일반", at: new Date().toISOString()};
     if (!a.to || !a.제목) { alert("받는 사람과 제목을 넣어 주세요."); return; }
-    try { await db.collection("asks").add(a); toast("요청을 보냈습니다."); } catch { alert("요청을 보내지 못했습니다."); } };
+    try { await akPut(`askq/${uid}`, {[rid()]: a}, !!askQ[uid]); toast("요청을 보냈습니다."); } catch { alert("요청을 보내지 못했습니다."); } };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
+// update 는 문서가 없으면 거부되므로 첫 쓰기만 set(실패한 update 뒤 set 으로 덮어쓰지 않는다). 필드 지우기가 없으므로 취소는 요청자 문서를 통째로 set 한다
+const akPut = (p, v, has) => has ? db.doc(p).update(v) : db.doc(p).set(v);
+const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function askDo(id, k) {
-  const a = asks.find(x => x.id === id); if (!a || !db) return; const {id: _, ...r} = a, set = v => db.doc(`asks/${id}`).set({...r, ...v}).catch(() => alert("저장하지 못했습니다."));
-  if (k === "del") { if ((admin || a.from === uid) && confirm(`'${a.제목}' 요청을 취소할까요?`)) await db.doc(`asks/${id}`).delete().catch(() => alert("취소하지 못했습니다.")); return; }
+  const a = AK().find(x => x.id === id); if (!a || !db) return; const {id: _, from, 상태, 사유, 처리, ...q} = a, ru = people.find(x => x.id === a.to)?.uid;
+  if (k === "del") { if ((admin || from === uid) && confirm(`'${a.제목}' 요청을 취소할까요?`)) { const {[id]: _x, ...rest} = askQ[from] || {}; await db.doc(`askq/${from}`).set(rest).catch(() => alert("취소하지 못했습니다.")); } return; }
   if (k === "wbs") { if (!admin || a.tid) return; const tid = wNew(wStg, {작업: a.제목, 산출물: a.내용 || "", 시작: today(), 종료: a.마감 || "", 담당: {t: "real", id: a.to}, 기록: [{at: new Date().toISOString(), 내용: "업무 요청에서 추가"}]});
-    await set({tid}); toast("공정일정에 넣었습니다."); draw(); return; }
-  if (!(admin || recv(a)) || !["수락", "완료", "반려"].includes(k)) return;
+    await db.doc(`askq/${from}`).update({[id]: {...q, tid}}).then(() => toast("공정일정에 넣었습니다."), () => alert("저장하지 못했습니다.")); draw(); return; }
+  if (!ru || !(admin || recv(a)) || !["수락", "완료", "반려"].includes(k)) return;
   const why = k === "반려" ? prompt("반려 사유 (한 줄)") : ""; if (why === null) return;
-  await set({상태: k, 처리: new Date().toISOString(), ...(k === "반려" ? {사유: why.trim().slice(0, 200)} : {})});
+  await akPut(`askr/${ru}`, {[id]: {상태: k, 처리: new Date().toISOString(), 사유: k === "반려" ? why.trim().slice(0, 200) : ""}}, !!askR[ru]).catch(() => alert("저장하지 못했습니다."));
 }
 async function repAI() {
   const t = dlgT, note = $("dNote"); if (!t) return;
@@ -1242,7 +1250,8 @@ showTab(tab);
     v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
     Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
   db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...d.data()})); if (dlgT) drawAtt(); }, () => {});
-  db.collection("asks").onSnapshot(s => { asks = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "wbs" || tab === "sch") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
+  const akSub = (c, set) => db.collection(c).onSnapshot(s => { set(Object.fromEntries(s.docs.map(d => [d.id, d.data()]))); if (tab === "wbs" || tab === "sch") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
+  akSub("askq", v => askQ = v); akSub("askr", v => askR = v);
   db.collection("peoplereq").onSnapshot(s => { preqs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
     db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...d.data()})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));
