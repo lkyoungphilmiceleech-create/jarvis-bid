@@ -173,7 +173,7 @@ tr.hi td{background:var(--go-soft)!important;box-shadow:inset 0 1px var(--go),in
 .ext{border:1px solid var(--holo);border-radius:12px;padding:10px 12px;background:var(--holo-soft);font-size:13px}
 /* 공정일정 표·예산 시트: 표 안에서만 스크롤, 머리·첫 열·합계 고정 */
 .wt,.sheet{overflow:auto;max-height:calc(100vh - 140px);border:1px solid var(--line);border-radius:10px}
-.wt table{min-width:1100px}
+.wt table{min-width:860px}
 .wt th,.sheet th{background:var(--bg2);z-index:2}
 .wt td{padding:3px 4px;vertical-align:middle}
 .wt td input:not([type=checkbox]),.wt td select{width:100%;padding:3px 6px;font-size:12px;border-color:transparent;background:transparent}
@@ -187,14 +187,8 @@ select option{background:var(--bg2);color:var(--ink)}
 .wt .nm{display:flex;align-items:center;gap:2px}.wt .nm input{flex:1}.wt .op{padding:1px 6px;font-size:11px}
 .wt .hd{cursor:grab;touch-action:none;user-select:none;color:var(--muted);padding:6px 8px;margin:-6px 0 -6px -4px;letter-spacing:-2px;border-radius:6px}.wt .hd:hover{background:var(--holo-soft);color:var(--holo)}.wt tr.grp.dropa td{box-shadow:inset 0 -2px var(--holo)}
 .wt tr.drag{opacity:.6}.wt tr.dropb td{box-shadow:inset 0 2px var(--holo)}.wt tr.dropa td{box-shadow:inset 0 -2px var(--holo)}
-body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
 .saved{font-size:12px;color:var(--go)}
 .wt .mw{display:block;font-size:12px;padding-left:6px}
-.wt th.tlh{min-width:58px;text-align:center;border-left:1px dashed var(--line)}.wt th.now{color:var(--amber);font-weight:700;box-shadow:inset 0 -2px var(--amber)}.wt td.tl.now{background:var(--holo-soft)}
-.wt td.tl{min-width:58px;padding:0;border-left:1px dashed var(--line);position:relative}
-.wt td.tl.on::after,.wt td.tl.dot::after{content:"";position:absolute;left:0;right:0;top:calc(50% - 5px);height:10px;background:var(--holo)}
-.wt td.tl.dot::after{left:calc(50% - 5px);right:auto;width:10px;border-radius:50%}
-.wt td.tl.완료::after{background:var(--go)}.wt td.tl.지연::after{background:var(--stop)}.wt td.tl.대기::after{background:var(--muted)}.wt td.tl.검토::after{background:var(--amber)}
 .wt table.gt{min-width:0}.wt tr.sub td{font-size:12px}
 .lnk{border:0;background:none;color:var(--ink);font:500 13px var(--sans);padding:0;cursor:pointer;text-align:left;text-decoration:underline dotted}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
@@ -489,7 +483,7 @@ JSON만 답한다: {"이름":"사업(용역)명","발주처":"","계약총액":�
   } catch (e) { note.textContent = askErr(e); }
   finally { if ($("docPick")) $("docPick").disabled = false; }
 }
-// ── CHRONOS: 공정 (간트·하위 할 일·지연 경고·지연 보고)
+// ── CHRONOS: 공정 (하위 할 일·지연 경고·지연 보고)
 const AI = D.ai; // [{code, 역할}]
 const who = d => d ? (d.t === "ai" ? `🤖 ${d.id}` : `👤 ${people.find(x => x.id === d.id)?.이름 || "?"}`) : "미배치";
 const effStat = t => t.상태 !== "완료" && t.종료 && t.종료 < today() ? "지연" : STAT.includes(t.상태) ? t.상태 : "대기"; // 목록 밖 값은 화면·class 에 넣지 않는다
@@ -513,19 +507,8 @@ const d8 = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}
 const wkL = d => `${d.getMonth() + 1}월 ${Math.ceil(d.getDate() / 7)}주`;
 const mon = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
 const mw = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? wkL(mon(new Date(v + "T00:00:00"))) : ""; // 타임라인 머리와 같은 주(월요일 기준)
-function periods(w) {
-  const end = [P()?.종료, ...w.map(t => t.종료)].filter(Boolean).sort().pop() || today(), e = new Date(end + "T00:00:00"), out = [],
-    st0 = [today(), ...w.filter(t => t.상태 !== "완료").map(t => t.시작 || t.종료).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(v || ""))].sort()[0], d = mon(new Date(st0 + "T00:00:00"));
-  while ((!out.length || d <= e) && out.length < 120) { const st = new Date(d); d.setDate(d.getDate() + 7); out.push({s: d8(st), e: d8(new Date(d.getTime() - 864e5)), l: wkL(st)}); }
-  return {ps: out};
-}
-const inP = (a, b, x) => !!(a || b) && (a || b) <= x.e && (b || a) >= x.s;
-const isNow = x => x.s <= today() && today() <= x.e;
-const tlHead = ps => ps.map(x => `<th class="tlh${isNow(x) ? " now" : ""}">${x.l}</th>`).join("");
-const tlCells = (t, ps) => ps.map(x => `<td class="tl${isNow(x) ? " now" : ""}${inP(t.시작, t.종료, x) ? " on " + effStat(t) : ""}"></td>`).join("");
-// 가로 스크롤: 다시 그릴 때는 이전 위치, 처음이면 오늘 주가 보이게(오늘 주가 첫 열이면 그대로)
-const tlScroll = (box, sl) => { if (!box) return; const th = box.querySelector("th.now"); box.scrollLeft = sl ?? (th && th.previousElementSibling?.classList.contains("tlh") ? Math.max(0, th.offsetLeft - box.clientWidth * .6) : 0); };
-// 공정일정: 표(항목·담당자·시작일·마감일·진행 내용 + 오른쪽 간트). 항목을 누르면 오른쪽 세부 패널, 표 안에서 바로 고치면 자동 저장
+const addW = (v, n) => { if (!v) return v; const x = new Date(v + "T00:00:00"); x.setDate(x.getDate() + 7 * n); return d8(x); };
+// 공정일정: 표(항목·담당자·시작일·마감일·진행 내용). 항목을 누르면 오른쪽 세부 패널, 표 안에서 바로 고치면 자동 저장
 const STG = ["착수", "준비", "실행", "사후·정산"];
 let wStg = "실행", wT, wSaved = "", wRe = false, wCal = false, drag = null; // wRe: 입력 중이라 미룬 다시 그리기
 const wMark = m => { wSaved = m; if ($("wSaved")) $("wSaved").textContent = m; };
@@ -537,16 +520,16 @@ const nid = () => "T" + String(W().reduce((m, x) => Math.max(m, +String(x.id).sl
 const wFind = k => { const j = k.lastIndexOf("|"), id = k.slice(0, j); return [W().find(x => x.id === id), k.slice(j + 1)]; };
 function wPut(t, k, v) { if (k === "담당") t.담당 = pw(v); else t[k] = v; if (k === "상태") { if (v === "완료") t.완료일 ||= today(); else delete t.완료일; } }
 function wTable(w) {
-  const dis = admin ? "" : " disabled", {ps} = periods(w), dt = (t, k, l) => `<td><b class="mw">${esc(mw(t[k]))}</b><input type="date" data-wi="${esc(`${t.id}|${k}`)}" value="${esc(t[k])}" aria-label="${l}"${dis}></td>`;
+  const dis = admin ? "" : " disabled", dt = (t, k, l) => `<td><b class="mw">${esc(mw(t[k]))}</b><input type="date" data-wi="${esc(`${t.id}|${k}`)}" value="${esc(t[k])}" aria-label="${l}"${dis}></td>`;
   let prev; // 단계는 드래그로 섞일 수 있어 배열 순서대로 그리고, 단계가 바뀌는 곳에 머리 줄을 둔다
-  return `<div class="wt"><table><thead><tr><th style="min-width:250px">항목</th><th style="min-width:150px">담당자</th><th style="min-width:124px">시작일</th><th style="min-width:124px">마감일</th><th style="min-width:200px">진행 내용</th>${tlHead(ps)}</tr></thead><tbody>${w.map((t, i) => {
+  return `<div class="wt"><table><thead><tr><th style="min-width:250px">항목</th><th style="min-width:150px">담당자</th><th style="min-width:124px">시작일</th><th style="min-width:124px">마감일</th><th style="min-width:200px">진행 내용</th></tr></thead><tbody>${w.map((t, i) => {
     const g = t.단계 || "", st = effStat(t), sub = t.하위 || [], f = x => esc(`${t.id}|${x}`); let h = "";
     if (g !== prev) { prev = g; let n = i; while (w[n] && (w[n].단계 || "") === g) n++; const run = w.slice(i, n), nl = run.filter(x => effStat(x) === "지연").length;
-      h = `<tr class="grp"><td colspan="5">${esc(g || "(구분 없음)")} · 작업 ${run.length} · 완료 ${run.filter(x => x.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</td><td colspan="${ps.length}"></td></tr>`; }
+      h = `<tr class="grp"><td colspan="5">${esc(g || "(구분 없음)")} · 작업 ${run.length} · 완료 ${run.filter(x => x.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</td></tr>`; }
     return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${W().indexOf(t)}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button><button class="btn x adm" type="button" data-wdel="${esc(t.id)}" title="이 작업 삭제" aria-label="작업 삭제">✕</button></div></td>
       <td><select data-wi="${f("담당")}" aria-label="담당자"${dis}>${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}${admin ? '<option value="+add">+ 인력 배치…</option>' : ""}</select></td>
       ${dt(t, "시작", "시작일")}${dt(t, "종료", "마감일")}
-      <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>${tlCells(t, ps)}</tr>`; }).join("")}</tbody></table></div>`;
+      <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td></tr>`; }).join("")}</tbody></table></div>`;
 }
 function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
   const p = P(); if (!p) { $("tab-wbs").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
@@ -560,24 +543,20 @@ function drawWbs(force) { // force: 선택칸·날짜를 바꿨을 때
       <span class="row adm"><button class="btn primary" type="button" id="genWbs">${w.length ? "공정표 다시 생성" : "공정표 1차 생성"}</button><button class="btn" type="button" id="chkLate">지연 점검</button></span><button class="btn" type="button" id="wbsCsv">엑셀 저장</button><button class="btn" type="button" id="wCal" aria-pressed="${wCal}">${wCal ? "▦ 간트 표" : "📅 월력"}</button></div>
     ${healthHtml()}${loadHtml()}
     ${late.length ? `<div class="alarm" role="alert">⚠ 지연 ${late.length}건 · 지연 보고 미작성 ${new Set(late.filter(x => !x.t.보고?.some(r => !r.해결)).map(x => x.i)).size}건<button class="btn adm" type="button" id="lateOpen">확인·알림</button></div>` : ""}
-    <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [열기]를 누르면 세부 내용(과업내용·하위 할 일·자료·지연 보고)을 봅니다. 오른쪽 막대는 주 단위 일정이고 노란 줄이 이번 주입니다." : "표에서 바로 고치면 자동 저장됩니다. [열기]를 누르면 세부 패널(과업내용·하위 할 일·자료·지연 보고·작업 요청)이 열립니다. ⋮⋮ 를 끌면 순서, 막대를 끌면 기간(가운데)·시작/마감(양 끝)이 주 단위로 바뀝니다."}</p>
+    <p class="note" id="wNote">${wMsg ? esc(wMsg) : !admin ? "보기 전용입니다. [열기]를 누르면 세부 내용(과업내용·하위 할 일·자료·지연 보고)을 봅니다." : "표에서 바로 고치면 자동 저장됩니다. [열기]를 누르면 세부 패널(과업내용·하위 할 일·자료·지연 보고·작업 요청)이 열립니다. ⋮⋮ 를 끌면 순서가 바뀌고, ✕ 로 행을 지웁니다."}</p>
     ${askHtml()}
     ${wCal ? calHtml(w) : w.length ? wTable(w) : isMine() ? '<p class="empty">내가 담당한 작업이 없습니다.</p>' : '<p class="empty">아직 공정표가 없습니다. 과업범위를 넣고 [공정표 1차 생성]을 누르거나 아래에서 행을 추가해 주세요.</p>'}
     <div class="row adm"><select id="wStg" aria-label="추가할 구분">${opt(STG, wStg)}</select><button class="btn" type="button" id="wAdd">+ 행 추가</button></div>
     ${reps.length ? `<h2>지연 보고</h2><div class="tw"><table><thead><tr><th>작업</th><th>보고일</th><th>원인</th><th>조치</th><th>새 마감</th><th>해결</th></tr></thead><tbody>${reps.map(({t, i, j, r}) => `<tr><td>${esc(t.작업)}</td><td>${esc(kst(r.at).slice(0, 10))}</td><td>${esc(r.원인)}</td><td>${esc(r.조치)}</td><td>${esc(r.새마감)}</td>
       <td><label class="chk"><input type="checkbox" data-rchk="${i}|${j}"${r.해결 ? " checked" : ""}${admin ? "" : " disabled"}> ${r.해결 ? `해결 ${esc(r.해결일)}` : "해결 완료"}</label></td></tr>`).join("")}</tbody></table></div>` : ""}`;
-  const wt = $("tab-wbs").querySelector(".wt"); if (sx && wt) wt.scrollTop = sx; tlScroll(wt, sl);
+  const wt = $("tab-wbs").querySelector(".wt"); if (sx && wt) wt.scrollTop = sx;
   if (fk) { const el = document.querySelector(`[data-wi="${CSS.escape(fk)}"]`); if (el) { el.focus(); try { el.setSelectionRange(fs, fs); } catch {} } }
 }
-// 끌기(관리자만, pointer 이벤트라 터치도 됨): ⋮⋮ = 행 순서(단계는 그대로), 간트 막대 = 가운데는 기간 이동·양 끝은 시작/마감. 주 단위로 옮기고 요일은 그대로 둔다
-const addW = (v, n) => { if (!v) return v; const x = new Date(v + "T00:00:00"); x.setDate(x.getDate() + 7 * n); return d8(x); };
-const dragTo = g => { let s = g.s, e = g.e; if (g.k !== "종료") s = addW(s, g.d); if (g.k !== "시작") e = addW(e, g.d); if (g.k === "시작" && e && s > e) s = e; if (g.k === "종료" && s && e < s) e = s; return [s, e]; };
+// 행 끌기(관리자만, pointer 이벤트라 터치도 됨): ⋮⋮ 로 순서를 바꾼다
 document.addEventListener("pointerdown", e => {
   if (!admin || tab !== "wbs" || e.button) return;
-  const hd = e.target.closest?.("#tab-wbs .hd"), bar = !hd && e.target.closest?.("#tab-wbs td.tl.on"), tr = (hd || bar)?.closest("tr"), t = tr && W().find(x => x.id === tr.dataset.id); if (!t) return;
-  e.preventDefault(); drag = {t, tr, k: "row"}; tr.classList.add("drag"); if (hd) return;
-  const cs = [...tr.querySelectorAll("td.tl")], on = cs.filter(c => c.classList.contains("on")), r = bar.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, ps = periods(myW()).ps; // 표를 그린 것과 같은 목록으로 — 필터가 있어도 열과 주가 맞게
-  Object.assign(drag, {cs, ps, i0: cs.indexOf(bar), d: 0, s: t.시작 || "", e: t.종료 || "", k: bar === on[0] && x < .4 && t.시작 >= ps[0].s ? "시작" : bar === on.at(-1) && x > .6 && t.종료 ? "종료" : "move"});
+  const hd = e.target.closest?.("#tab-wbs .hd"), tr = hd?.closest("tr"), t = tr && W().find(x => x.id === tr.dataset.id); if (!t) return;
+  e.preventDefault(); drag = {t, tr, k: "row"}; tr.classList.add("drag");
 });
 document.addEventListener("pointermove", e => { const g = drag; if (!g) return;
   if (g.k === "row") { document.querySelectorAll("#tab-wbs .dropb, #tab-wbs .dropa").forEach(x => x.classList.remove("dropb", "dropa")); const o = document.elementFromPoint(e.clientX, e.clientY)?.closest("#tab-wbs tr[data-id]");
@@ -586,12 +565,9 @@ document.addEventListener("pointermove", e => { const g = drag; if (!g) return;
     if (g.to) (gh || o).classList.add(gh ? "dropa" : g.to.after ? "dropa" : "dropb");
     clearInterval(g.sc); const wr = document.querySelector("#tab-wbs .wt")?.getBoundingClientRect(), y = e.clientY, top = Math.max(wr?.top ?? 0, 0), bot = Math.min(wr?.bottom ?? innerHeight, innerHeight), v = y < top + 50 ? -14 : y > bot - 50 ? 14 : 0;
     if (v) g.sc = setInterval(() => { const box = document.querySelector("#tab-wbs .wt"), s = box?.scrollTop; if (box) box.scrollTop += v; if (!box || box.scrollTop === s) scrollBy(0, v); }, 16); return; } // 표 상자(자체 스크롤)를 먼저, 끝까지 가면 페이지를 스크롤
-  const c = g.cs.findIndex(td => { const r = td.getBoundingClientRect(); return e.clientX >= r.left && e.clientX < r.right; }); if (c < 0) return;
-  g.d = c - g.i0; const [s, en] = dragTo(g), st = effStat(g.t); g.cs.forEach((td, j) => td.className = "tl" + (inP(s, en, g.ps[j]) ? " on " + st : ""));
 });
 const dragEnd = e => { const g = drag; drag = null; if (!g) return; clearInterval(g.sc);
   if (e.type === "pointerup" && g.k === "row" && g.to) { const a = W(), to = a.find(x => x.id === g.to.id); if (to) { a.splice(a.indexOf(g.t), 1); a.splice(a.indexOf(to) + g.to.after, 0, g.t); if (to.단계 && to.단계 !== g.t.단계) g.t.단계 = to.단계; wSave(0); } } // 다른 단계 사이로 옮기면 그 단계를 따른다
-  if (e.type === "pointerup" && g.k !== "row" && g.d) { const [s, en] = dragTo(g); (g.t.기록 ||= []).push({at: new Date().toISOString(), 내용: `간트에서 일정 변경 ${g.s || "-"}~${g.e || "-"} → ${s || "-"}~${en || "-"}`}); g.t.시작 = s; g.t.종료 = en; wSave(0); drawTop(); }
   drawWbs(true); };
 document.addEventListener("pointerup", dragEnd); document.addEventListener("pointercancel", dragEnd);
 // 담당자 '+ 인력 배치…': 사내 직원 명부에서 골라 이 프로젝트에 배치하고 바로 그 작업 담당으로
@@ -795,7 +771,7 @@ const AK = () => Object.entries(askQ).flatMap(([from, m]) => Object.entries(m ||
 // '내 업무' 보기(담당이 나인 작업 + 받은·보낸 요청)는 화면 필터일 뿐 보안이 아니다(공유받은 사람은 db 전체를 읽는다)
 let mineV = false; try { mineV = localStorage.getItem("pmo-mine") === "1"; } catch {}
 const isMine = () => mineV && !!me();
-// 담당자별 보기('전체'에서만): 표·간트·월력이 같은 myW() 를 쓰고, 행 번호는 늘 W().indexOf(t)
+// 담당자별 보기('전체'에서만): 표·월력이 같은 myW() 를 쓰고, 행 번호는 늘 W().indexOf(t)
 let whoF = "", loadOpen = false;
 const whoId = () => !isMine() && PP().some(x => x.id === whoF) ? whoF : "";
 const byWho = id => W().filter(t => t.담당?.t === "real" && t.담당.id === id);
