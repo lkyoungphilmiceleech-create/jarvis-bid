@@ -217,10 +217,15 @@ table.lt .sm{display:block;font-size:11px;color:var(--muted)}table.lt .sm.one{ov
 @media (max-width:600px){table.ct thead{display:none}table.ct,table.ct tbody,table.ct tr,table.ct td{display:block}table.ct tr{border-bottom:1px solid var(--line);padding:6px 8px}table.ct td{border:0;padding:1px 0}
   table.ct td[data-l]::before{content:attr(data-l);display:inline-block;min-width:70px;font-size:11px;color:var(--muted)}table.ct td:empty{display:none}}
 /* 예산표 4칸(가로 스크롤 없음), 휴대폰은 항목별 카드 */
-.sheet table.bt{min-width:0;width:100%}.sheet .bt td:first-child{white-space:normal;position:static}.bt th:nth-child(n+2){width:17%}
-.bt .sm{display:block;font-size:11px;color:var(--muted);font-weight:400;white-space:normal}.bt th .sm,.bt tr.head .sm{display:inline}.bt .hbar{margin-top:3px;min-width:60px}.hbar i.stop{background:var(--stop)}
-@media (max-width:600px){.bt thead{display:none}.bt,.bt tbody,.bt tfoot,.bt tr,.bt td{display:block}.bt tr{border-bottom:1px solid var(--line);padding:6px 8px}.sheet .bt td{border:0;padding:2px 0;position:static}
-  .bt td.num{text-align:left;display:flex;flex-wrap:wrap;gap:0 8px;align-items:baseline;white-space:normal}.bt td[data-l]::before{content:attr(data-l);font-size:11px;color:var(--muted);min-width:80px}.bt td.num .hbar{flex:1 1 60px}.bt td.num .sm{display:inline}}
+.sheet table.bt{min-width:0;width:100%}.sheet .bt td:first-child{white-space:normal}
+/* 예산표: 과세·영세·합계 × 계약·집행·잔액 + 집행률. 숫자 칸은 좁게, 900px 이하는 카드(3×3 격자) */
+.bt .sm{display:block;font-size:11px;color:var(--muted);font-weight:400;white-space:normal}.bt th .sm,.bt tr.head .sm{display:inline}.hbar i.stop{background:var(--stop)}
+.bt th.n,.bt td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:11.5px;padding:4px 5px}.bt th.c{text-align:center}.sheet .bt td.n.neg{color:var(--stop);font-weight:700}
+.bt thead tr:first-child th{height:24px;box-sizing:border-box}.bt thead tr:nth-child(2) th{top:24px}.bt thead th{padding:3px 5px}
+.bt tr[data-bid]{cursor:pointer}.bt tr[data-bid]:hover td{background:var(--holo-soft)}.bt .hd{cursor:grab;touch-action:none;user-select:none;color:var(--muted);padding-right:4px;letter-spacing:-2px}
+.bt tr.drag{opacity:.5}.bt tr.dropb td{box-shadow:inset 0 2px var(--holo)}.bt tr.dropa td{box-shadow:inset 0 -2px var(--holo)}
+.bt td.cv{display:none}.g3{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:1px 8px;font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums}.g3 i{font-style:normal;color:var(--muted);text-align:left}.g3 .neg{color:var(--stop);font-weight:700}
+@media (max-width:900px){.bt thead{display:none}.bt,.bt tbody,.bt tfoot,.bt tr{display:block}.sheet .bt td{display:none;border:0;padding:2px 0;position:static}.sheet .bt td:first-child,.sheet .bt td.cv{display:block}.bt tr{border-bottom:1px solid var(--line);padding:6px 8px}.sheet .bt tr.total2 td{display:block}}
 .sum6{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .sum6>div{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--glass2)}
 .sum6 b{display:block;font:700 16px var(--hud);font-variant-numeric:tabular-nums}
@@ -858,7 +863,8 @@ JSON만: {"원인":"한국어 1~3줄","조치":"한국어 1~3줄 (누가·무엇
 
 // ── LEDGER: 예산 (산출내역서 양식: 구분·항목·내용·산출근거·계약 금액 과세/영세/합계 → 집행은 장부 합산)
 const LOCK = '<span class="tag amber" title="직원에게 공개할 때는 금액 저장 경로를 따로 나눈 뒤 막습니다">관리자·담당 PM</span>';
-let bRe = false; // 목표 수익률 칸 입력 중에는 다시 그리지 않는다(포커스가 빠질 때 그림)
+let bRe = false, bUnit = "k", bClickT = 0, bDragAt = 0, bdrag = null; try { bUnit = localStorage.getItem("pmo-bunit") || "k"; } catch {}
+const bU = v => bUnit === "k" ? Math.round(num(v) / 1000).toLocaleString("ko-KR") : won(v); // 천원은 반올림 // 목표 수익률 칸 입력 중에는 다시 그리지 않는다(포커스가 빠질 때 그림)
 function drawBud(force) {
   if (!force && document.activeElement?.id === "tgtIn") { bRe = true; return; }
   const p = P(); if (!p) { $("tab-bud").innerHTML = '<p class="empty">프로젝트를 먼저 만들어 주세요.</p>'; return; }
@@ -869,10 +875,12 @@ function drawBud(force) {
     ${b ? `<details class="fold"${bup ? " open" : ""}><summary>산출내역서 다시 올리기 (엑셀·PDF·구글 시트)</summary>${drop}</details>` : drop}`;
   if (!b) { $("tab-bud").innerHTML = up + '<p class="note" id="bNote">계약 당시 산출내역서를 올리면 구분·항목·내용·산출근거·계약 금액(과세·영세·합계)을 그대로 옮깁니다. 집행 금액은 장부에 적은 내역을 항목별로 더해 자동으로 채웁니다.</p><div id="bStage"></div>'; if (bup) budStage(); return; }
   const ex = r => m.by[r.id] || {과세: 0, 영세: 0, n: 0}, sum = (rs, f) => rs.reduce((a, r) => a + f(r), 0);
-  // 4칸: 계약(A)·집행(B)·잔액+집행률 막대. data-l = 휴대폰 카드 보기의 칸 이름
-  const cells = (a, tx, zr, e, tip = "", aH = "") => { const q = a ? e / a * 100 : null; return `<td class="num" data-l="계약 (A)">${aH || `<b>${won(a)}</b>`}<div class="sm">과세 ${won(tx)} · 영세 ${won(zr)}</div></td><td class="num" data-l="집행 (B)"${tip ? ` title="${esc(tip)}"` : ""}>${won(e)}</td>
-    <td class="num${a - e < 0 ? " neg" : ""}" data-l="잔액·집행률">${won(a - e)}<div class="hbar"><i class="${q > 100 ? "stop" : "amber"}" style="width:${Math.min(100, q || 0)}%"></i></div><div class="sm">${pct(q)}</div></td>`; };
-  const nums = rs => cells(sum(rs, r => num(r.금액)), sum(rs, r => num(r.과세액)), sum(rs, r => num(r.영세액)), sum(rs, r => ex(r).과세 + ex(r).영세));
+  // 한 줄: 계약·집행·잔액 × 과세·영세·합계(단위 bUnit) + 집행률. cv = 카드 보기(900px 이하)의 3×3 격자
+  const U = bU, trip = rs => { const a = [sum(rs, r => num(r.과세액)), sum(rs, r => num(r.영세액))], e = [sum(rs, r => ex(r).과세), sum(rs, r => ex(r).영세)]; a.push(a[0] + a[1]); e.push(e[0] + e[1]); return [a, e, a.map((v, k) => v - e[k])]; };
+  const cells = ([a, e, l]) => { const q = a[2] ? e[2] / a[2] * 100 : null, v = (x, neg) => `<td class="n${neg && x < 0 ? " neg" : ""}">${U(x)}</td>`;
+    return a.map(x => v(x)).join("") + e.map(x => v(x)).join("") + l.map(x => v(x, 1)).join("") + `<td class="n${q > 100 ? " neg" : ""}">${pct(q)}</td>
+      <td class="cv"><div class="g3"><i></i><i>과세</i><i>영세</i><i>합계</i>${[["계약", a], ["집행", e], ["잔액", l]].map(([k, xs]) => `<i>${k}</i>${xs.map(x => `<span${k === "잔액" && x < 0 ? ' class="neg"' : ""}>${U(x)}</span>`).join("")}`).join("")}<i>집행률</i><span></span><span></span><span>${pct(q)}</span></div></td>`; };
+  const nums = rs => cells(trip(rs));
   const groups = []; rows.forEach(r => { const x = groups.at(-1); if (x && x.name === r.구분) x.rows.push(r); else groups.push({name: r.구분, rows: [r]}); });
   const vat = Math.round(m.과세.예산 * .1), tot = m.예산 + vat, rc = rcvOf(p); // 총액은 보기용(절사 없음). 잔액·집행률·수익률은 공급가(m.예산) 기준 — 장부 집행도 공급가
   const left = m.예산 - m.집행, un = L().filter(e => !ridOf(nl(e), rows));
@@ -881,19 +889,22 @@ function drawBud(force) {
   $("tab-bud").innerHTML = up + `<div class="sum6">
       <div><span class="hudlabel">${esc(cl)}</span><b>${won(ca)}</b><div class="note">공급가 ${won(m.계약)}${m.계약 && Math.abs(m.계약 - m.예산) > 1 ? ` · <span class="warn">내역서와 ${won(m.예산 - m.계약)} 차이</span>` : ""}</div></div>
       <div><span class="hudlabel">예산 총액 (부가세 포함)</span><b>${won(tot)}</b><div class="note">공급가 ${won(m.예산)} + 부가세 ${won(vat)} (과세 × 10%)<br>과세 ${won(m.과세.예산)} / 영세 ${won(m.영세.예산)}${num(p.계약총액) && tot !== num(p.계약총액) ? `<br><span class="warn">계약 금액과 ${won(tot - num(p.계약총액))} 차이${tot > num(p.계약총액) ? "(계약 금액 절사)" : ""}</span>` : ""}</div></div>
-      <div><span class="hudlabel">수금</span><b>${won(rc.sum)}</b><div class="note">계약 대비 ${pct(rc.q)} · 미수금 ${won(rc.left)}${rc.adv ? `<br>선금 ${won(rc.adv.금액)}원 (${esc(rc.adv.입금일 || "입금일 없음")})` : ""}</div></div>
+      <div id="rcvCard"${admin ? ' style="cursor:pointer" title="더블클릭해서 수금 입력"' : ""}><span class="hudlabel">수금</span><b>${won(rc.sum)}</b><div class="note">계약 대비 ${pct(rc.q)} · 미수금 ${won(rc.left)}${rc.adv ? `<br>선금 ${won(rc.adv.금액)}원 (${esc(rc.adv.입금일 || "입금일 없음")})` : ""}${admin ? '<br><span class="adm">더블클릭해서 입력 <button class="btn op" type="button" id="rcvAdd2">+ 수금</button></span>' : ""}</div></div>
       <div><span class="hudlabel">집행 (B) · 장부</span><b>${won(m.집행)}</b></div>
       <div><span class="hudlabel">잔액 (A−B)</span><b${left < 0 ? ' class="err"' : ""}>${won(left)}</b></div>
       <div><span class="hudlabel">목표 수익률</span>${admin ? `<label class="row" style="gap:4px;flex-wrap:nowrap"><input id="tgtIn" inputmode="decimal" value="${esc(g ?? "")}" placeholder="예: 15" aria-label="목표 수익률(%)" style="width:90px;padding:3px 6px"> %</label>` : `<b>${pct(g)}</b>`}</div></div>
     <details class="fold" id="rcvF"${rcvOpen ? " open" : ""}><summary>수금 내역 ${rc.cs.length}건 (선금·중도금·잔금, 부가세 포함)</summary><div class="tw"><table><thead><tr><th>구분</th><th>입금일</th><th class="num">금액</th><th>비고</th><th></th></tr></thead><tbody>
-      ${rc.cs.map(x => `<tr><td>${esc(x.구분)}</td><td>${esc(x.입금일)}</td><td class="num">${won(x.금액)}</td><td>${esc(x.비고)}</td><td>${admin ? `<button class="btn op" type="button" data-rce="${esc(x.id)}">수정</button> <button class="btn op x" type="button" data-rcx="${esc(x.id)}" aria-label="수금 삭제">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">수금 기록이 없습니다.</td></tr>'}</tbody></table></div>
+      ${rc.cs.map(x => `<tr data-rce="${esc(x.id)}"${admin ? ' style="cursor:pointer" title="더블클릭해서 수정"' : ""}><td>${esc(x.구분)}</td><td>${esc(x.입금일)}</td><td class="num">${won(x.금액)}</td><td>${esc(x.비고)}</td><td>${admin ? `<button class="btn op x" type="button" data-rcx="${esc(x.id)}" aria-label="수금 삭제">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">수금 기록이 없습니다.</td></tr>'}</tbody></table></div>
       ${admin ? '<div class="row"><button class="btn" type="button" id="rcvAdd">+ 수금 추가</button></div>' : ""}</details>
     <p class="note">${g === null ? "목표 수익률이 없습니다 — 위 목표 수익률 칸에 숫자(%)를 넣어 주세요. " : `목표 수익률 <b>${pct(g)}</b> 대비 현재 수익률(집행 기준) <b>${pct(m.확정수익률)}</b>${m.확정수익률 === null ? "" : ` (${m.확정수익률 - g >= 0 ? "+" : ""}${(m.확정수익률 - g).toFixed(1)}%p)`} · `}참고: (계약 공급가 − 집행) ÷ 계약 공급가</p>
     <p class="note" id="bNote">${esc(b.file)} · ${rows.length}개 항목 · 금액은 공급가액(부가세 제외). 집행(B)은 장부에 적은 내역을 항목별로 더한 값이고, 잔액 = 예산 − 집행입니다. 소계 줄을 누르면 접힙니다.</p>
-    <div class="sheet"><table class="bt"><thead><tr><th>항목 · 내용 <span class="sm">(산출근거)</span></th><th>계약 (A)</th><th>집행 (B)</th><th>잔액 · 집행률</th></tr></thead><tbody>
+    <div class="row"><span class="note">금액 단위</span><div class="seg" role="group" aria-label="금액 단위"><button type="button" data-bu="w" aria-pressed="${bUnit === "w"}">원</button><button type="button" data-bu="k" aria-pressed="${bUnit === "k"}">천원</button></div><span class="note">행을 누르면 산출근거·연결된 장부${admin ? ", 두 번 누르면 수정, ⋮⋮ 를 끌면 순서 이동" : ""}</span></div>
+    <div class="sheet"><table class="bt"><thead><tr><th rowspan="2">항목 · 내용</th><th class="c" colspan="3">계약 (A)</th><th class="c" colspan="3">집행 (B)</th><th class="c" colspan="3">잔액 (A−B)</th><th class="n" rowspan="2">집행률</th></tr>
+      <tr>${"과세 영세 합계 과세 영세 합계 과세 영세 합계".split(" ").map(x => `<th class="n">${x}</th>`).join("")}</tr></thead><tbody>
     ${groups.map(x => `<tr class="head click${bShut.has(x.name) ? " shut" : ""}" data-gh="${esc(x.name)}"><td>${esc(x.name || "(구분 없음)")} 소계 <span class="sm">${x.rows.length}항목</span>${admin ? ` <button class="btn op adm" type="button" data-ba="${esc(x.name)}">+ 행 추가</button>` : ""}</td>${nums(x.rows)}</tr>` + (bShut.has(x.name) ? "" : x.rows.map(r => { const e = ex(r), a = num(r.금액), en = e.과세 + e.영세;
-      return `<tr class="${en > a + 1 ? "warn" : ""}"><td><b>${esc(r.항목)}</b>${r.내용 ? ` · ${esc(r.내용)}` : ""}${r.산출 ? `<div class="sm">${esc(r.산출)}</div>` : ""}${admin ? `<span class="row adm" style="gap:4px;margin-top:2px"><button class="btn op" type="button" data-be="${esc(r.id)}">수정</button><button class="btn op x" type="button" data-bx="${esc(r.id)}" aria-label="이 행 삭제">✕</button></span>` : ""}</td>${cells(a, num(r.과세액), num(r.영세액), en, `장부 ${e.n}건 · 과세 ${won(e.과세)} / 영세 ${won(e.영세)}`)}</tr>`; }).join(""))).join("")}
-    </tbody><tfoot><tr class="head total"><td>총계 <span class="sm">${rows.length}항목</span></td>${cells(m.예산, m.과세.예산, m.영세.예산, m.집행 - m.미연결, "", `<div>공급가 합계 <b>${won(m.예산)}</b></div><div>부가세 <b>${won(vat)}</b></div><div>총액(절사 없음) <b>${won(tot)}</b></div>`)}</tr></tfoot></table></div>
+      return `<tr data-bid="${esc(r.id)}" class="${en > a + 1 ? "warn" : ""}" title="${esc(r.산출 || "")}"><td>${admin ? '<span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span>' : ""}<b>${esc(r.항목)}</b>${r.내용 ? ` · ${esc(r.내용)}` : ""}</td>${cells(trip([r]))}</tr>`; }).join(""))).join("")}
+    </tbody><tfoot><tr class="head total"><td>총계 <span class="sm">${rows.length}항목</span></td>${nums(rows)}</tr>
+      <tr class="total2"><td colspan="11" class="note">원 단위: 공급가 합계 <b>${won(m.예산)}</b> · 부가세 <b>${won(vat)}</b> (과세 × 10%) · 총액(절사 없음) <b>${won(tot)}</b></td></tr></tfoot></table></div>
     ${admin ? '<div class="row adm"><button class="btn" type="button" id="bNewG">+ 새 구분 추가</button></div>' : ""}
     ${(b.log || []).length ? `<p class="note">변경 기록: ${(b.log || []).slice(-5).reverse().map(x => `${esc(kst(x.at))} ${esc(x.내용)}`).join(" · ")}</p>` : ""}
     ${un.length ? `<div class="co"><h3>미연결 집행 ${un.length}건 · ${won(m.미연결)}원 <span class="note">— 장부에서 예산 항목과 연결되지 않은 집행입니다. 항목을 고르면 바로 연결합니다.</span></h3>
@@ -940,6 +951,33 @@ function editBudRow(id, g) {
     draw(); };
   $("dlg").returnValue = ""; $("dlg").showModal();
 }
+// 행 세부 패널(한 번 누르기): 산출근거·원 단위 금액·연결된 장부. 두 번 누르기는 수정(한 번 누르기는 250ms 늦춰 겹치지 않게)
+function budPanel(id) {
+  const rows = BR(), r = rows.find(x => x.id === id); if (!r || $("dlg").open) return; const m = money(), e = m.by[id] || {과세: 0, 영세: 0};
+  const a = [num(r.과세액), num(r.영세액), num(r.금액)], x = [e.과세, e.영세, e.과세 + e.영세], l = a.map((v, k) => v - x[k]), led = L().map(nl).filter(y => ridOf(y, rows) === id).sort((p, q) => String(q.지출일).localeCompare(String(p.지출일)));
+  $("dlgForm").innerHTML = `<div class="row"><h2 style="margin:0">${esc(rLab(r))}</h2><span style="flex:1"></span><button class="btn" value="close" aria-label="닫기">✕</button></div>
+    <p class="note">${esc([r.구분, r.항목, r.내용].filter(Boolean).join(" / "))}</p><h3>산출근거</h3><p style="white-space:pre-wrap;margin:0">${esc(r.산출 || "-")}</p>
+    <h3>금액 (원)</h3><div class="g3"><i></i><i>과세</i><i>영세</i><i>합계</i>${[["계약", a], ["집행", x], ["잔액", l]].map(([k, xs]) => `<i>${k}</i>${xs.map(v => `<span${v < 0 ? ' class="neg"' : ""}>${won(v)}</span>`).join("")}`).join("")}</div>
+    <h3>연결된 장부 ${led.length}건</h3>${led.map(y => `<button class="lnk" type="button" data-le="${esc(y.id)}">${esc(y.지출일)} · ${esc(y.공급업체 || y.지출항목 || "-")} · ${won(num(y.과세액) + num(y.영세액))}원</button>`).join("<br>") || '<p class="note">없습니다.</p>'}
+    ${admin ? `<div class="row" style="margin-top:12px"><button class="btn" type="button" data-be="${esc(id)}">수정</button><button class="btn x" type="button" data-bx="${esc(id)}">삭제</button></div>` : ""}`;
+  $("dlg").onclose = null; $("dlg").returnValue = ""; $("dlg").classList.add("side"); $("dlg").showModal();
+}
+const dlgThen = f => { if ($("dlg").open) { $("dlg").close(); setTimeout(f); } else f(); }; // 패널을 닫고 다른 창을 연다
+document.addEventListener("dblclick", e => { if (admin && !e.target.closest?.("button")) { const rt = e.target.closest?.("#tab-bud tr[data-rce]"); if (rt) return editRcv(rt.dataset.rce); if (e.target.closest?.("#rcvCard")) return editRcv(""); } // 수금: 카드 = 새 입력, 행 = 수정
+  const tr = e.target.closest?.("#tab-bud tr[data-bid]"); if (!tr || !admin || e.target.closest(".hd")) return; clearTimeout(bClickT); editBudRow(tr.dataset.bid); });
+// 산출내역서 행 끌기(관리자, ⋮⋮): budget.rows 순서만 바꾸고 id 는 그대로. 다른 구분으로 옮기면 그 구분을 따른다
+document.addEventListener("pointerdown", e => { if (!admin || tab !== "bud" || e.button) return; const tr = e.target.closest?.("#tab-bud .hd")?.closest("tr[data-bid]"); if (!tr) return; e.preventDefault(); bdrag = {id: tr.dataset.bid, tr}; tr.classList.add("drag"); });
+document.addEventListener("pointermove", e => { const g = bdrag; if (!g) return; document.querySelectorAll("#tab-bud .dropb, #tab-bud .dropa").forEach(x => x.classList.remove("dropb", "dropa"));
+  const el = document.elementFromPoint(e.clientX, e.clientY), o = el?.closest("#tab-bud tr[data-bid]"), gh = !o && el?.closest("#tab-bud tr.head[data-gh]");
+  g.to = o && o.dataset.bid !== g.id ? {id: o.dataset.bid, after: e.clientY > o.getBoundingClientRect().top + o.offsetHeight / 2} : gh ? {g: gh.dataset.gh} : null; if (g.to) (o || gh).classList.add(o && !g.to.after ? "dropb" : "dropa");
+  clearInterval(g.sc); const box = document.querySelector("#tab-bud .sheet"), wr = box?.getBoundingClientRect(), y = e.clientY, top = Math.max(wr?.top ?? 0, 0), bot = Math.min(wr?.bottom ?? innerHeight, innerHeight), v = y < top + 50 ? -14 : y > bot - 50 ? 14 : 0;
+  if (v) g.sc = setInterval(() => { const b = document.querySelector("#tab-bud .sheet"), s0 = b?.scrollTop; if (b) b.scrollTop += v; if (!b || b.scrollTop === s0) scrollBy(0, v); }, 16); });
+const bDragEnd = async e => { const g = bdrag; bdrag = null; if (!g) return; clearInterval(g.sc); bDragAt = Date.now(); const raw = B()?.rows;
+  if (e.type === "pointerup" && g.to && raw) { const i = raw.findIndex(x => x.id === g.id), row = raw[i]; if (i >= 0) { raw.splice(i, 1);
+    let k = g.to.id ? raw.findIndex(x => x.id === g.to.id) + (g.to.after ? 1 : 0) : raw.findIndex(x => (x.구분 || "") === g.to.g); if (k < 0 || (g.to.id && k === 0 && !raw.some(x => x.id === g.to.id))) k = raw.length;
+    const ng = g.to.id ? raw.find(x => x.id === g.to.id)?.구분 : g.to.g; if (ng !== undefined && ng !== row.구분) row.구분 = ng; raw.splice(k, 0, row); bLog(B(), `행 이동: ${bLbl(br(row))}`); await saveBud(); } }
+  drawBud(true); };
+document.addEventListener("pointerup", bDragEnd); document.addEventListener("pointercancel", bDragEnd);
 async function delBudRow(id) {
   const b = B(), raw = b?.rows || [], r = raw.find(x => x.id === id); if (!admin || !r) return; const n = L().filter(e => ridOf(nl(e), BR()) === id).length;
   if (!(await askYes("산출내역서 행 삭제", `${bLbl(br(r))} 행을 삭제할까요?${n ? `\n\n연결된 장부 ${n}건이 미연결이 됩니다.` : ""}`, "삭제"))) return;
@@ -1325,7 +1363,7 @@ async function saveXlsx(name, sheets) {
 }
 $("dlg").addEventListener("close", () => $("dlg").classList.remove("side")); // 세부 패널 모양은 editTask 에서만 (onclose 보다 먼저 등록)
 document.addEventListener("click", async e => {
-  const t = e.target.closest("button, tr.click"); if (!t || (t.tagName === "TR" && e.target.closest("select, input, a"))) return;
+  const t = e.target.closest("button, tr.click, tr[data-bid]"); if (!t || (t.tagName === "TR" && e.target.closest("select, input, a"))) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.id === "pNew" || t.id === "pNew2") { if (!db) return; const id = "PM" + Date.now().toString(36); projects.push({id, 이름: "새 프로젝트", 상태: "준비"}); cur = id; try { localStorage.setItem("pmo-proj", id); } catch {} await saveProj(P()); showTab("set"); }
@@ -1362,8 +1400,10 @@ document.addEventListener("click", async e => {
     ["지연 보고", [["작업", "보고일", "기존 마감", "새 마감", "원인", "조치", "해결", "해결일"], ...W().flatMap(x => (x.보고 || []).map(r => [x.작업, kst(r.at).slice(0, 10), r.기존마감, r.새마감, r.원인, r.조치, r.해결 ? "해결" : "미해결", r.해결일]))]]]);
   if (t.dataset.gh !== undefined) { bShut.has(t.dataset.gh) ? bShut.delete(t.dataset.gh) : bShut.add(t.dataset.gh); drawBud(); }
   if (t.id === "bCommit") budCommit();
-  if (t.id === "rcvAdd") editRcv(""); if (t.dataset.rce) editRcv(t.dataset.rce); if (t.dataset.rcx) delRcv(t.dataset.rcx);
-  if (t.dataset.be) editBudRow(t.dataset.be); if (t.dataset.bx) delBudRow(t.dataset.bx);
+  if (t.id === "rcvAdd" || t.id === "rcvAdd2") editRcv(""); if (t.dataset.rcx) delRcv(t.dataset.rcx);
+  if (t.dataset.be) dlgThen(() => editBudRow(t.dataset.be)); if (t.dataset.bx) dlgThen(() => delBudRow(t.dataset.bx));
+  if (t.dataset.bu) { bUnit = t.dataset.bu; try { localStorage.setItem("pmo-bunit", bUnit); } catch {} drawBud(true); }
+  if (t.dataset.bid && !e.target.closest(".hd") && Date.now() - bDragAt > 300) { const id = t.dataset.bid; clearTimeout(bClickT); bClickT = setTimeout(() => budPanel(id), 250); }
   if (t.dataset.ba !== undefined) editBudRow("", t.dataset.ba);
   if (t.id === "bNewG") editBudRow("", "");
   if (t.id === "ulGo") { const ids = [...ulSel].filter(id => document.querySelector(`[data-ulc="${CSS.escape(id)}"]`)); if (!ids.length || !$("ulTo").value) { alert("연결할 집행을 체크하고 예산 항목을 골라 주세요."); return; } ulink(ids, $("ulTo").value); }
@@ -1383,7 +1423,7 @@ document.addEventListener("click", async e => {
   if (t.id === "cCancel") { cup = null; drawCt(true); }
   if (t.id === "ctXlsx" && admin) saveXlsx(`연락처_${P()?.이름 || "전체"}_${today()}.xlsx`, [["연락처", [["프로젝트", "구분", "분야", "소속", "성명", "직책", "이메일", "연락처1", "연락처2", "비고"], ...ctRows.map(x => [projects.find(p => p.id === x.pid)?.이름 || x.pid, x.구분, x.분야, x.소속, x.성명, x.직책, x.이메일, x.연락처1, x.연락처2, x.비고])]]]);
   if (t.id === "ledXlsxF") ledX(lRows, "_필터");
-  if (t.dataset.le) editLed(ledger.find(x => x.id === t.dataset.le));
+  if (t.dataset.le) { const x = ledger.find(y => y.id === t.dataset.le); dlgThen(() => editLed(x)); }
   if (t.id === "ledXlsx") ledX(ledger.map(nl), "");
   if (t.id === "stAdd") editSt(null);
   if (t.dataset.st) editSt(staff.find(x => x.id === t.dataset.st));
