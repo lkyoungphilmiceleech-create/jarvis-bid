@@ -254,10 +254,10 @@ table.lt .sm{display:block;font-size:11px;color:var(--muted)}table.lt .sm.one{ov
   <nav class="tabs" role="tablist">
     <button type="button" class="adm" data-tab="set" aria-selected="false">프로젝트 설정</button>
     <button type="button" data-tab="wbs" aria-selected="true">공정일정 (CHRONOS)</button>
-    <button type="button" class="adm" data-tab="bud" aria-selected="false">예산 (LEDGER)</button>
-    <button type="button" class="adm" data-tab="led" aria-selected="false">장부</button>
     <button type="button" data-tab="ppl" aria-selected="false">참여인력</button>
-    <button type="button" data-tab="ct" aria-selected="false">연락처</button>
+    <button type="button" data-tab="ct" aria-selected="false">관계자 연락처</button>
+    <button type="button" class="adm" data-tab="bud" aria-selected="false">예산 (LEDGER)</button>
+    <button type="button" class="adm" data-tab="led" aria-selected="false">집행내역서</button>
   </nav>
 
   <section class="glass panel" id="tab-list" hidden></section>
@@ -874,7 +874,7 @@ function drawBud(force) {
     <label class="note" style="display:block;margin-top:8px">구글 시트: 표 범위(머리 줄 포함)를 복사해 여기에 붙여 넣거나, 파일 &gt; 다운로드 &gt; Microsoft Excel(.xlsx)로 받아 위에 올려 주세요.<textarea id="budTsv" placeholder="여기에 붙여넣기 (Ctrl+V)" style="display:block;width:100%;min-height:48px;margin-top:4px"></textarea></label>`;
   const up = `<div class="row"><h2>예산 (산출내역서)</h2>${LOCK}<span style="flex:1"></span>${b ? '<button class="btn" type="button" id="budXlsx">엑셀 저장</button>' : ""}</div>
     ${b ? `<details class="fold"${bup ? " open" : ""}><summary>산출내역서 다시 올리기 (엑셀·PDF·구글 시트)</summary>${drop}</details>` : drop}`;
-  if (!b) { $("tab-bud").innerHTML = up + '<p class="note" id="bNote">계약 당시 산출내역서를 올리면 구분·항목·내용·산출근거·계약 금액(과세·영세·합계)을 그대로 옮깁니다. 집행 금액은 장부에 적은 내역을 항목별로 더해 자동으로 채웁니다.</p><div id="bStage"></div>'; if (bup) budStage(); return; }
+  if (!b) { $("tab-bud").innerHTML = up + '<p class="note" id="bNote">계약 당시 산출내역서를 올리면 구분·항목·내용·산출근거·계약 금액(과세·영세·합계)을 그대로 옮깁니다. 집행 금액은 집행내역서에 적은 내역을 항목별로 더해 자동으로 채웁니다.</p><div id="bStage"></div>'; if (bup) budStage(); return; }
   const ex = r => m.by[r.id] || {과세: 0, 영세: 0, n: 0}, sum = (rs, f) => rs.reduce((a, r) => a + f(r), 0);
   // 한 줄: 계약·집행·잔액 × 과세·영세·합계(단위 bUnit) + 집행률. cv = 카드 보기(900px 이하)의 3×3 격자
   const U = bU, trip = rs => { const a = [sum(rs, r => num(r.과세액)), sum(rs, r => num(r.영세액))], e = [sum(rs, r => ex(r).과세), sum(rs, r => ex(r).영세)]; a.push(a[0] + a[1]); e.push(e[0] + e[1]); return [a, e, a.map((v, k) => v - e[k])]; };
@@ -891,15 +891,15 @@ function drawBud(force) {
       <div><span class="hudlabel">${esc(cl)}</span><b>${won(ca)}</b><div class="note">공급가 ${won(m.계약)}${m.계약 && Math.abs(m.계약 - m.예산) > 1 ? ` · <span class="warn">내역서와 ${won(m.예산 - m.계약)} 차이</span>` : ""}</div></div>
       <div><span class="hudlabel">예산 총액 (부가세 포함)</span><b>${won(tot)}</b><div class="note">공급가 ${won(m.예산)} + 부가세 ${won(vat)} (과세 × 10%)<br>과세 ${won(m.과세.예산)} / 영세 ${won(m.영세.예산)}${num(p.계약총액) && tot !== num(p.계약총액) ? `<br><span class="warn">계약 금액과 ${won(tot - num(p.계약총액))} 차이${tot > num(p.계약총액) ? "(계약 금액 절사)" : ""}</span>` : ""}</div></div>
       <div id="rcvCard"${admin ? ' style="cursor:pointer" title="더블클릭해서 수금 입력"' : ""}><span class="hudlabel">수금</span><b>${won(rc.sum)}</b><div class="note">계약 대비 ${pct(rc.q)} · 미수금 ${won(rc.left)}${rc.adv ? `<br>선금 ${won(rc.adv.금액)}원 (${esc(rc.adv.입금일 || "입금일 없음")})` : ""}${admin ? '<br><span class="adm">더블클릭해서 입력 <button class="btn op" type="button" id="rcvAdd2">+ 수금</button></span>' : ""}</div></div>
-      <div><span class="hudlabel">집행 (B) · 장부</span><b>${won(m.집행)}</b></div>
+      <div><span class="hudlabel">집행 (B) · 집행내역서</span><b>${won(m.집행)}</b></div>
       <div><span class="hudlabel">잔액 (A−B)</span><b${left < 0 ? ' class="err"' : ""}>${won(left)}</b></div>
       <div><span class="hudlabel">목표 수익률</span>${admin ? `<label class="row" style="gap:4px;flex-wrap:nowrap"><input id="tgtIn" inputmode="decimal" value="${esc(g ?? "")}" placeholder="예: 15" aria-label="목표 수익률(%)" style="width:90px;padding:3px 6px"> %</label>` : `<b>${pct(g)}</b>`}</div></div>
     <details class="fold" id="rcvF"${rcvOpen ? " open" : ""}><summary>수금 내역 ${rc.cs.length}건 (선금·중도금·잔금, 부가세 포함)</summary><div class="tw"><table><thead><tr><th>구분</th><th>입금일</th><th class="num">금액</th><th>비고</th><th></th></tr></thead><tbody>
       ${rc.cs.map(x => `<tr data-rce="${esc(x.id)}"${admin ? ' style="cursor:pointer" title="더블클릭해서 수정"' : ""}><td>${esc(x.구분)}</td><td>${esc(x.입금일)}</td><td class="num">${won(x.금액)}</td><td>${esc(x.비고)}</td><td>${admin ? `<button class="btn op x" type="button" data-rcx="${esc(x.id)}" aria-label="수금 삭제">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">수금 기록이 없습니다.</td></tr>'}</tbody></table></div>
       ${admin ? '<div class="row"><button class="btn" type="button" id="rcvAdd">+ 수금 추가</button></div>' : ""}</details>
     <p class="note">${g === null ? "목표 수익률이 없습니다 — 위 목표 수익률 칸에 숫자(%)를 넣어 주세요. " : `목표 수익률 <b>${pct(g)}</b> 대비 현재 수익률(집행 기준) <b>${pct(m.확정수익률)}</b>${m.확정수익률 === null ? "" : ` (${m.확정수익률 - g >= 0 ? "+" : ""}${(m.확정수익률 - g).toFixed(1)}%p)`} · `}참고: (계약 공급가 − 집행) ÷ 계약 공급가</p>
-    <p class="note" id="bNote">${esc(b.file)} · ${rows.length}개 항목 · 금액은 공급가액(부가세 제외). 집행(B)은 장부에 적은 내역을 항목별로 더한 값이고, 잔액 = 예산 − 집행입니다. 소계 줄을 누르면 접힙니다.</p>
-    <div class="row"><span class="note">금액 단위</span><div class="seg" role="group" aria-label="금액 단위"><button type="button" data-bu="w" aria-pressed="${bUnit === "w"}">원</button><button type="button" data-bu="k" aria-pressed="${bUnit === "k"}">천원</button></div><span class="note">행을 누르면 산출근거·연결된 장부${admin ? ", 두 번 누르면 수정, ⋮⋮ 를 끌면 순서 이동" : ""}</span></div>
+    <p class="note" id="bNote">${esc(b.file)} · ${rows.length}개 항목 · 금액은 공급가액(부가세 제외). 집행(B)은 집행내역서에 적은 내역을 항목별로 더한 값이고, 잔액 = 예산 − 집행입니다. 소계 줄을 누르면 접힙니다.</p>
+    <div class="row"><span class="note">금액 단위</span><div class="seg" role="group" aria-label="금액 단위"><button type="button" data-bu="w" aria-pressed="${bUnit === "w"}">원</button><button type="button" data-bu="k" aria-pressed="${bUnit === "k"}">천원</button></div><span class="note">행을 누르면 산출근거·연결된 집행내역${admin ? ", 두 번 누르면 수정, ⋮⋮ 를 끌면 순서 이동" : ""}</span></div>
     <div class="sheet"><table class="bt"><thead><tr><th rowspan="2">항목 · 내용</th><th class="c" colspan="3">계약 (A)</th><th class="c" colspan="3">집행 (B)</th><th class="c" colspan="3">잔액 (A−B)</th><th class="n" rowspan="2">집행률</th></tr>
       <tr>${"과세 영세 합계 과세 영세 합계 과세 영세 합계".split(" ").map(x => `<th class="n">${x}</th>`).join("")}</tr></thead><tbody>
     ${groups.map(x => `<tr class="head click${bShut.has(x.name) ? " shut" : ""}" data-gh="${esc(x.name)}"><td>${esc(x.name || "(구분 없음)")} 소계 <span class="sm">${x.rows.length}항목</span>${admin ? ` <button class="btn op adm" type="button" data-ba="${esc(x.name)}">+ 행 추가</button>` : ""}</td>${nums(x.rows)}</tr>` + (bShut.has(x.name) ? "" : x.rows.map(r => { const e = ex(r), a = num(r.금액), en = e.과세 + e.영세;
@@ -908,7 +908,7 @@ function drawBud(force) {
       <tr class="total2"><td colspan="11" class="note">원 단위: 공급가 합계 <b>${won(m.예산)}</b> · 부가세 <b>${won(vat)}</b> (과세 × 10%) · 총액(절사 없음) <b>${won(tot)}</b></td></tr></tfoot></table></div>
     ${admin ? '<div class="row adm"><button class="btn" type="button" id="bNewG">+ 새 구분 추가</button></div>' : ""}
     ${(b.log || []).length ? `<p class="note">변경 기록: ${(b.log || []).slice(-5).reverse().map(x => `${esc(kst(x.at))} ${esc(x.내용)}`).join(" · ")}</p>` : ""}
-    ${un.length ? `<div class="co"><h3>미연결 집행 ${un.length}건 · ${won(m.미연결)}원 <span class="note">— 장부에서 예산 항목과 연결되지 않은 집행입니다. 항목을 고르면 바로 연결합니다.</span></h3>
+    ${un.length ? `<div class="co"><h3>미연결 집행 ${un.length}건 · ${won(m.미연결)}원 <span class="note">— 집행내역서에서 예산 항목과 연결되지 않은 집행입니다. 항목을 고르면 바로 연결합니다.</span></h3>
       <div class="tw"><table><thead><tr><th><input type="checkbox" id="ulAll" aria-label="모두 선택"${un.every(e => ulSel.has(e.id)) ? " checked" : ""}></th><th>지출일</th><th>구분·항목·내용</th><th>지출 항목</th><th>공급업체</th><th>금액</th><th>예산 항목 연결</th></tr></thead><tbody>${un.map(e => { const n = nl(e);
         return `<tr><td><input type="checkbox" data-ulc="${esc(e.id)}" aria-label="선택"${ulSel.has(e.id) ? " checked" : ""}></td><td>${esc(n.지출일)}</td><td>${esc(lab(n))}</td><td>${esc(n.지출항목)}</td><td>${esc(n.공급업체)}</td><td class="num">${won(num(n.과세액) + num(n.영세액))}</td><td><select data-ul="${esc(e.id)}" aria-label="예산 항목">${ropt(recOf(n, rows))}</select></td></tr>`; }).join("")}</tbody></table></div>
       <div class="row"><span class="note">선택한 건을</span><select id="ulTo" aria-label="한 번에 연결할 예산 항목">${ropt(null)}</select><button class="btn" type="button" id="ulGo">한 번에 연결</button></div></div>` : ""}
@@ -942,7 +942,7 @@ function editBudRow(id, g) {
   const r = old ? br(old) : {구분: g ?? "", 항목: "", 내용: "", 산출: "", 과세액: 0, 영세액: 0};
   const f = (k, l, n) => `<label>${l}<input data-bf="${k}" value="${esc(n ? (r[k] ? won(r[k]) : "") : r[k] ?? "")}"${n ? ' inputmode="numeric"' : ""}></label>`;
   $("dlgForm").innerHTML = `<h2 style="margin:0 0 10px">${old ? "산출내역서 행 수정" : "산출내역서 행 추가"}</h2><div class="form">${f("구분", "구분")}${f("항목", "항목")}${f("내용", "내용")}<label class="wide">산출근거<input data-bf="산출" value="${esc(r.산출 ?? "")}"></label>${f("과세액", "과세액 (원)", 1)}${f("영세액", "영세액 (원)", 1)}</div>
-    <p class="note">금액 = 과세 + 영세(공급가). ${old ? "행 번호는 그대로라 장부 연결이 유지됩니다." : ""}</p><div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button><button class="btn" value="cancel">닫기</button></div>`;
+    <p class="note">금액 = 과세 + 영세(공급가). ${old ? "행 번호는 그대로라 집행내역 연결이 유지됩니다." : ""}</p><div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button><button class="btn" value="cancel">닫기</button></div>`;
   $("dlg").onclose = async () => { if ($("dlg").returnValue !== "save") return; const n = {}; $("dlgForm").querySelectorAll("[data-bf]").forEach(el => n[el.dataset.bf] = el.value.trim());
     n.과세액 = num(n.과세액); n.영세액 = num(n.영세액); n.금액 = n.과세액 + n.영세액; if (!n.항목 && !n.내용) { alert("항목이나 내용을 넣어 주세요."); return; }
     if (old) { const keep = L().filter(e => !e.rid && ridOf(nl(e), BR()) === id).map(e => e.id); // 글자로만 이어진 장부는 rid 를 고정해 연결 유지
@@ -959,7 +959,7 @@ function budPanel(id) {
   $("dlgForm").innerHTML = `<div class="row"><h2 style="margin:0">${esc(rLab(r))}</h2><span style="flex:1"></span><button class="btn" value="close" aria-label="닫기">✕</button></div>
     <p class="note">${esc([r.구분, r.항목, r.내용].filter(Boolean).join(" / "))}</p><h3>산출근거</h3><p style="white-space:pre-wrap;margin:0">${esc(r.산출 || "-")}</p>
     <h3>금액 (원)</h3><div class="g3"><i></i><i>과세</i><i>영세</i><i>합계</i>${[["계약", a], ["집행", x], ["잔액", l]].map(([k, xs]) => `<i>${k}</i>${xs.map(v => `<span${v < 0 ? ' class="neg"' : ""}>${won(v)}</span>`).join("")}`).join("")}</div>
-    <h3>연결된 장부 ${led.length}건</h3>${led.map(y => `<button class="lnk" type="button" data-le="${esc(y.id)}">${esc(y.지출일)} · ${esc(y.공급업체 || y.지출항목 || "-")} · ${won(num(y.과세액) + num(y.영세액))}원</button>`).join("<br>") || '<p class="note">없습니다.</p>'}
+    <h3>연결된 집행내역 ${led.length}건</h3>${led.map(y => `<button class="lnk" type="button" data-le="${esc(y.id)}">${esc(y.지출일)} · ${esc(y.공급업체 || y.지출항목 || "-")} · ${won(num(y.과세액) + num(y.영세액))}원</button>`).join("<br>") || '<p class="note">없습니다.</p>'}
     ${admin ? `<div class="row" style="margin-top:12px"><button class="btn" type="button" data-be="${esc(id)}">수정</button><button class="btn x" type="button" data-bx="${esc(id)}">삭제</button></div>` : ""}`;
   $("dlg").onclose = null; $("dlg").returnValue = ""; $("dlg").classList.add("side"); $("dlg").showModal();
 }
@@ -981,7 +981,7 @@ const bDragEnd = async e => { const g = bdrag; bdrag = null; if (!g) return; cle
 document.addEventListener("pointerup", bDragEnd); document.addEventListener("pointercancel", bDragEnd);
 async function delBudRow(id) {
   const b = B(), raw = b?.rows || [], r = raw.find(x => x.id === id); if (!admin || !r) return; const n = L().filter(e => ridOf(nl(e), BR()) === id).length;
-  if (!(await askYes("산출내역서 행 삭제", `${bLbl(br(r))} 행을 삭제할까요?${n ? `\n\n연결된 장부 ${n}건이 미연결이 됩니다.` : ""}`, "삭제"))) return;
+  if (!(await askYes("산출내역서 행 삭제", `${bLbl(br(r))} 행을 삭제할까요?${n ? `\n\n연결된 집행내역 ${n}건이 미연결이 됩니다.` : ""}`, "삭제"))) return;
   const i = B()?.rows?.findIndex(x => x.id === id); if (i === undefined || i < 0) return; B().rows.splice(i, 1); bLog(B(), `행 삭제: ${bLbl(br(r))}`); await saveBud(); draw(); }
 // 미연결 장부 → 예산 항목 추천: 구분·항목·내용·지출 항목 글자 두 개씩 겹치는 정도(가장 비슷한 1개)
 const bg2 = s => { const t = nk(s), o = new Set(); for (let i = 0; i < t.length - 1; i++) o.add(t.slice(i, i + 2)); return o; };
@@ -1076,7 +1076,7 @@ function drawLed(force) {
   const rows = lRows = base.filter(e => (!lf.link || (lf.link === "no") === !e._rid) && (!lf.from || e.지출일 >= lf.from) && (!lf.to || e.지출일 <= lf.to) && (!lf.pay || e.결제방법 === lf.pay) && (!lf.cat || e.구분 === lf.cat)
       && (!lf.sup || nk(e.공급업체).includes(nk(lf.sup))) && (!lf.q || [e.구분, e.항목, e.내용, e.지출항목, e.공급업체, e.비고].some(v => String(v || "").includes(lf.q)))).sort((a, b) => String(b.지출일).localeCompare(String(a.지출일)));
   const s = k => rows.reduce((m, e) => m + num(e[k]), 0), pn = id => projects.find(p => p.id === id)?.이름 || id;
-  $("tab-led").innerHTML = `<div class="row"><h2>장부 (전체 내역서)</h2>${LOCK}<span style="flex:1"></span><button class="btn primary" type="button" id="ledAdd" ${P() ? "" : "disabled"}>+ 집행 내역 추가</button><button class="btn" type="button" id="ledXlsx">엑셀 저장</button><button class="btn" type="button" id="ledXlsxF" title="아래 필터 결과만 저장">필터 결과만 저장</button></div>
+  $("tab-led").innerHTML = `<div class="row"><h2>집행내역서</h2>${LOCK}<span style="flex:1"></span><button class="btn primary" type="button" id="ledAdd" ${P() ? "" : "disabled"}>+ 집행 내역 추가</button><button class="btn" type="button" id="ledXlsx">엑셀 저장</button><button class="btn" type="button" id="ledXlsxF" title="아래 필터 결과만 저장">필터 결과만 저장</button></div>
     ${P() ? dropBox("led", "전체 내역서 엑셀(XLSX·XLS·CSV)·증빙 이미지(카드영수증·송금증·세금계산서, 여러 장)", ".xlsx,.xls,.csv,image/*", true, "이미지는 LEDGER가 지출일·과세·부가세·결제방법·공급업체만 읽어 아래 확인 목록에 넣습니다(저장 전 확인). 원본 이미지는 저장하지 않습니다. PDF는 캡처해 이미지로 올려 주세요.") + `<p class="note" id="lImg" role="status">${esc(lImgMsg)}</p>` : ""}
     <div id="lStage">${lup?.pid === cur ? lupHtml() : ""}</div>
     <div class="row"><select data-lff="scope" aria-label="범위">${opt([["cur", "현재 프로젝트"], ["all", "전체 프로젝트"]], lf.scope)}</select><select data-lff="link" aria-label="예산 연결">${opt([["", "예산 연결 전체"], ["yes", "연결"], ["no", "미연결"]], lf.link)}</select>
@@ -1126,7 +1126,7 @@ function ledLoad(name, wb) {
   }
   lupPut(`${name} · ${sheet}`, out, dup);
 }
-// 확인 목록(lup): 엑셀·이미지가 함께 쌓이고, 행마다 고친 뒤 [장부에 추가]를 눌러야 저장
+// 확인 목록(lup): 엑셀·이미지가 함께 쌓이고, 행마다 고친 뒤 [집행내역서에 추가]를 눌러야 저장
 const lupPut = (name, rows, dup) => { if (lup?.pid === cur) { lup.rows.push(...rows); lup.dup += dup; lup.name += ` + ${name}`; } else lup = {pid: cur, name, rows, dup}; drawLed(true); };
 // 예산 항목 고르기: 이름(구분 / 항목 / 내용) → 행. 같은 이름이 여럿이면 (2)(3) 을 붙여 구분
 // 표시는 '항목 · 내용'(내용이 비면 항목·구분). 같은 이름이 여러 구분에 있을 때만 ' (구분)', 그래도 겹치면 (2)(3)
@@ -1175,7 +1175,7 @@ async function ledImgs(fs, pre) {
     try { const b = await fitImg(fs[i], lim); if (!b) { bad.push(fs[i].name); continue; }
       const e = rcpt(await sample.json(RCPT, {images: [b], modelTier: "default"}), fs[i].name); if (have.has(lkeyI(e))) dup++; else out.push({...e, _img: 1}); } catch { bad.push(fs[i].name); } } }
   finally { lBusy = false; }
-  say(`증빙 이미지 ${out.length}장을 읽었습니다${dup ? ` (이미 장부에 있는 ${dup}건 건너뜀)` : ""}. 아래 확인 목록에서 고친 뒤 [장부에 추가]를 눌러 주세요.${bad.length ? ` 읽지 못함: ${bad.join(", ")}` : ""}`);
+  say(`증빙 이미지 ${out.length}장을 읽었습니다${dup ? ` (이미 집행내역서에 있는 ${dup}건 건너뜀)` : ""}. 아래 확인 목록에서 고친 뒤 [집행내역서에 추가]를 눌러 주세요.${bad.length ? ` 읽지 못함: ${bad.join(", ")}` : ""}`);
   if (out.length) lupPut(`증빙 이미지 ${out.length}장`, out, dup);
 }
 const luRow = (e, i) => { const a = k => `data-lu="${i}|${k}"`, inp = (k, l, w = 90) => `<input ${a(k)} value="${esc(e[k] ?? "")}" placeholder="${l}" aria-label="${l}" style="min-width:${w}px">`, rid = ridOf(e, BR());
@@ -1183,9 +1183,9 @@ const luRow = (e, i) => { const a = k => `data-lu="${i}|${k}"`, inp = (k, l, w =
     <td style="min-width:220px"><input list="rdl" ${a("rp")} value="${esc(rName(rid, cur))}" placeholder="예산 항목 검색" aria-label="예산 항목" style="width:100%"><details${!rid && (e.구분 || e.항목 || e.내용) ? " open" : ""}><summary class="note">직접 입력</summary>${inp("구분", "구분")}${inp("항목", "항목")}${inp("내용", "내용")}</details></td>
     <td>${inp("지출항목", "지출 항목", 120)}</td><td>${inp("과세액", "과세")}</td><td>${inp("부가세", "부가세")}</td><td>${inp("영세액", "영세 원화")}</td><td>${inp("외화", "외화")}</td>
     <td><select ${a("결제방법")} aria-label="결제방법">${opt(uq([...PAYS, e.결제방법]), e.결제방법, "")}</select></td><td>${inp("공급업체", "공급업체", 120)}</td><td>${inp("비고", "비고", 140)}</td><td><button class="btn x" type="button" data-lux="${i}" aria-label="이 줄 빼기">✕</button></td></tr>`; };
-const lupHtml = () => `<div class="co"><h3>${esc(lup.name)} 확인</h3><p class="note">새 내역 ${lup.rows.length}건 · 합계 ${won(lup.rows.reduce((a, e) => a + num(e.과세액) + num(e.영세액), 0))}원 · 예산 항목 연결 ${lup.rows.filter(e => ridOf(e, BR())).length}건${lup.dup ? ` · 이미 있는 ${lup.dup}건은 건너뜀` : ""}. 칸을 고친 뒤 [장부에 추가]를 눌러야 저장됩니다. 예산 항목은 같은 거래처·지출 항목의 이전 연결로 추천해 둡니다.</p>
+const lupHtml = () => `<div class="co"><h3>${esc(lup.name)} 확인</h3><p class="note">새 내역 ${lup.rows.length}건 · 합계 ${won(lup.rows.reduce((a, e) => a + num(e.과세액) + num(e.영세액), 0))}원 · 예산 항목 연결 ${lup.rows.filter(e => ridOf(e, BR())).length}건${lup.dup ? ` · 이미 있는 ${lup.dup}건은 건너뜀` : ""}. 칸을 고친 뒤 [집행내역서에 추가]를 눌러야 저장됩니다. 예산 항목은 같은 거래처·지출 항목의 이전 연결로 추천해 둡니다.</p>
   ${rDl("rdl", cur)}<div class="tw" style="max-height:480px;overflow:auto"><table><thead><tr><th>지출일</th><th>예산 항목</th><th>지출 항목</th><th>과세</th><th>부가세</th><th>영세 원화</th><th>외화</th><th>결제방법</th><th>공급업체</th><th>비고</th><th></th></tr></thead><tbody>${lup.rows.map(luRow).join("")}</tbody></table></div>
-  <div class="row"><button class="btn primary" type="button" id="lCommit"${lup.rows.length ? "" : " disabled"}>장부에 추가</button><button class="btn x" type="button" id="lCancel">취소</button><span class="note" id="lNote"></span></div></div>`;
+  <div class="row"><button class="btn primary" type="button" id="lCommit"${lup.rows.length ? "" : " disabled"}>집행내역서에 추가</button><button class="btn x" type="button" id="lCancel">취소</button><span class="note" id="lNote"></span></div></div>`;
 const ledX = (list, tag) => saveXlsx(`LEDGER_장부${tag}_${today()}.xlsx`, [["전체 내역서", [["지출일", "프로젝트", "구분", "항목", "내용", "지출 항목", "과세", "영세 외화", "영세 원화", "합계", "부가세", "결제방법", "공급업체", "비고"],
   ...list.map(x => [x.지출일, projects.find(p => p.id === x.pid)?.이름 || x.pid, x.구분, x.항목, x.내용, x.지출항목, num(x.과세액), x.외화, num(x.영세액), num(x.과세액) + num(x.영세액), num(x.부가세), x.결제방법, x.공급업체, x.비고])]]]);
 async function ledCommit() {
@@ -1193,9 +1193,9 @@ async function ledCommit() {
   const all = lup.rows.map(({_img, ...e}) => { const x = {...e, _i: !!_img, 과세액: num(e.과세액), 영세액: num(e.영세액), 부가세: num(e.부가세)}; x.합계 = x.과세액 + x.영세액; return x; });
   const miss = all.filter(e => !e.지출일 || !e.합계).length; if (miss) { alert(`지출일·금액이 빈 줄 ${miss}개를 채우거나 ✕로 빼 주세요.`); return; }
   const rows = all.filter(e => (e._i ? haveI.has(lkeyI(e)) : have.has(lkey(e))) ? (dup++, false) : true).map(({_i, ...e}) => e); $("lCommit").disabled = true; // 고친 뒤 다시 중복 검사
-  if (!rows.length) { lup = null; drawLed(true); alert(`모두 이미 장부에 있습니다 (${dup}건).`); return; }
+  if (!rows.length) { lup = null; drawLed(true); alert(`모두 이미 집행내역서에 있습니다 (${dup}건).`); return; }
   for (let i = 0; i < rows.length; i += 20) { const r = await Promise.allSettled(rows.slice(i, i + 20).map(e => db.collection("ledger").add({...e, at}))); ok += r.filter(x => x.status === "fulfilled").length; if ($("lNote")) $("lNote").textContent = `${ok}/${rows.length}건 저장…`; }
-  lup = null; drawLed(true); alert(ok === rows.length ? `${ok}건을 장부에 넣었습니다.` : `${rows.length}건 중 ${ok}건만 저장했습니다. 다시 올리면 빠진 것만 추가됩니다.`);
+  lup = null; drawLed(true); alert(ok === rows.length ? `${ok}건을 집행내역서에 넣었습니다.` : `${rows.length}건 중 ${ok}건만 저장했습니다. 다시 올리면 빠진 것만 추가됩니다.`);
 }
 
 // ── 참여인력: 사내 직원 명부(staff, 관리자만)에서 골라 프로젝트에 배치 → people 문서(pid·staffId). 배치 해제 = 그 people 문서 삭제
@@ -1383,7 +1383,7 @@ document.addEventListener("click", async e => {
     if (await saveProj(p, $("pNote"))) { setDirty = null; pMsg = ""; hiP = p.id; showTab("list"); toast(`저장했습니다 — ${p.코드 ? p.코드 + " " : ""}${p.이름}`); } else drawTop(); } // 저장하면 목록으로 가서 그 행을 강조
   if (t.id === "tgt" && admin) { const v = prompt(`${P().이름} 목표 수익률(%) — 비우면 지웁니다`, tgt(P()) ?? ""); if (v !== null) setTgt(v); }
   if (t.dataset.pj) { cur = t.dataset.pj; hiP = null; setDirty = null; pMsg = ""; try { localStorage.setItem("pmo-proj", cur); } catch {} showTab("wbs"); setTimeout(() => lateAlert(false), 300); }
-  if (t.id === "pDel") { const p = P(); if (!p || !(await askYes("프로젝트 삭제", `'${p.이름}' 프로젝트를 삭제합니다. 되돌릴 수 없습니다.\n\n지워지는 것: 프로젝트 정보·공정일정·예산(산출내역서)\n남는 것: 장부·참여인력·프로젝트별 연락처 페이지`, "프로젝트 삭제", p.이름 || "삭제"))) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
+  if (t.id === "pDel") { const p = P(); if (!p || !(await askYes("프로젝트 삭제", `'${p.이름}' 프로젝트를 삭제합니다. 되돌릴 수 없습니다.\n\n지워지는 것: 프로젝트 정보·공정일정·예산(산출내역서)\n남는 것: 집행내역서·참여인력·프로젝트별 연락처 페이지`, "프로젝트 삭제", p.이름 || "삭제"))) return; await Promise.all([`pm/${p.id}`, `wbs/${p.id}`, `budget/${p.id}`].map(x => db.doc(x).delete().catch(() => {}))); cur = null; showTab("list"); }
   if (t.dataset.pick) $(t.dataset.pick + "File").click();
   if (t.id === "attLink") attLink();
   if (t.dataset.fget) attGet(t.dataset.fget);
