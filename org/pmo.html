@@ -239,7 +239,7 @@ body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
   <nav class="tabs" role="tablist">
     <button type="button" class="adm" data-tab="set" aria-selected="false">프로젝트 설정</button>
     <button type="button" data-tab="wbs" aria-selected="true">공정일정 (CHRONOS)</button>
-    <button type="button" data-tab="sch" aria-selected="false">일정 보기</button>
+    <button type="button" data-tab="sch" aria-selected="false">담당자별 업무</button>
     <button type="button" class="adm" data-tab="bud" aria-selected="false">예산 (LEDGER)</button>
     <button type="button" class="adm" data-tab="led" aria-selected="false">장부</button>
     <button type="button" data-tab="ppl" aria-selected="false">참여인력</button>
@@ -364,7 +364,7 @@ function say() {
     : !p ? (admin ? "" : "아직 공개된 프로젝트가 없습니다.") || "본부장님, [+ 새 프로젝트]를 누르고 착수보고서·계약서·산출내역서를 올려 주세요. CHRONOS가 계약 정보와 공정표를, LEDGER가 예산표를 만듭니다."
     : `${hi}${p.이름} — ${n ? `지연 ${n}건이 있습니다. ` : ""}${admin ? `목표 수익률 ${pct(tgt(p))}, ` : ""}공정률 ${progOf(W()) === null ? "–" : Math.round(progOf(W()) * 100) + "%"} (작업 ${W().filter(t => t.상태 === "완료").length}/${W().length} 완료)입니다.`;
 }
-function showTab(t) { if (admin === false && !["ct", "list", "sch", "ppl"].includes(t)) t = "wbs"; /* 비관리자: 목록·공정일정·일정 보기·참여인력(요청)·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
+function showTab(t) { if (admin === false && !["ct", "list", "sch", "ppl"].includes(t)) t = "wbs"; /* 비관리자: 목록·공정일정·담당자별 업무·참여인력(요청)·연락처만 */ tab = t; try { localStorage.setItem("pmo-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   ["list", "set", "wbs", "sch", "bud", "led", "ppl", "ct"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
 function draw() { drawTop(); say();
@@ -613,16 +613,17 @@ function calHtml(w) {
   return `<div class="row"><button class="btn" type="button" data-cm="-1" aria-label="이전 달">‹ 이전 달</button><b id="calT">${y}년 ${mo}월</b><button class="btn" type="button" data-cm="1" aria-label="다음 달">다음 달 ›</button><button class="btn" type="button" data-cm="0">이번 달</button><span class="note">마감일 기준 · 빨강 = 지연 · 흐림 = 완료 · ✉ = 업무 요청</span></div>
     <div class="cal">${["월", "화", "수", "목", "금", "토", "일"].map(x => `<div class="cw">${x}</div>`).join("")}${cells.join("")}</div>`;
 }
-// ── 일정 보기: 간트 + 체크리스트(하위 할 일). 팀장도 읽기로
+// ── 담당자별 업무: 담당자마다 작업·상태·시작일·마감일만(간트 없음). 팀장도 읽기로
 function drawSch() {
   const p = P(); if (!p) { $("tab-sch").innerHTML = '<p class="empty">프로젝트를 먼저 고르세요.</p>'; return; }
-  const w = myW(), {ps} = periods(w), dis = admin ? "" : " disabled", sl = document.querySelector("#tab-sch .wt")?.scrollLeft;
-  $("tab-sch").innerHTML = `<div class="row"><h2>일정 보기 — 간트 + 체크리스트</h2>${mineSeg()}${whoSel()}</div>${loadHtml()}<p class="note">오늘(${today()})이 든 주(노란 줄)부터 보여 주고, 끝나지 않은 지난 작업이 있으면 그 주부터 보여 줍니다. ${admin ? "하위 할 일을 체크하면 바로 저장됩니다." : "보기 전용입니다."} 작업 이름을 누르면 세부 내용을 엽니다. 월력은 공정일정 탭의 [월력] 버튼.</p>
-    <div class="wt"><table class="gt"><thead><tr><th style="min-width:220px">작업 · 체크리스트</th><th style="min-width:110px">담당</th><th>상태</th>${tlHead(ps)}</tr></thead><tbody>${w.map(t => { const st = effStat(t);
-      return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><span class="note">${esc(t.단계)} · ${esc(mw(t.시작))} ~ ${esc(mw(t.종료))}</span><br><button class="lnk" type="button" data-t="${W().indexOf(t)}">${esc(t.작업 || "(이름 없음)")}</button></td><td>${esc(who(t.담당))}</td><td><span class="st ${st}">${SL(st)}</span></td>${tlCells(t, ps)}</tr>`
-      + (t.하위 || []).map((s, j) => { const ss = subStat(s); return `<tr class="sub"><td><label class="chk"><input type="checkbox" data-sc="${esc(t.id)}|${j}"${s.완료 ? " checked" : ""}${dis}> ${esc(s.할일)}</label></td><td class="note">${esc(s.담당 ? who(s.담당) : "")}</td><td>${s.마감 ? `<span class="st ${ss}">${esc(mw(s.마감))}</span>` : ""}</td>${ps.map(x => `<td class="tl${s.마감 && s.마감 >= x.s && s.마감 <= x.e ? " dot " + ss : ""}"></td>`).join("")}</tr>`; }).join(""); }).join("")
-      || `<tr><td colspan="${3 + ps.length}" class="empty">${isMine() ? "내가 담당한 작업이 없습니다." : "공정표가 없습니다."}</td></tr>`}</tbody></table></div>${askHtml()}`;
-  tlScroll(document.querySelector("#tab-sch .wt"), sl);
+  const w = myW(), grp = new Map(); w.forEach(t => { const k = t.담당 ? who(t.담당) : "미배치"; grp.set(k, [...(grp.get(k) || []), t]); });
+  const keys = [...grp.keys()].sort((a, b) => (a === "미배치") - (b === "미배치") || a.localeCompare(b, "ko"));
+  $("tab-sch").innerHTML = `<div class="row"><h2>담당자별 업무</h2>${mineSeg()}${whoSel()}</div><p class="note">작업 이름을 누르면 세부 내용을 엽니다.</p>
+    ${keys.map(k => { const ts = grp.get(k), nl = ts.filter(t => effStat(t) === "지연").length;
+      return `<h3 style="margin:14px 0 6px">${esc(k)} <span class="note">작업 ${ts.length} · 완료 ${ts.filter(t => t.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</span></h3>
+      <div class="tw"><table><thead><tr><th>담당 업무</th><th>상태</th><th>시작일</th><th>마감일</th></tr></thead><tbody>${ts.map(t => { const st = effStat(t);
+        return `<tr class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><button class="lnk" type="button" data-t="${W().indexOf(t)}">${esc(t.작업 || "(이름 없음)")}</button></td><td><span class="st ${st}">${SL(st)}</span></td><td>${esc(t.시작 || "")}</td><td>${esc(t.종료 || "")}</td></tr>`; }).join("")}</tbody></table></div>`; }).join("")
+      || `<p class="empty">${isMine() ? "내가 담당한 작업이 없습니다." : "공정표가 없습니다."}</p>`}${askHtml()}`;
 }
 let wMsg = "";
 const wn = m => { wMsg = m; if ($("wNote")) $("wNote").textContent = m; };
