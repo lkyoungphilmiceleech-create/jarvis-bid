@@ -185,7 +185,7 @@ select option{background:var(--bg2);color:var(--ink)}
 .wt tr.late td{color:var(--stop)}.wt tr.late td:first-child{box-shadow:inset 3px 0 var(--stop)}.wt tr.late [data-wi$="|종료"]{color:var(--stop);font-weight:700}
 .wt tr.done td{opacity:.5}
 .wt .nm{display:flex;align-items:center;gap:2px}.wt .nm input{flex:1}.wt .op{padding:1px 6px;font-size:11px}
-.wt .hd{cursor:grab;touch-action:none;user-select:none;color:var(--muted);padding:0 6px 0 2px;letter-spacing:-2px}
+.wt .hd{cursor:grab;touch-action:none;user-select:none;color:var(--muted);padding:6px 8px;margin:-6px 0 -6px -4px;letter-spacing:-2px;border-radius:6px}.wt .hd:hover{background:var(--holo-soft);color:var(--holo)}.wt tr.grp.dropa td{box-shadow:inset 0 -2px var(--holo)}
 .wt tr.drag{opacity:.6}.wt tr.dropb td{box-shadow:inset 0 2px var(--holo)}.wt tr.dropa td{box-shadow:inset 0 -2px var(--holo)}
 body:not(.staff) #tab-wbs td.tl.on{cursor:grab;touch-action:none}
 .saved{font-size:12px;color:var(--go)}
@@ -543,7 +543,7 @@ function wTable(w) {
     const g = t.단계 || "", st = effStat(t), sub = t.하위 || [], f = x => esc(`${t.id}|${x}`); let h = "";
     if (g !== prev) { prev = g; let n = i; while (w[n] && (w[n].단계 || "") === g) n++; const run = w.slice(i, n), nl = run.filter(x => effStat(x) === "지연").length;
       h = `<tr class="grp"><td colspan="5">${esc(g || "(구분 없음)")} · 작업 ${run.length} · 완료 ${run.filter(x => x.상태 === "완료").length}${nl ? ` · <span class="err">지연 ${nl}</span>` : ""}</td><td colspan="${ps.length}"></td></tr>`; }
-    return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${W().indexOf(t)}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button></div></td>
+    return h + `<tr data-id="${esc(t.id)}" class="${st === "지연" ? "late" : t.상태 === "완료" ? "done" : ""}"><td><div class="nm"><span class="hd adm" title="끌어서 순서 바꾸기" aria-hidden="true">⋮⋮</span><input data-wi="${f("작업")}" value="${esc(t.작업)}" placeholder="작업 이름" aria-label="항목"${dis}><button class="btn op" type="button" data-t="${W().indexOf(t)}" title="세부 내용 (과업내용·하위 할 일·자료·지연 보고)">열기${sub.length ? ` ☑${sub.filter(s => s.완료).length}/${sub.length}` : ""}</button><button class="btn x adm" type="button" data-wdel="${esc(t.id)}" title="이 작업 삭제" aria-label="작업 삭제">✕</button></div></td>
       <td><select data-wi="${f("담당")}" aria-label="담당자"${dis}>${WHO(t.담당 ? `${t.담당.t}:${t.담당.id}` : "")}${admin ? '<option value="+add">+ 인력 배치…</option>' : ""}</select></td>
       ${dt(t, "시작", "시작일")}${dt(t, "종료", "마감일")}
       <td><select data-wi="${f("상태")}" aria-label="상태"${dis}>${opt(STO, sv(t.상태))}</select>${st === "지연" && t.상태 !== "지연" ? ' <span class="st 지연">기한 초과</span>' : ""}<input data-wi="${f("메모")}" value="${esc(t.메모)}" placeholder="${admin ? "진행 메모" : ""}" aria-label="진행 메모"${dis}></td>${tlCells(t, ps)}</tr>`; }).join("")}</tbody></table></div>`;
@@ -581,12 +581,16 @@ document.addEventListener("pointerdown", e => {
 });
 document.addEventListener("pointermove", e => { const g = drag; if (!g) return;
   if (g.k === "row") { document.querySelectorAll("#tab-wbs .dropb, #tab-wbs .dropa").forEach(x => x.classList.remove("dropb", "dropa")); const o = document.elementFromPoint(e.clientX, e.clientY)?.closest("#tab-wbs tr[data-id]");
-    g.to = o && o !== g.tr ? {id: o.dataset.id, after: e.clientY > o.getBoundingClientRect().top + o.offsetHeight / 2} : null; if (g.to) o.classList.add(g.to.after ? "dropa" : "dropb"); return; }
+    const gh = !o && document.elementFromPoint(e.clientX, e.clientY)?.closest("#tab-wbs tr.grp"), nx = gh?.nextElementSibling; // 단계 머리 줄 = 그 단계의 맨 앞
+    g.to = o && o.dataset.id !== g.t.id ? {id: o.dataset.id, after: e.clientY > o.getBoundingClientRect().top + o.offsetHeight / 2} : nx?.dataset?.id && nx.dataset.id !== g.t.id ? {id: nx.dataset.id, after: false} : null;
+    if (g.to) (gh || o).classList.add(gh ? "dropa" : g.to.after ? "dropa" : "dropb");
+    clearInterval(g.sc); const wr = document.querySelector("#tab-wbs .wt")?.getBoundingClientRect(), y = e.clientY, top = Math.max(wr?.top ?? 0, 0), bot = Math.min(wr?.bottom ?? innerHeight, innerHeight), v = y < top + 50 ? -14 : y > bot - 50 ? 14 : 0;
+    if (v) g.sc = setInterval(() => { const box = document.querySelector("#tab-wbs .wt"), s = box?.scrollTop; if (box) box.scrollTop += v; if (!box || box.scrollTop === s) scrollBy(0, v); }, 16); return; } // 표 상자(자체 스크롤)를 먼저, 끝까지 가면 페이지를 스크롤
   const c = g.cs.findIndex(td => { const r = td.getBoundingClientRect(); return e.clientX >= r.left && e.clientX < r.right; }); if (c < 0) return;
   g.d = c - g.i0; const [s, en] = dragTo(g), st = effStat(g.t); g.cs.forEach((td, j) => td.className = "tl" + (inP(s, en, g.ps[j]) ? " on " + st : ""));
 });
-const dragEnd = e => { const g = drag; drag = null; if (!g) return;
-  if (e.type === "pointerup" && g.k === "row" && g.to) { const a = W(); a.splice(a.indexOf(g.t), 1); a.splice(a.findIndex(x => x.id === g.to.id) + g.to.after, 0, g.t); wSave(0); }
+const dragEnd = e => { const g = drag; drag = null; if (!g) return; clearInterval(g.sc);
+  if (e.type === "pointerup" && g.k === "row" && g.to) { const a = W(), to = a.find(x => x.id === g.to.id); if (to) { a.splice(a.indexOf(g.t), 1); a.splice(a.indexOf(to) + g.to.after, 0, g.t); if (to.단계 && to.단계 !== g.t.단계) g.t.단계 = to.단계; wSave(0); } } // 다른 단계 사이로 옮기면 그 단계를 따른다
   if (e.type === "pointerup" && g.k !== "row" && g.d) { const [s, en] = dragTo(g); (g.t.기록 ||= []).push({at: new Date().toISOString(), 내용: `간트에서 일정 변경 ${g.s || "-"}~${g.e || "-"} → ${s || "-"}~${en || "-"}`}); g.t.시작 = s; g.t.종료 = en; wSave(0); drawTop(); }
   drawWbs(true); };
 document.addEventListener("pointerup", dragEnd); document.addEventListener("pointercancel", dragEnd);
@@ -1183,6 +1187,7 @@ document.addEventListener("click", async e => {
   if (t.dataset.ak) { const [id, k] = t.dataset.ak.split("|"); askDo(t.dataset.akf, id, k); }
   if (t.id === "wCal") { wCal = !wCal; drawWbs(true); }
   if (t.dataset.cm !== undefined) { const [y, m] = calM.split("-").map(Number), d = new Date(y, m - 1 + +t.dataset.cm, 1); calM = +t.dataset.cm ? d8(d).slice(0, 7) : today().slice(0, 7); drawWbs(true); }
+  if (t.dataset.wdel && admin) { const a = W(), k = a.findIndex(x => x.id === t.dataset.wdel); if (k < 0 || !confirm(`'${a[k].작업 || "이름 없는 작업"}' 작업을 삭제할까요?`)) return; a.splice(k, 1); wSave(0); drawWbs(true); drawTop(); return; }
   if (t.id === "wAdd" && admin) { wStg = $("wStg").value; whoF = ""; /* 새 행(담당 없음)이 필터에 가려지지 않게 */ const id = wNew(wStg); wCal = false; drawWbs(true); document.querySelector(`[data-wi="${CSS.escape(id + "|작업")}"]`)?.focus(); }
   if (t.id === "chkLate") checkLate();
   if (t.id === "lateOpen") lateAlert(true);
