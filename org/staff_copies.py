@@ -1,12 +1,12 @@
 """직원용 사본 만들기 — 아침 루틴이 실행한다(관리자가 페이지를 안 열어도 사본이 최신이 되게).
 NEXUS pipeline → pubpipe (연락처 뺌), 관제실 pm·people → view (금액·이메일 뺌),
-관제실 asks(유형 디자인) → PRISM designtasks (이름·일정만, 내용의 연락처 가림).
+관제실 askq·askr(유형 디자인) → PRISM designtasks (이름·일정만, 내용의 연락처 가림).
 필드 목록과 가림 규칙은 org/nexus.tpl.html(PUBF·PUBM·scrub·reach)과 org/pmo.tpl.html(syncView)과 같아야 한다.
 
 사용: ArtifactData 로 각 컬렉션을 out_dir 로 내려받은 뒤
   python org/staff_copies.py nexus <pipeline 폴더> <pubpipe 폴더> <출력 폴더>
   python org/staff_copies.py pmo <pm 폴더> <people 폴더> <view 폴더> <출력 폴더>
-  python org/staff_copies.py design <관제실 asks 폴더> <people 폴더> <pm 폴더> <PRISM designtasks 폴더> <출력 폴더>
+  python org/staff_copies.py design <관제실 askq 폴더> <askr 폴더> <people 폴더> <pm 폴더> <PRISM designtasks 폴더> <출력 폴더>
   python org/staff_copies.py test
 출력 폴더에 쓸 문서(<id>.json)와 plan.json {"new": [...], "changed": [...], "delete": [...]} 를 만든다.
 changed·delete 는 기존 문서라 ArtifactData 쓰기에 if_version 이 필요하다."""
@@ -62,11 +62,20 @@ def views(pm, people):
             for pid, p in pm.items()}
 
 
-def design(asks, people, pm):
+def design(askq, askr, people, pm):
+    # askq/{요청자 uid} = {요청id: 요청}, askr/{받는 사람 uid} = {요청id: 응답} — 받는 사람 본인의 응답만 믿는다(페이지와 같음)
     nm = lambda i: s((people.get(i) or {}).get("이름")) if isinstance(i, str) else ""
-    return {i: {"프로젝트": s((pm.get(a.get("pid")) or {}).get("이름")), "제목": scrub(s(a.get("제목"))), "내용": scrub(s(a.get("내용"))),
-                "마감": s(a.get("마감")), "상태": s(a.get("상태")), "담당": nm(a.get("to")), "요청자": nm(a.get("fromP")), "at": s(a.get("at"))}
-            for i, a in asks.items() if a.get("유형") == "디자인" and a.get("상태") in ("요청", "수락", "완료")}
+    out = {}
+    for q in askq.values():
+        for i, a in (q.items() if isinstance(q, dict) else []):
+            if not isinstance(a, dict) or a.get("유형") != "디자인":
+                continue
+            r = (askr.get(s((people.get(a.get("to")) or {}).get("uid"))) or {}).get(i)
+            st = s(r.get("상태")) if isinstance(r, dict) and r.get("상태") else "요청"
+            if st in ("요청", "수락", "완료"):
+                out[i] = {"프로젝트": s((pm.get(a.get("pid")) or {}).get("이름")), "제목": scrub(s(a.get("제목"))), "내용": scrub(s(a.get("내용"))),
+                          "마감": s(a.get("마감")), "상태": st, "담당": nm(a.get("to")), "요청자": nm(a.get("fromP")), "at": s(a.get("at"))}
+    return out
 
 
 def load(d):
@@ -101,9 +110,12 @@ def test():
     v = views({"P1": {"이름": "사업", "계약금액": 100, "PM": "u1"}}, {"u1": {"이름": "김", "이메일": "k@x.com", "인건비": 5}})
     assert v == {"P1": {"이름": "사업", "코드": "", "발주처": "", "상태": "", "시작": "", "종료": "", "연락처페이지": "", "담당PM": "김", "PM": "u1",
                         "인력": [{"id": "u1", "이름": "김", "직책": "", "역할": "", "참여시작": "", "참여종료": "", "uid": ""}]}}
-    d = design({"A1": {"유형": "디자인", "상태": "요청", "pid": "P1", "to": "u1", "fromP": "x", "제목": "키비주얼", "내용": "k@x.com 로 전달", "마감": "2026-10-01"},
-                "A2": {"유형": "일반", "상태": "요청"}, "A3": {"유형": "디자인", "상태": "반려"}}, {"u1": {"이름": "김"}}, {"P1": {"이름": "사업", "계약금액": 1}})
-    assert d == {"A1": {"프로젝트": "사업", "제목": "키비주얼", "내용": "(이메일 생략) 로 전달", "마감": "2026-10-01", "상태": "요청", "담당": "김", "요청자": "", "at": ""}}
+    q = {"uA": {"A1": {"유형": "디자인", "pid": "P1", "to": "u1", "fromP": "x", "제목": "키비주얼", "내용": "k@x.com 로 전달", "마감": "2026-10-01"},
+                "A2": {"유형": "일반"}, "A3": {"유형": "디자인", "to": "u1"}, "A4": {"유형": "디자인", "to": "u1"}}}
+    r = {"m1": {"A3": {"상태": "반려"}, "A4": {"상태": "수락"}}, "evil": {"A1": {"상태": "완료"}}}  # evil 은 받는 사람이 아니라 무시
+    d = design(q, r, {"u1": {"이름": "김", "uid": "m1"}}, {"P1": {"이름": "사업", "계약금액": 1}})
+    assert d["A1"] == {"프로젝트": "사업", "제목": "키비주얼", "내용": "(이메일 생략) 로 전달", "마감": "2026-10-01", "상태": "요청", "담당": "김", "요청자": "", "at": ""}
+    assert set(d) == {"A1", "A4"} and d["A4"]["상태"] == "수락"
     print("ok")
 
 
@@ -115,7 +127,7 @@ if __name__ == "__main__":
         write({i: pub_of(b) for i, b in load(a[1]).items()}, load(a[2]), a[3])
     elif a[:1] == ["pmo"] and len(a) == 5:
         write(views(load(a[1]), load(a[2])), load(a[3]), a[4])
-    elif a[:1] == ["design"] and len(a) == 6:
-        write(design(load(a[1]), load(a[2]), load(a[3])), load(a[4]), a[5])
+    elif a[:1] == ["design"] and len(a) == 7:
+        write(design(load(a[1]), load(a[2]), load(a[3]), load(a[4])), load(a[5]), a[6])
     else:
         sys.exit(__doc__)
