@@ -974,9 +974,11 @@ document.addEventListener("pointermove", e => { const g = bdrag; if (!g) return;
   clearInterval(g.sc); const box = document.querySelector("#tab-bud .sheet"), wr = box?.getBoundingClientRect(), y = e.clientY, top = Math.max(wr?.top ?? 0, 0), bot = Math.min(wr?.bottom ?? innerHeight, innerHeight), v = y < top + 50 ? -14 : y > bot - 50 ? 14 : 0;
   if (v) g.sc = setInterval(() => { const b = document.querySelector("#tab-bud .sheet"), s0 = b?.scrollTop; if (b) b.scrollTop += v; if (!b || b.scrollTop === s0) scrollBy(0, v); }, 16); });
 const bDragEnd = async e => { const g = bdrag; bdrag = null; if (!g) return; clearInterval(g.sc); bDragAt = Date.now(); const raw = B()?.rows;
-  if (e.type === "pointerup" && g.to && raw) { const i = raw.findIndex(x => x.id === g.id), row = raw[i]; if (i >= 0) { raw.splice(i, 1);
+  if (e.type === "pointerup" && g.to && raw) { const i = raw.findIndex(x => x.id === g.id), row = raw[i]; if (i >= 0) {
+    const pin = {}; L().filter(x => !x.rid).forEach(x => { const r = ridOf(nl(x), BR()); if (r) (pin[r] ||= []).push(x.id); }); // 옮기기 전 글자로만 이어진 집행내역 → 저장 후 rid 로 고정(구분이 바뀌거나 순서가 바뀌어도 연결 유지)
+    raw.splice(i, 1);
     let k = g.to.id ? raw.findIndex(x => x.id === g.to.id) + (g.to.after ? 1 : 0) : raw.findIndex(x => (x.구분 || "") === g.to.g); if (k < 0 || (g.to.id && k === 0 && !raw.some(x => x.id === g.to.id))) k = raw.length;
-    const ng = g.to.id ? raw.find(x => x.id === g.to.id)?.구분 : g.to.g; if (ng !== undefined && ng !== row.구분) row.구분 = ng; raw.splice(k, 0, row); bLog(B(), `행 이동: ${bLbl(br(row))}`); await saveBud(); } }
+    const ng = g.to.id ? raw.find(x => x.id === g.to.id)?.구분 : g.to.g; if (ng !== undefined && ng !== row.구분) row.구분 = ng; raw.splice(k, 0, row); bLog(B(), `행 이동: ${bLbl(br(row))}`); if (await saveBud()) for (const [r, ids] of Object.entries(pin)) await ulink(ids, r); } }
   drawBud(true); };
 document.addEventListener("pointerup", bDragEnd); document.addEventListener("pointercancel", bDragEnd);
 async function delBudRow(id) {
