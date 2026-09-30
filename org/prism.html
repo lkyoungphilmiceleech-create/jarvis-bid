@@ -103,7 +103,7 @@ a{color:var(--holo)}
   <nav class="tabs" role="tablist" id="tabs">
     <button type="button" role="tab" data-tab="find">레퍼런스 찾기</button>
     <button type="button" role="tab" data-tab="ref">내부 자료</button>
-    <button type="button" role="tab" data-tab="req">디자인 요청</button>
+    <button type="button" role="tab" data-tab="req">배정된 디자인 업무</button>
     <button type="button" role="tab" data-tab="work">시안 작업</button>
   </nav>
 
@@ -116,7 +116,7 @@ a{color:var(--holo)}
   </section>
 
   <section class="glass panel" id="tab-req" hidden>
-    <div class="row"><h2>디자인 요청</h2><span style="flex:1"></span><button class="btn primary" type="button" id="newReq">+ 새 요청</button></div>
+    <div class="row"><h2>배정된 디자인 업무</h2><span class="note">디자인 업무 요청·상태 변경은 관제실 공정일정에서 합니다. 이 목록은 매일 아침 갱신됩니다.</span></div>
     <div class="seg" role="group" aria-label="상태" id="rFilt"></div>
     <div class="list" id="reqList"></div>
   </section>
@@ -144,8 +144,6 @@ a{color:var(--holo)}
   </section>
 </div>
 
-<dialog id="dlg" style="border:1px solid var(--line);border-radius:14px;background:var(--bg2);color:var(--ink);max-width:720px;width:calc(100% - 32px);padding:18px"><form method="dialog" id="dlgForm"></form></dialog>
-
 <script>
 const KINDS = ["키비주얼", "포스터", "웹 배너", "SNS 카드", "리플렛", "부스 그래픽", "기타"];
 const RATIO = {"키비주얼": "16:9", "포스터": "2:3", "웹 배너": "21:9", "SNS 카드": "4:5", "리플렛": "3:4", "부스 그래픽": "16:9", "기타": "1:1"};
@@ -169,7 +167,7 @@ const applyTheme = m => { if (m === "system") delete document.documentElement.da
 let th = "system"; try { th = localStorage.getItem("prism-theme") || "system"; } catch {} applyTheme(th);
 
 let db = null, sample = null, mcp = null, assets = null, tab = "find", cur = null, rf = "진행", cfg = {};
-let briefs = [], refs = [], rjobs = [], finds = [], fcur = null, busy = {}, msg = {};
+let briefs = [], tasks = [], refs = [], rjobs = [], finds = [], fcur = null, busy = {}, msg = {};
 try { tab = localStorage.getItem("prism-tab") || "find"; cur = localStorage.getItem("prism-cur"); } catch {}
 const B = () => briefs.find(b => b.id === cur);
 const say = (id, m) => { msg[id] = m; if ($(id)) $(id).textContent = m; };
@@ -184,46 +182,33 @@ const stepOf = b => Math.max(0, FLOW.indexOf(b.상태 || "접수"));
 
 // ── 상단
 function drawHero() {
-  const live = briefs.filter(b => b.상태 !== "완료"), soon = live.filter(b => b.마감 && (new Date(b.마감) - new Date(today())) / 864e5 <= 3);
+  const live = tasks.length ? tasks.filter(LIVE) : briefs.filter(b => b.상태 !== "완료"), soon = live.filter(b => b.마감 && (new Date(b.마감) - new Date(today())) / 864e5 <= 3);
   $("kpis").innerHTML = [["작업물", refs.filter(r => kindOf(r) === "작업물").length], ["레퍼런스", refs.filter(r => kindOf(r) === "레퍼런스").length], ["진행 요청", live.length]].map(([k, v]) => `<div class="kpi"><span class="hudlabel">${k}</span><b>${v}</b></div>`).join("");
   $("say").textContent = !db ? "이 화면에서는 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요." : !refs.length ? "아직 내부 자료가 없습니다. '내부 자료'에 우리 작업물과 찾아 둔 레퍼런스를 올려 주시면, 키워드마다 3개씩 골라 드리겠습니다." :
-    !briefs.length ? `내부 자료 ${refs.length}건을 갖고 있습니다. 키워드를 넣으시면 3개를 골라 드리고, 맞는 게 없으면 웹에서 새로 찾겠습니다.` : `진행 중인 요청 ${live.length}건${soon.length ? `, 그중 ${soon.length}건이 3일 안에 마감입니다` : ""}. 레퍼런스 3개를 추천하고 키비주얼과 목업까지 이어서 만들겠습니다.`;
+    !tasks.length && !briefs.length ? `내부 자료 ${refs.length}건을 갖고 있습니다. 키워드를 넣으시면 3개를 골라 드리고, 맞는 게 없으면 웹에서 새로 찾겠습니다.` : `진행 중인 요청 ${live.length}건${soon.length ? `, 그중 ${soon.length}건이 3일 안에 마감입니다` : ""}. 레퍼런스 3개를 추천하고 키비주얼과 목업까지 이어서 만들겠습니다.`;
 }
 function showTab(t) { if (!["find", "req", "ref", "work"].includes(t)) t = "find"; tab = t; try { localStorage.setItem("prism-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
   ["find", "req", "ref", "work"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
 function draw() { drawHero(); if (tab === "find") drawFind(); if (tab === "req") drawReq(); if (tab === "ref") drawRef(); if (tab === "work") drawWork(); }
 
-// ── 디자인 요청
+// ── 배정된 디자인 업무 (관제실 업무 요청 유형=디자인 → 아침 루틴이 designtasks 로 복사, 여기서는 읽기만)
+const LIVE = t => t.상태 === "요청" || t.상태 === "수락";
+const ddTag = (d, done) => { const dd = dday(d); return dd ? `<span class="tag ${done ? "" : /^D\+/.test(dd) ? "stop" : /^D-[0-3]$|DAY/.test(dd) ? "amber" : ""}">${dd}</span>` : ""; };
 function drawReq() {
   $("rFilt").innerHTML = [["진행", "진행 중"], ["완료", "완료"], ["", "전체"]].map(([k, l]) => `<button type="button" data-rf="${k}" aria-pressed="${rf === k}">${l}</button>`).join("");
-  const rows = briefs.filter(b => !rf || (rf === "완료") === (b.상태 === "완료")).sort((a, b) => String(a.마감 || "9").localeCompare(String(b.마감 || "9")));
-  $("reqList").innerHTML = rows.map(b => { const s = stepOf(b), dd = dday(b.마감), late = /^D\+/.test(dd) && b.상태 !== "완료";
-    return `<article class="card click${b.id === cur ? " sel" : ""}" data-open="${esc(b.id)}"><div class="row"><h3 style="flex:1">${esc(b.제목)}</h3>${dd ? `<span class="tag ${late ? "stop" : /^D-[0-3]$|DAY/.test(dd) ? "amber" : ""}">${dd}</span>` : ""}</div>
-      <div class="note">${esc([b.프로젝트, b.마감 && `마감 ${b.마감}`].filter(Boolean).join(" · "))}</div>
-      <div class="chips">${(b.종류 || []).map(k => `<span class="tag">${esc(k)}</span>`).join("")}</div>
-      <div class="flow">${FLOW.map((f, i) => `<span class="${i <= s ? "done" : ""}">${f}</span>`).join("")}</div>
-      <div class="row"><button class="btn" type="button" data-edit="${esc(b.id)}">수정</button><button class="btn primary" type="button" data-go="${esc(b.id)}">시안 작업 →</button></div></article>`; }).join("") || '<p class="empty">요청이 없습니다.</p>';
+  const rows = tasks.filter(t => !rf || (rf === "완료" ? t.상태 === "완료" : LIVE(t))).sort((a, b) => String(a.마감 || "9").localeCompare(String(b.마감 || "9")));
+  $("reqList").innerHTML = rows.map(t => `<details class="card"><summary style="cursor:pointer;list-style:none"><div class="row"><h3 style="flex:1;min-width:0">${esc(t.제목)}</h3>${ddTag(t.마감, t.상태 === "완료")}<span class="tag${t.상태 === "완료" ? " go" : ""}">${esc(t.상태)}</span></div>
+      <div class="note">${esc([t.프로젝트, t.담당 && `담당 ${t.담당}`, t.요청자 && `요청 ${t.요청자}`, t.마감 && `마감 ${t.마감}`].filter(Boolean).join(" · "))}</div></summary>
+      <p class="note" style="white-space:pre-wrap;margin-top:6px">${esc(t.내용 || "(내용 없음)")}</p>
+      ${LIVE(t) ? `<div class="row"><button class="btn primary" type="button" data-go="${esc(t.id)}">시안 작업 →</button></div>` : ""}</details>`).join("") || `<p class="empty">${db ? "배정된 디자인 업무가 없습니다." : "이 화면에서는 저장소에 연결할 수 없습니다."}</p>`;
 }
-function editBrief(b) {
-  const isNew = !b; b = b || {id: "D" + Date.now().toString(36), 종류: ["키비주얼"], 상태: "접수"};
-  $("dlgForm").innerHTML = `<h2 style="margin:0 0 12px">${isNew ? "새 디자인 요청" : esc(b.제목)}</h2><div class="form">
-    <label class="wide">제목<input data-bf="제목" value="${esc(b.제목)}" placeholder="예) 2026 K-콘텐츠 마켓 공동관 키비주얼"></label>
-    <label>프로젝트·행사<input data-bf="프로젝트" value="${esc(b.프로젝트)}"></label>
-    <label>마감일<input type="date" data-bf="마감" value="${esc(b.마감)}"></label>
-    <label>상태<select data-bf="상태">${opt(FLOW, b.상태 || "접수")}</select></label>
-    <label class="wide">홍보물 종류<span class="chips">${KINDS.map(k => `<label><input type="checkbox" data-kind="${k}" ${(b.종류 || []).includes(k) ? "checked" : ""}>${k}</label>`).join("")}</span></label>
-    <label class="wide">톤·키워드<input data-bf="톤" value="${esc(b.톤)}" placeholder="예) 미래적, 네온, 한국 전통 문양, 신뢰감"></label>
-    <label class="wide">설명 (대상·필수 문구·로고·금지 사항)<textarea data-bf="설명">${esc(b.설명)}</textarea></label></div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" value="save">저장</button>${isNew ? "" : '<button class="btn x" value="del">삭제</button>'}<button class="btn" value="cancel">닫기</button></div>`;
-  $("dlg").onclose = async () => { const v = $("dlg").returnValue; if (!v || v === "cancel" || !db) return;
-    if (v === "del") { if (!confirm(`'${b.제목}' 요청을 삭제할까요? 만든 시안 기록도 함께 지워집니다.`)) return; db.doc(`briefs/${b.id}`).delete().catch(() => {}); briefs = briefs.filter(x => x.id !== b.id); if (cur === b.id) cur = null; draw(); return; }
-    const f = {}; $("dlgForm").querySelectorAll("[data-bf]").forEach(el => f[el.dataset.bf] = el.value.trim()); f.종류 = [...$("dlgForm").querySelectorAll("[data-kind]:checked")].map(el => el.dataset.kind);
-    if (!f.제목) return;
-    if (isNew) { const {id, ...r} = {...b, ...f, at: new Date().toISOString(), updatedAt: new Date().toISOString()}; try { await db.doc(`briefs/${id}`).set(r); briefs.push({id, ...r}); } catch { return; } }
-    else await put(b.id, f);
-    cur = b.id; draw(); };
-  $("dlg").returnValue = ""; $("dlg").showModal();
+// 관제실 업무를 고르면 briefs/{같은 id} 가 없을 때만 한 번 만든다 — 기존 briefs 는 건드리지 않는다
+async function pick(id) {
+  cur = id; msg = {}; try { localStorage.setItem("prism-cur", cur); } catch {}
+  const t = tasks.find(x => x.id === id);
+  if (t && db && !briefs.some(b => b.id === id)) { const now = new Date().toISOString(), r = {제목: String(t.제목 || ""), 마감: String(t.마감 || ""), 상태: "접수", 프로젝트: String(t.프로젝트 || ""), 설명: String(t.내용 || ""), 출처: "관제실", at: now, updatedAt: now};
+    try { if (!(await db.doc(`briefs/${id}`).get()).exists) await db.doc(`briefs/${id}`).set(r); if (!briefs.some(b => b.id === id)) briefs.push({id, ...r}); } catch {} }
 }
 
 // ── 레퍼런스
@@ -256,8 +241,8 @@ async function addRef(img) {
 
 // ── 시안 작업
 function drawWork() {
-  $("wReq").innerHTML = opt(briefs.map(b => [b.id, `${b.제목}${b.상태 === "완료" ? " (완료)" : ""}`]), cur, "요청을 고르세요");
-  const b = B(); if (!b) { $("work").innerHTML = '<p class="empty">위에서 요청을 고르세요. 요청이 없으면 디자인 요청 탭에서 먼저 만들어 주세요.</p>'; return; }
+  $("wReq").innerHTML = opt([...briefs.map(b => [b.id, `${b.제목}${b.상태 === "완료" ? " (완료)" : ""}`]), ...tasks.filter(t => LIVE(t) && !briefs.some(b => b.id === t.id)).map(t => [t.id, `${t.제목} (관제실 · 새로 시작)`])], cur, "요청을 고르세요");
+  const b = B(); if (!b) { $("work").innerHTML = '<p class="empty">위에서 요청을 고르세요. 새 디자인 업무는 관제실 공정일정의 업무 요청(유형 = 디자인)으로 들어옵니다.</p>'; return; }
   const mine = refs.filter(r => (r.요청 || []).includes(b.id)), job = rjobs.filter(j => j.bid === b.id).sort((x, y) => String(y.at).localeCompare(String(x.at)))[0];
   const jobLive = job && (job.status === "진행" || (job.status === "요청" && Date.now() - new Date(job.at) < 15 * 60e3));
   const picks = (b.추천?.picks || []).map(p => [refs.find(r => r.id === p.id), p.이유]).filter(([r]) => r);
@@ -283,7 +268,7 @@ function drawWork() {
     ${gens.filter(g => g.종류 === "키비주얼").length ? `<div class="gen">${gens.filter(g => g.종류 === "키비주얼").map(g => fig(g, kv.id === g.id)).join("")}</div>` : ""}</div>
 
   <div class="card"><div class="row"><h3 style="flex:1">④ 홍보물 목업</h3></div>
-    <div class="chips">${(b.종류 || []).filter(k => k !== "키비주얼").map(k => `<label><input type="checkbox" data-mk="${esc(k)}" checked>${esc(k)} <span class="note">${RATIO[k] || "1:1"}</span></label>`).join("") || '<span class="note">요청에 키비주얼 외 홍보물 종류가 없습니다. 요청을 수정해 추가해 주세요.</span>'}</div>
+    <div class="chips">${((b.종류 || []).length ? b.종류 : KINDS).filter(k => k !== "키비주얼").map(k => `<label><input type="checkbox" data-mk="${esc(k)}" ${(b.종류 || []).includes(k) ? "checked" : ""}>${esc(k)} <span class="note">${RATIO[k] || "1:1"}</span></label>`).join("")}</div>
     <div class="row"><button class="btn primary" type="button" id="mkGo" ${kv.id && !busy.mk ? "" : "disabled"}>${busy.mk ? "만드는 중…" : "선택한 키비주얼로 목업 만들기"}</button><span class="note" id="mNote">${esc(msg.mNote || (kv.id ? "키비주얼의 색·구도·요소를 유지해 종류별 비율로 만듭니다." : "③에서 키비주얼을 먼저 선택해 주세요."))}</span></div>
     ${gens.filter(g => g.종류 !== "키비주얼").length ? `<div class="gen">${gens.filter(g => g.종류 !== "키비주얼").map(g => fig(g)).join("")}</div>` : ""}
     <div class="row"><span style="flex:1"></span><button class="btn" type="button" id="done" ${b.상태 === "완료" ? "disabled" : ""}>요청 완료로 표시</button></div></div>`;
@@ -455,14 +440,11 @@ JSON만 답한다: {"제목":"짧은 한국어 제목","설명":"무엇을 위�
 
 // ── 이벤트
 document.addEventListener("click", async e => {
-  const t = e.target.closest("button, [data-open]"); if (!t) return;
+  const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.dataset.rf !== undefined) { rf = t.dataset.rf; drawReq(); }
-  if (t.id === "newReq") editBrief(null);
-  if (t.dataset.edit) { e.stopPropagation(); editBrief(briefs.find(b => b.id === t.dataset.edit)); return; }
-  if (t.dataset.go) { e.stopPropagation(); cur = t.dataset.go; msg = {}; try { localStorage.setItem("prism-cur", cur); } catch {} showTab("work"); return; }
-  if (t.dataset.open && t.tagName !== "BUTTON") { cur = t.dataset.open; try { localStorage.setItem("prism-cur", cur); } catch {} drawReq(); }
+  if (t.dataset.go) { await pick(t.dataset.go); showTab("work"); return; }
   if (t.id === "rfAdd") addRef();
   if (t.dataset.rdel && confirm("이 자료를 지울까요?")) { const r = refs.find(x => x.id === t.dataset.rdel); db?.doc(`refs/${t.dataset.rdel}`).delete().catch(() => {}); if (r?.파일 && assets) assets.delete(r.파일).catch(() => {}); }
   if (t.id === "fGo") recommend();
@@ -480,7 +462,7 @@ document.addEventListener("click", async e => {
   if (t.id === "done") { await put(cur, {상태: "완료"}); drawWork(); }
 });
 document.addEventListener("change", async e => { const t = e.target;
-  if (t.id === "wReq") { cur = t.value; msg = {}; try { localStorage.setItem("prism-cur", cur); } catch {} drawWork(); }
+  if (t.id === "wReq") { await pick(t.value); drawWork(); }
   if (["rSrc", "rReq", "rKind"].includes(t.id)) drawRef();
   if (t.id === "upFile" && t.files.length) { const fs = [...t.files]; t.value = ""; upload(fs); }
 });
@@ -492,8 +474,9 @@ showTab(tab);
 (async () => {
   [db, sample, mcp, assets] = await Promise.all(["db", "sample", "mcp", "assets"].map(n => Promise.resolve(window.claude?.use?.(n)).catch(() => null).then(x => x ?? null)));
   if (!db) { drawHero(); return; }
-  const busyDlg = () => $("dlg").open || ["kvP", "rfUrl", "rfImg", "rfTitle", "rfTags", "fq", "upProj"].includes(document.activeElement?.id);
+  const busyDlg = () => ["kvP", "rfUrl", "rfImg", "rfTitle", "rfTags", "fq", "upProj"].includes(document.activeElement?.id);
   db.collection("briefs").onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
+  db.collection("designtasks").onSnapshot(s => { tasks = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
   db.collection("refs").onSnapshot(s => { refs = s.docs.map(d => ({id: d.id, ...d.data()})); if (!busyDlg()) draw(); else drawHero(); });
   db.collection("rjobs").onSnapshot(s => { rjobs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "work" && !busyDlg()) drawWork(); if (tab === "find") drawFind(); });
   db.collection("finds").onSnapshot(s => { finds = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => String(b.at).localeCompare(String(a.at))); if (tab === "find") drawFind(); });
