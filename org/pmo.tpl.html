@@ -743,7 +743,7 @@ async function attLink() { const t = dlgT, u = $("attUrl").value.trim(); if (!t 
   try { await db.doc(`files/${fid}`).set(m); if (!files.some(x => x.id === fid)) files.push({id: fid, ...m}); $("attUrl").value = ""; } catch { $("attNote").textContent = "저장하지 못했습니다."; } drawAtt(); }
 async function attGet(id) { const f = files.find(x => x.id === id), note = $("attNote"); if (!f || !db) return;
   try { note.textContent = `${f.이름} 받는 중…`; const ps = await Promise.all([...Array(+f.n || 0)].map((_, i) => db.doc(`filechunks/${f.id}_${i}`).get()));
-    if (ps.some(p => !p.exists)) throw 0; const blob = new Blob(ps.map(p => unb64(p.data().d)), {type: f.형식 || "application/octet-stream"});
+    if (ps.some(p => !p.exists)) throw 0; const blob = new Blob(ps.map(p => unb64(structuredClone(p.data()).d)), {type: f.형식 || "application/octet-stream"});
     if (downloads) await downloads.save({filename: f.이름, data: blob}); else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = f.이름; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
     note.textContent = ""; } catch (e) { note.textContent = e?.code === "declined" ? "" : "파일을 받지 못했습니다."; } }
 async function attDel(id) { const f = files.find(x => x.id === id); if (!f || !(admin || (uid && f.by === uid)) || !confirm(`'${f.이름}'을 지울까요?`)) return;
@@ -1264,25 +1264,25 @@ showTab(tab);
   if (!db) { draw(); return; }
   const got = new Set(), ready = k => { got.add(k); if (got.size === 2 && !got.has("done")) { got.add("done"); setTimeout(() => lateAlert(false), 500); } }; // 프로젝트·공정이 모두 들어온 뒤 한 번
   // 같은 작업(id)은 같은 객체를 유지한다 — 열린 창·AI 작업 중인 작업이 새 스냅샷에 끊기지 않게
-  db.collection("wbs").onSnapshot(s => { const old = wbs, now = Date.now(); wbs = {}; s.docs.forEach(d => { const v = d.data(), prev = old[d.id]?.items || [], pd = wPend[d.id];
+  db.collection("wbs").onSnapshot(s => { const old = wbs, now = Date.now(); wbs = {}; s.docs.forEach(d => { const v = structuredClone(d.data()), prev = old[d.id]?.items || [], pd = wPend[d.id];
     if (pd) { if ((pd.j === sj(v.items || []) && pd.t <= pd.s) || now - pd.t > 15000) delete wPend[d.id]; else if (old[d.id]) { wbs[d.id] = old[d.id]; return; } } // 내 저장이 돌아오기 전 스냅샷은 건너뜀
     v.items = (v.items || []).map(it => { const o = prev.find(x => x.id === it.id); if (!o) return it; Object.keys(o).forEach(k => delete o[k]); return Object.assign(o, it); }); wbs[d.id] = v; });
     Object.keys(wPend).forEach(id => { if (!wbs[id] && old[id] && now - wPend[id].t <= 15000) wbs[id] = old[id]; }); draw(); ready("wbs"); });
-  db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...d.data()})); if (dlgT) drawAtt(); }, () => {});
-  const akSub = (c, set) => db.collection(c).onSnapshot(s => { set(Object.fromEntries(s.docs.map(d => [d.id, d.data()]))); if (tab === "wbs" || tab === "sch") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
+  db.collection("files").onSnapshot(s => { files = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (dlgT) drawAtt(); }, () => {});
+  const akSub = (c, set) => db.collection(c).onSnapshot(s => { set(Object.fromEntries(s.docs.map(d => [d.id, structuredClone(d.data())]))); if (tab === "wbs" || tab === "sch") draw(); }, () => {}); // drawWbs 가 입력 중 다시 그리기를 미룬다
   akSub("askq", v => { askQ = v; askOK = true; }); akSub("askr", v => askR = v);
-  db.collection("peoplereq").onSnapshot(s => { preqs = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") draw(); }, () => {});
+  db.collection("peoplereq").onSnapshot(s => { preqs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "ppl") draw(); }, () => {});
   if (!admin) { // 팀장: pm·people·budget·ledger 는 읽지 않고(db 규칙상 거부) 사본만
-    db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...d.data()})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));
+    db.collection("view").onSnapshot(s => { projects = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); people = projects.flatMap(p => (p.인력 || []).map(x => ({...x, pid: p.id})));
       if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); }, () => { $("say").textContent = "관제실 자료를 불러오지 못했습니다. 새로고침해 주세요."; });
     return;
   }
   const seen = new Set(), sync = k => { seen.add(k); if (seen.size === 3) syncView(); }; // pm·people·view 가 모두 들어온 뒤부터
-  db.collection("pm").onSnapshot(s => { const local = projects.filter(p => !s.docs.some(d => d.id === p.id) && !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...d.data()})), ...local]; if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); sync("pm"); });
-  db.collection("budget").onSnapshot(s => { budget = {}; s.docs.forEach(d => budget[d.id] = d.data()); draw(); });
-  db.collection("ledger").onSnapshot(s => { ledger = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab !== "led" || document.activeElement?.id !== "lq") draw(); });
-  db.collection("staff").onSnapshot(s => { staff = s.docs.map(d => ({id: d.id, ...d.data()})); if (tab === "ppl") { if (document.activeElement?.id === "stQ") drawSt(); else draw(); } }, () => {});
-  db.collection("people").onSnapshot(s => { people = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); sync("people"); });
-  db.collection("view").onSnapshot(s => { const first = !seen.has("view"); views = {}; s.docs.forEach(d => views[d.id] = d.data()); if (first) sync("view"); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
+  db.collection("pm").onSnapshot(s => { const local = projects.filter(p => !s.docs.some(d => d.id === p.id) && !p.updatedAt); projects = [...s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})), ...local]; if (!P() && projects[0]) cur = projects[0].id; draw(); ready("pm"); sync("pm"); });
+  db.collection("budget").onSnapshot(s => { budget = {}; s.docs.forEach(d => budget[d.id] = structuredClone(d.data())); draw(); });
+  db.collection("ledger").onSnapshot(s => { ledger = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab !== "led" || document.activeElement?.id !== "lq") draw(); });
+  db.collection("staff").onSnapshot(s => { staff = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "ppl") { if (document.activeElement?.id === "stQ") drawSt(); else draw(); } }, () => {});
+  db.collection("people").onSnapshot(s => { people = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); draw(); sync("people"); });
+  db.collection("view").onSnapshot(s => { const first = !seen.has("view"); views = {}; s.docs.forEach(d => views[d.id] = structuredClone(d.data())); if (first) sync("view"); }, () => {}); // 쓰는 중 스냅샷마다 다시 쓰지 않게 첫 번만
 })();
 </script>

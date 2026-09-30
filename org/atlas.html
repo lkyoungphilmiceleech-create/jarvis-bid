@@ -334,11 +334,11 @@ draw();
   const admin = !!user && ((await user.isOwner?.().catch(() => false)) || (await user.canEdit?.().catch(() => false)));
   $("dFocus").hidden = !admin; document.querySelector('[data-tab="lib"]').hidden = !admin;
   if (!db) { $("say").textContent = "본부장님, 이 화면에서는 브리핑 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요."; return; }
-  db.doc("config/focus").onSnapshot(d => { dfocus = d.exists ? d.data() : {}; drawDeep(); });
-  db.collection("reports").orderBy("날짜", "desc").limit(60).onSnapshot(s => { reports = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
-  db.collection("nights").orderBy("날짜", "desc").limit(14).onSnapshot(s => { nights = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
-  db.collection("research").onSnapshot(s => { research = s.docs.map(d => ({id: d.id, ...d.data()})); drawDeep(); });
-  if (admin) db.collection("library").onSnapshot(s => { lib = s.docs.map(d => ({id: d.id, ...d.data()})); drawLib(); draw(); }, () => {});
-  db.collection("briefs").orderBy("날짜", "desc").limit(60).onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...d.data()})); draw(); drawLib(); drawRep(); }, () => { $("say").textContent = "본부장님, 브리핑을 불러오지 못했습니다. 새로고침해 주세요."; });
+  db.doc("config/focus").onSnapshot(d => { dfocus = d.exists ? structuredClone(d.data()) : {}; drawDeep(); });
+  db.collection("reports").orderBy("날짜", "desc").limit(60).onSnapshot(s => { reports = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); drawDeep(); });
+  db.collection("nights").orderBy("날짜", "desc").limit(14).onSnapshot(s => { nights = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); drawDeep(); });
+  db.collection("research").onSnapshot(s => { research = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); drawDeep(); });
+  if (admin) db.collection("library").onSnapshot(s => { lib = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); drawLib(); draw(); }, () => {});
+  db.collection("briefs").orderBy("날짜", "desc").limit(60).onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); draw(); drawLib(); drawRep(); }, () => { $("say").textContent = "본부장님, 브리핑을 불러오지 못했습니다. 새로고침해 주세요."; });
 })();
 </script>
