@@ -105,6 +105,7 @@ a{color:var(--holo)}
     <button type="button" role="tab" data-tab="ref">내부 자료</button>
     <button type="button" role="tab" data-tab="req">배정된 디자인 업무</button>
     <button type="button" role="tab" data-tab="work">시안 작업</button>
+    <button type="button" role="tab" data-tab="line">디자인 라인</button>
   </nav>
 
   <section class="glass panel" id="tab-find">
@@ -142,6 +143,8 @@ a{color:var(--holo)}
     <div class="row"><label class="note" style="flex:1;min-width:0;display:flex;gap:6px;align-items:center">요청 <select id="wReq" style="flex:1;min-width:0;width:100%"></select></label></div>
     <div id="work"></div>
   </section>
+
+  <section class="glass panel" id="tab-line" hidden><div id="line"></div></section>
 </div>
 
 <script>
@@ -187,10 +190,11 @@ function drawHero() {
   $("say").textContent = !db ? "이 화면에서는 저장소에 연결할 수 없습니다. claude.ai에서 열어 주세요." : !refs.length ? "아직 내부 자료가 없습니다. '내부 자료'에 우리 작업물과 찾아 둔 레퍼런스를 올려 주시면, 키워드마다 3개씩 골라 드리겠습니다." :
     !tasks.length && !briefs.length ? `내부 자료 ${refs.length}건을 갖고 있습니다. 키워드를 넣으시면 3개를 골라 드리고, 맞는 게 없으면 웹에서 새로 찾겠습니다.` : `진행 중인 요청 ${live.length}건${soon.length ? `, 그중 ${soon.length}건이 3일 안에 마감입니다` : ""}. 레퍼런스 3개를 추천하고 키비주얼과 목업까지 이어서 만들겠습니다.`;
 }
-function showTab(t) { if (!["find", "req", "ref", "work"].includes(t)) t = "find"; tab = t; try { localStorage.setItem("prism-tab", t); } catch {}
+const TABS = ["find", "req", "ref", "work", "line"]; // line = 디자인 라인(org/design_line.js)
+function showTab(t) { if (!TABS.includes(t)) t = "find"; tab = t; try { localStorage.setItem("prism-tab", t); } catch {}
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
-  ["find", "req", "ref", "work"].forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
-function draw() { drawHero(); if (tab === "find") drawFind(); if (tab === "req") drawReq(); if (tab === "ref") drawRef(); if (tab === "work") drawWork(); }
+  TABS.forEach(k => $("tab-" + k).hidden = k !== t); draw(); }
+function draw() { drawHero(); if (tab === "find") drawFind(); if (tab === "req") drawReq(); if (tab === "ref") drawRef(); if (tab === "work") drawWork(); if (tab === "line" && typeof drawLine === "function") drawLine(); }
 
 // ── 배정된 디자인 업무 (관제실 업무 요청 유형=디자인 → 아침 루틴이 designtasks 로 복사, 여기서는 읽기만)
 const LIVE = t => t.상태 === "요청" || t.상태 === "수락";
@@ -473,7 +477,9 @@ document.addEventListener("error", e => { const t = e.target; if (t.tagName === 
 showTab(tab);
 (async () => {
   [db, sample, mcp, assets] = await Promise.all(["db", "sample", "mcp", "assets"].map(n => Promise.resolve(window.claude?.use?.(n)).catch(() => null).then(x => x ?? null)));
-  if (!db) { drawHero(); return; }
+  const hasLine = typeof lineInit === "function"; // 디자인 라인 스크립트가 아직 안 읽혔으면 그쪽에서 스스로 시작한다
+  if (!db) { drawHero(); if (hasLine && tab === "line") drawLine(); return; }
+  if (hasLine) lineInit();
   const busyDlg = () => ["kvP", "rfUrl", "rfImg", "rfTitle", "rfTags", "fq", "upProj"].includes(document.activeElement?.id);
   db.collection("briefs").onSnapshot(s => { briefs = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (!busyDlg()) draw(); else drawHero(); });
   db.collection("designtasks").onSnapshot(s => { tasks = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (!busyDlg()) draw(); else drawHero(); });
@@ -482,4 +488,7 @@ showTab(tab);
   db.collection("finds").onSnapshot(s => { finds = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})).sort((a, b) => String(b.at).localeCompare(String(a.at))); if (tab === "find") drawFind(); });
   db.doc("config/prism").onSnapshot(d => { cfg = d.exists ? structuredClone(d.data()) : {}; });
 })();
+</script>
+<script>
+__DESIGN_LINE__
 </script>
