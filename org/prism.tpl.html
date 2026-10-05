@@ -311,7 +311,7 @@ async function resume() {
   busy.wait = false; drawWork();
 }
 async function runPick() {
-  const b = B(); if (!sample) { say("pNote", askErr({code: "no"})); return; }
+  const b = B(); if (gateOf(b.id, "pick")) { say("pNote", gateOf(b.id, "pick")); return; } if (!sample) { say("pNote", askErr({code: "no"})); return; }
   const pool = (refs.filter(r => (r.요청 || []).includes(b.id)).length ? refs.filter(r => (r.요청 || []).includes(b.id)) : refs).slice(0, 80);
   busy.pick = true; drawWork();
   try { const r = await sample.json(`너는 JARVIS 사업 수행 본부 디자인 스튜디오의 디자이너 PRISM이다. 한국 공공기관 해외 진출 지원 사업(마켓 공동관·포럼·IR)의 홍보물을 만든다.
@@ -325,7 +325,7 @@ JSON만 답한다: {"picks":[{"id":"후보 ID","이유":"한국어 1문장"}],"�
   busy.pick = false; drawWork();
 }
 async function runKv() {
-  const b = B(), p = $("kvP").value.trim(); if (!p) { say("kNote", "프롬프트를 넣어 주세요."); return; }
+  const b = B(), p = $("kvP").value.trim(); if (gateOf(b.id, "gen")) { say("kNote", gateOf(b.id, "gen")); return; } if (!p) { say("kNote", "프롬프트를 넣어 주세요."); return; }
   if (!mcp) { say("kNote", "이 화면에서는 Magnific을 쓸 수 없습니다. claude.ai에서 열어 주세요."); return; }
   const ratio = $("kvR").value, n = +$("kvN").value; busy.kv = true; await put(b.id, {kv: {...(latest(b.id).kv || {}), prompt: p, ratio}}); drawWork(); say("kNote", "Magnific이 만드는 중입니다(1~3분)…");
   try { const ids = await mgStart(p, ratio, n), at = new Date().toISOString(); await addGens(b.id, ids.map(id => ({id, 종류: "키비주얼", 상태: "처리 중", at})), "키비주얼");
@@ -335,7 +335,7 @@ async function runKv() {
   busy.kv = false; drawWork();
 }
 async function runMk() {
-  const b = B(), kinds = [...document.querySelectorAll("[data-mk]:checked")].map(el => el.dataset.mk); if (!kinds.length) { say("mNote", "목업 종류를 골라 주세요."); return; }
+  const b = B(), kinds = [...document.querySelectorAll("[data-mk]:checked")].map(el => el.dataset.mk); if (gateOf(b.id, "gen")) { say("mNote", gateOf(b.id, "gen")); return; } if (!kinds.length) { say("mNote", "목업 종류를 골라 주세요."); return; }
   if (!mcp) { say("mNote", "이 화면에서는 Magnific을 쓸 수 없습니다."); return; }
   busy.mk = true; drawWork(); const kv = latest(b.id).kv || {};
   for (const k of kinds) { say("mNote", `${k} 목업 만드는 중…`);
@@ -361,7 +361,7 @@ async function startWeb(job, note) {
   return jid;
 }
 async function runFind() {
-  const b = B(); if (busy.find) return;
+  const b = B(); if (busy.find) return; if (gateOf(b.id, "pick")) { say("fNote", gateOf(b.id, "pick")); return; }
   if (!confirm(`'${b.제목}' 레퍼런스를 웹에서 찾을까요? 10~20분 걸리고 본부장님 Claude 사용량이 쓰입니다.`)) return;
   if (busy.find) return; busy.find = true; setTimeout(() => { busy.find = false; }, 60e3); drawWork(); // 스냅샷이 오기 전 두 번 눌러 세션이 두 번 도는 것을 막는다
   await startWeb({kind: "brief", bid: b.id, 제목: b.제목}, "fNote");
@@ -369,7 +369,8 @@ async function runFind() {
 
 // ── 레퍼런스 찾기: 내부 자료에서 3개 → 부족하면 웹
 const F = () => finds.find(f => f.id === fcur) || finds[0];
-const briefOf = id => id && typeof lineBrief === "function" ? lineBrief(id) : ""; // 디자인 라인 0단계 브리프(국가·성격·산업·대상 등)
+const briefOf = id => id && typeof lineBrief === "function" ? lineBrief(id) : "";
+const gateOf = (id, what) => id && typeof lineGate === "function" ? lineGate(id, what) : ""; // 디자인 라인 착수 확인·생성형 이미지 방침(작업 카드가 없으면 막지 않음) // 디자인 라인 0단계 브리프(국가·성격·산업·대상 등)
 const refLine = r => [r.id, kindOf(r), r.출처, r.제목, L(r.태그).join("/"), L(r.스타일).join("/"), L(r.색).join("/"), r.용도, String(r.설명 || "").slice(0, 100), `+${+(r.평가 || {}).up || 0}/-${+(r.평가 || {}).down || 0}`].map(v => String(v || "").replace(/\|/g, "/").slice(0, 120)).join("|");
 function drawFind() {
   $("fCard").innerHTML = opt(typeof lineOptions === "function" ? lineOptions() : [], fcard, "작업 카드 없이 키워드만 (고르면 행사 국가·성격·산업·대상까지 고려)");
@@ -394,6 +395,7 @@ async function recommend() {
   if (busy.rec) return; // Enter 연타로 추천·웹 세션이 겹치지 않게
   const ctx = briefOf(fcard), q = $("fq").value.trim() || (ctx ? `${latest(fcard).제목 || "행사"} 키비주얼` : ""), k = $("fk").value; if (!q) { say("fMsg", "키워드를 넣거나 작업 카드를 골라 주세요."); return; }
   if (!db) { say("fMsg", "이 화면에서는 저장소에 연결할 수 없습니다."); return; }
+  if (gateOf(fcard, "pick")) { say("fMsg", gateOf(fcard, "pick")); return; }
   const pool = refs.filter(r => !k || kindOf(r) === k).sort((a, b) => ((+(b.평가 || {}).up || 0) - (+(b.평가 || {}).down || 0)) - ((+(a.평가 || {}).up || 0) - (+(a.평가 || {}).down || 0)) || String(b.at).localeCompare(String(a.at))).slice(0, 200);
   busy.rec = true; drawFind(); say("fMsg", pool.length ? "PRISM이 내부 자료를 살펴보는 중…" : "내부 자료가 없어 웹에서 찾습니다.");
   const fid = "F" + Date.now().toString(36); let f = {q, 범위: k || "전체", card: fcard, at: new Date().toISOString(), picks: [], 판정: "부족", 부족이유: "내부 자료가 없습니다."};
