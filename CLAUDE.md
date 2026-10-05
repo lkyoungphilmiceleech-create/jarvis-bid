@@ -15,7 +15,7 @@
 | ATLAS 리서치 | `org/atlas.tpl.html` + `org/build_atlas.py` (보고서 `org/atlas_report.py`) | https://claude.ai/artifact/TDPhARCLePshYGn4xkh4Zm |
 | NEXUS 매칭 | `org/nexus.tpl.html` + `org/build_nexus.py` | https://claude.ai/artifact/R88TLqegZUoARH6CoxMaJf |
 | CHRONOS·LEDGER 관제실 | `org/pmo.tpl.html` + `org/build_pmo.py` | https://claude.ai/artifact/MpTu46T2Xd74XZYPmVXWD6 |
-| PRISM 디자인 스튜디오 | `org/prism.tpl.html` + `org/build_prism.py` | https://claude.ai/artifact/9hG8VesME61rUXfjjt7AVg |
+| PRISM 디자인 스튜디오 | `org/prism.tpl.html` + `org/design_brief.js`·`org/design_line.js`(디자인 라인 탭) + `org/build_prism.py` | https://claude.ai/artifact/9hG8VesME61rUXfjjt7AVg |
 | 프로젝트별 참가기업 연락처 | `org/pcontact.tpl.html` + `org/build_pcontact.py` | 프로젝트마다 별도 발행(관제실 pm `연락처페이지`) |
 | 업무 데스크(BABEL·MAESTRO·SCRIBE) | `org/desk.tpl.html` + `org/build_desk.py` | https://claude.ai/artifact/JmQ3biw4gWxzSct65eCjBF |
 
@@ -35,7 +35,7 @@
 ## 담당 (처음 안 — 본부장님과 조정)
 | 영역 | 담당 |
 |---|---|
-| 업무실 화면(`org/*.tpl.html`, `org/avatars/`) | 사내 직원 (+ 개발 조력자 **프라이데이**, `.claude/agents/page-builder.md`) |
+| 업무실 화면(`org/*.tpl.html`, `org/design_*.js`, `org/avatars/`) | 사내 직원 (+ 개발 조력자 **프라이데이**, `.claude/agents/page-builder.md`) |
 | 빌드·보고서 스크립트(`org/build_*.py`, `org/*_report.py`), `org/org.json` | JARVIS |
 | 수집(`collect.py`, `.github/workflows/`, `data/`) | JARVIS |
 | 루틴·카톡 알림·아티팩트 배포 | JARVIS (본부장님 계정) |
@@ -56,6 +56,7 @@
 - 사내 직원 등록·등급(본부장님 결정 2026-09-28, 1차): 로그인은 각자 claude.ai 계정. 보안 강화형 등록(본부장님 결정 2026-09-29): 관리자가 1회용·7일 초청 코드(사무실 db `invites/{코드}`, 관리자만)를 만들어 메일·메시지로 보내고 사무실 공유로 초대 → 초청받은 사람이 코드·부서·직책·연락처로 신청 → 관리자가 코드 대조 후 승인·등급 부여. 성명은 claude.ai 계정에서 확인(저장 안 함), 비밀번호는 두지 않음(claude.ai 로그인 사용). 메일·연락처는 신청 때 적고 관리자만 읽는 `staffinfo/{id}` 에만 둔다(플랫폼이 계정 메일 읽기를 허용하지 않음). 등급은 3단계 관리자·팀장·직원 — 관리자는 페이지 편집 권한으로만 정해지고(화면에서 부여하지 않음), 화면에서는 팀장·직원을 부여. 사무실 db `join/{본인}`(신청, 본인만 씀)·`members/{id}`(등급, 관리자만 씀), 이름·이메일은 저장하지 않고 id 만. 등급별 입장: 관리자 전용 = 관리자 / 관리자·담당 PM = 관리자·팀장 / 그 밖(PRISM 포함) = 모든 등급. 화면 표시일 뿐이고 실제 차단은 페이지 공유(기준표는 인사 관리 화면). 각 업무실 기능 연동은 다음 단계.
 - 직원 정보 보관(본부장님 결정 2026-09-29): 비활성 처리 후 30일이 지나면 `staffinfo/{id}`(메일·연락처)를 지운다. 등급 기록(`members/{id}`)은 남긴다. 관리자가 사무실을 열 때 지운다.
 - PRISM 은 모든 등급이 사용(내부 전용, 외부 공개 안 함).
+- 디자인 라인(본부장님 결정 2026-10-05): 디자인 자동화는 PRISM 안의 「디자인 라인」 탭으로 만들되 코드는 별도 파일(`org/design_line.js`, 빌드 때 붙임)로 둔다. 5단계 = 0 기반(작업 카드·품목 규격 사전) → 1 레퍼런스 → 2 키비주얼 → 3 응용 세트(팀장 이상 확정) → 4 발주 패키지(사양서·인쇄 PDF, 금액 없음). 저장소 `line/{id}`(id = `briefs/{id}`)·`linespec/{key}`. 발주 금액·업체는 관제실, 4단계 발주 페이지는 별도 발행(디자인팀장·담당 PM·관리자 공유). 0단계 = **PM 키비주얼 브리프**(본부장님 결정 2026-10-05, 양식 '키비주얼 디자인 브리프' 13항목, `org/design_brief.js`): PM 이 작성해 디자인팀에 전달(중간 저장 가능), 1~2쪽(1~7항 + 생성형 이미지 방침 + 품목)은 레퍼런스·키비주얼 전에, 3~4쪽(8~12항)은 응용 세트 확정 전까지. **예산 항목은 두지 않는다.** 담당자는 이름·연락처 대신 역할. 13항 착수 확인('착수 가능'은 확인 4개 모두, '조건부 착수'는 필수만)이 끝나야 추천·생성이 열리고(작업 카드가 있는 요청만), 생성형 방침이 '사용하지 않음'이면 이미지 생성을 막고 '사전 협의 필요'는 협의 완료 체크 후 생성. 공고문 붙여 넣기로 자동 채움, 국가별 색 주의는 출처와 함께 '확인용'(현지 파트너 확인). PM 도 PRISM 공유 대상(금액·연락처 없음). 브리프는 레퍼런스 찾기(작업 카드 불러오기)·시안 작업 추천에 함께 들어간다. 한 단계씩 PR 로 붙인다. 구조도: https://claude.ai/artifact/4RpWeZtPV3rxWmazCxwvQE
 - 업무실별 등급 연동(본부장님 결정 2026-09-29): ATLAS = 직원 읽기(브리핑·리포트), 주제 설정·제안 조사 자료(library)는 관리자만. 관제실 = 팀장은 공정 일정·업무 지표만 읽기, 예산·수익률·계약 금액·장부·인력 이메일은 관리자만(관리자가 열 때 금액 뺀 사본 `view/{pid}` 갱신). NEXUS = 직원은 발굴 DB 사본(`pubpipe`, 연락처 뺌)·참가기업·바이어 프로필·상담 일정 읽기만, 연락처 DB·이메일·전화·링크드인·메모·내려받기·올리기·발굴 실행은 관리자만. 직원용 사본은 허용 목록 필드만 담는다. 사본은 관리자가 페이지를 열 때와 매일 06:23 아침 루틴(`org/staff_copies.py`, 페이지와 같은 필드·가림 규칙)에서 갱신한다.
 - 참가기업 연락처·국내외 협업사(본부장님 결정 2026-09-29): 참가기업 연락처(담당자·모바일·이메일·대표번호)는 **프로젝트마다 별도 페이지**(`org/pcontact.tpl.html` + `org/build_pcontact.py`, 페이지 db `contacts/list`·`config/project`)로 발행해 그 프로젝트 담당 PM·관리자에게만 공유한다. 새 프로젝트 페이지는 요청 시 JARVIS 가 발행하고 관제실 pm `연락처페이지` 에 주소를 적는다. 국내외 협업사(연락처·협업 이력)는 별도 페이지(`org/partners.tpl.html` + `org/build_partners.py`, db `partners/{id}`, 관리자·담당 PM 만 공유). 관제실은 투입 인력까지 공유: 참여 신청·PM 인력 수정은 `peoplereq` → 관리자 승인, 작업 자료는 `files`·`filechunks`(파일당 10MB, 공유자 전원 열람 — 금액·연락처 문서 금지). 내려받기는 관리자만. NEXUS 메모 칸에는 연락처를 적지 않는다.
 - 관제실 운영 변경(본부장님 결정 2026-09-30): 공정일정의 간트·일정 보기 탭을 없애고 담당자 선택으로 봄. 업무 요청은 `askq/{self}`·`askr/{self}`(본인 문서만 쓰기, 관리자 대행). 관제실 '연락처' 탭 `pcon/{id}`(참가기업·협업사: 분야·소속·성명·직책·이메일·유선·모바일)는 **관제실 공유자 모두 열람**(본부장님이 위험을 알고 결정), 추가·수정은 관리자·담당 PM(화면 제한), 내려받기는 관리자만. 장부 증빙 이미지는 읽어서 값만 입력하고 원본은 보관하지 않음. 수금(선금·중도금·잔금)은 `pm/{pid}.수금`(관리자만). 삭제 확인은 페이지 안 팝업(`askYes`), 프로젝트 삭제는 이름 입력.

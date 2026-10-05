@@ -4,7 +4,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, "..");
-const PAGES = ["office", "radar", "decoder", "atlas", "nexus", "pmo", "prism", "pcontact", "partners"];
+const PAGES = ["office", "radar", "decoder", "atlas", "nexus", "pmo", "prism", "prism:line", "pcontact", "partners"]; // 이름:탭 = 그 탭을 연 상태로 시험
 const MOCK = `(() => { const q = () => ({orderBy: q, limit: q, where: q, onSnapshot: cb => { setTimeout(() => cb({docs: [], size: 0, empty: true}), 10); return () => {}; }, get: async () => ({docs: []}), add: async () => ({id: "x"}), doc: () => d()});
   const d = () => ({onSnapshot: cb => { setTimeout(() => cb({exists: false, data: () => undefined}), 10); return () => {}; }, get: async () => ({exists: false, data: () => undefined}), set: async () => {}, update: async () => {}, delete: async () => {}, collection: q});
   window.claude = {use: async n => n === "db" ? {collection: q, doc: d} : null}; })();`;
@@ -13,13 +13,13 @@ const local = u => { const m = u.match(/cdn\.jsdelivr\.net\/npm\/([^@]+)@[^/]+\/
   const names = process.argv.slice(2).length ? process.argv.slice(2) : PAGES;
   const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || undefined}); let bad = 0;  // 브라우저를 따로 둔 환경: CHROMIUM_PATH=경로 npm test
   for (const name of names) {
-    const file = path.join(ROOT, "org", `${name}.html`);
-    if (!fs.existsSync(file)) { console.log(`- ${name}: 빌드 파일 없음 (python org/build_${name}.py)`); continue; }
+    const [base, tabName] = name.split(":"), file = path.join(ROOT, "org", `${base}.html`);
+    if (!fs.existsSync(file)) { console.log(`- ${name}: 빌드 파일 없음 (python org/build_${base}.py)`); continue; }
     for (const width of [1280, 390]) {
       const page = await browser.newPage({viewport: {width, height: 900}}); const errs = [];
       page.on("pageerror", e => errs.push(e.message));
       await page.route("https://cdn.jsdelivr.net/**", r => { const f = local(r.request().url()); f ? r.fulfill({path: f, contentType: "application/javascript"}) : r.continue(); });
-      await page.addInitScript(MOCK);
+      await page.addInitScript(MOCK); if (tabName) await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch {} }, [`${base}-tab`, tabName]);
       await page.goto("file://" + file); await page.waitForTimeout(800);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       const ok = !errs.length && over <= 1; bad += !ok;
