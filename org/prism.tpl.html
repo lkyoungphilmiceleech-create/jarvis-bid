@@ -418,7 +418,7 @@ JSON만 답한다: {"picks":[{"id":"위 ID","이유":"한국어 1문장"}],"충�
   busy.rec = false; drawFind();
 }
 async function webMore() {
-  const f = F(); if (!f || busy.web) return; busy.web = true; setTimeout(() => { busy.web = false; }, 60e3);
+  const f = F(); if (!f || busy.web) return; if (gateOf(f.card, "pick")) { say("fMsg", gateOf(f.card, "pick")); drawFind(); return; } busy.web = true; setTimeout(() => { busy.web = false; }, 60e3);
   const jid = await startWeb({kind: "find", fid: f.id, q: f.q, 검색어: f.검색어 || [], 조건: briefOf(f.card).slice(0, 1500)}, "fMsg");
   if (jid) { await db.doc(`finds/${f.id}`).update({rjob: jid}).catch(() => {}); f.rjob = jid; } drawFind();
 }

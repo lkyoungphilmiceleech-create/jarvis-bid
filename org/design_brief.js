@@ -68,7 +68,9 @@ function lbTableIn(name, val, items) {
   return `<div class="ltbl lbt"><table><thead><tr><th>${name === "제작물" ? "제작물" : name === "미확정" ? "#" : "구분"}</th>${cols.map(c => `<th>${esc(c[1])}</th>`).join("")}</tr></thead><tbody>${rows.map(([rk, rl], i) => `<tr><td>${esc(rl)}</td>${cols.map(([ck, , type, o]) => { const v = (name === "제작물" ? val?.[rk] : val?.[i])?.[ck] || "", a = `data-lt="${name}" data-r="${esc(rk)}" data-c="${ck}"`;
     return `<td>${type === "s" ? `<select ${a}>${opt(o, v, "-")}</select>` : `<input ${a} ${type === "d" ? 'type="date"' : 'maxlength="200"'} value="${esc(v)}" placeholder="${esc(T?.ph?.[i] || "")}">`}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`; }
 // 브리프 양식 — f = 저장된 브리프, items = 고른 품목(규격 사전 항목)
+let lbKeep = {}; // 8항 품목별 값 — 품목을 껐다 켜도, 사전에서 빠져도 지킨다
 function lBriefForm(f, specs, sel) {
+  lbKeep = {...(f.제작물 || {})};
   const items = specs.filter(s => sel.has(s.key)), sec = s => `<details class="card" ${s.part === 1 ? "open" : ""}><summary style="cursor:pointer"><b>${s.n}. ${esc(s.t)}</b></summary>
     <div class="form" style="margin-top:8px">${s.f.map(d => lbIn(lbMark(d), f[d[0]])).join("")}</div>${s.table ? `<div style="margin-top:8px" id="lbt_${s.table}">${lbTableIn(s.table, f[s.table], items)}</div>` : ""}
     ${s.n === 1 ? `<p class="note warn" id="lnColor">${esc(lColor(f.국가))}</p>` : ""}</details>`;
@@ -85,7 +87,7 @@ function lBriefForm(f, specs, sel) {
 }
 const lbItems = () => [...document.querySelectorAll("[data-lp]:checked")].map(x => x.dataset.lp);
 // 품목을 바꾸면 8항 표만 다시 그린다(적던 값은 지킨다)
-function lbRedrawItems(specs) { const box = $("lbt_제작물"); if (!box) return; const cur = lbTableRead("제작물"), sel = new Set(lbItems()); box.innerHTML = lbTableIn("제작물", cur, specs.filter(s => sel.has(s.key))); }
+function lbRedrawItems(specs) { const box = $("lbt_제작물"); if (!box) return; Object.assign(lbKeep, lbTableRead("제작물")); const sel = new Set(lbItems()); box.innerHTML = lbTableIn("제작물", lbKeep, specs.filter(s => sel.has(s.key))); }
 function lbTableRead(name) {
   const out = name === "제작물" ? {} : [];
   document.querySelectorAll(`[data-lt="${name}"]`).forEach(el => { const r = el.dataset.r, v = el.value.trim(); if (name === "제작물") (out[r] ||= {})[el.dataset.c] = v; else (out[+r] ||= {})[el.dataset.c] = v; });
@@ -94,7 +96,7 @@ function lbTableRead(name) {
 const lbRead = () => { const f = {};
   LB_FIELDS.forEach(([k, , type]) => { f[k] = type === "m" ? [...document.querySelectorAll(`[data-lbm="${k}"]:checked`)].map(x => x.value) : type === "c" ? !!$("lb_" + k)?.checked : ($("lb_" + k)?.value || "").trim(); });
   LB_CHECK.forEach((_, i) => { f[`확인${i + 1}`] = !!$(`lb_확인${i + 1}`)?.checked; });
-  Object.keys(LBT).forEach(t => { f[t] = lbTableRead(t); }); f.제작물 = lbTableRead("제작물"); return f; };
+  Object.keys(LBT).forEach(t => { f[t] = lbTableRead(t); }); f.제작물 = {...lbKeep, ...lbTableRead("제작물")}; return f; }; // 저장할 때 고른 품목만 남긴다(lSave)
 // 필수 중 빈 것 — 1~2쪽 필수 + 생성형 방침 + 품목
 const lbMissing = (f, items) => [...LBS.flatMap(s => s.f), ...LB_GEN].filter(d => d[4] && !lbVal(f?.[d[0]])).map(d => d[1]).concat(items.length ? [] : ["제작 품목"]);
 const lbPart2 = f => { const ks = LBS.filter(s => s.part === 2).flatMap(s => s.f.map(d => d[0])); return [ks.filter(k => lbVal(f?.[k])).length, ks.length]; };
@@ -131,7 +133,7 @@ function lBriefView(f, items) {
     .filter(r => Object.entries(r).some(([k, v]) => k !== "구분" && v)).map(r => `<tr><th>${esc(r.구분)}</th><td>${esc(Object.entries(r).filter(([k, v]) => k !== "구분" && v).map(([, v]) => v).join(" · "))}</td></tr>`).join("");
   const body = [...LBS, {n: "", t: "생성형 이미지", f: LB_GEN}, {n: 13, t: "착수 전 확인", f: LB_13}].map(s => { const h = s.f.map(([k, l]) => row(l, f[k])).join("") + (s.table ? trows(s.table, f) : "");
     return h ? `<tr><th colspan="2" class="hudlabel">${esc(s.n ? `${s.n}. ${s.t}` : s.t)}</th></tr>${h}` : ""; }).join("");
-  return `<div class="chips"><span class="tag${f.상태 === "디자인팀에 전달" ? " go" : ""}">${esc(f.상태 || "작성 중")}</span><span class="tag${miss.length ? " amber" : " go"}">1~2쪽 필수 ${lbReq() - miss.length}/${lbReq()}</span><span class="tag">3~4쪽 ${p2}/${p2n}</span>
+  return `<div class="chips lbchips"><span class="tag${f.상태 === "디자인팀에 전달" ? " go" : ""}">${esc(f.상태 || "작성 중")}</span><span class="tag${miss.length ? " amber" : " go"}">1~2쪽 필수 ${lbReq() - miss.length}/${lbReq()}</span><span class="tag">3~4쪽 ${p2}/${p2n}</span>
       <span class="tag${LB_GO.includes(f.협의결과) ? " go" : " amber"}">착수 확인: ${esc(f.협의결과 || "전")}</span><span class="tag${f.생성형 === "허용" ? " go" : " amber"}">생성형: ${esc(f.생성형 || "미정")}</span></div>
     ${miss.length ? `<p class="note warn">빈 필수 항목: ${esc(miss.join(", "))}</p>` : ""}
     ${f.국가 ? `<p class="note warn">색 주의(${esc(f.국가)}): ${esc(lColor(f.국가))}</p>` : ""}

@@ -36,7 +36,7 @@ document.head.insertAdjacentHTML("beforeend", `<style>
 .ltbl th,.ltbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .ltbl th{color:var(--muted);font-weight:500;white-space:nowrap}
 .ltbl td:first-child{min-width:130px}
-.lbt table{min-width:640px}.lbt input,.lbt select{width:100%}.lbv table{min-width:0}.lbv th{white-space:normal;width:38%}
+.lbchips .tag{white-space:normal;overflow-wrap:anywhere}.lbt table{min-width:640px}.lbt input,.lbt select{width:100%}.lbv table{min-width:0}.lbv th{white-space:normal;width:38%}
 .lkv{max-width:420px}.lkv img{width:100%;display:block;border-radius:10px;border:1px solid var(--line)}
 </style>`);
 
@@ -132,6 +132,7 @@ async function lSave() {
   if (!bf.제목) delete bf.제목; // 기존 요청에서 시작하면 그 제목을 그대로 둔다
   Object.keys(bf).forEach(k => { if (!bf[k] && (lnew || k === "톤")) delete bf[k]; }); // 빈 칸으로 기존 요청의 마감·설명·톤을 지우지 않는다(고치기에서 마감·설명은 비울 수 있음)
   const kinds = ["키비주얼", ...items.map(k => specs.find(s => s.key === k)?.종류).filter(Boolean)]; // 시안 작업 ④ 목업 종류와 맞춘다
+  f.제작물 = Object.fromEntries(items.filter(k => f.제작물[k]).map(k => [k, f.제작물[k]])); // 고른 품목(사전에서 빠진 것 포함)의 값만
   const ln = {브리프: f, 품목: items, updatedAt: now}; // 아래에서 화면이 바뀌기 전에 읽는다
   lbusy = true; lsay(""); if ($("lnSave")) { $("lnSave").disabled = true; $("lnSave").textContent = "저장 중…"; } // 양식은 다시 그리지 않는다 — 실패해도 입력이 남게
   try {
