@@ -619,7 +619,7 @@ async function lSave() {
   if (!lnew && !bf.제목) delete bf.제목; // 제목은 비울 수 없다
   const kinds = ["키비주얼", ...items.map(k => specs.find(s => s.key === k)?.종류).filter(Boolean)]; // 시안 작업 ④ 목업 종류와 맞춘다
   const ln = {언어: v("lnLang"), 일시장소: v("lnWhen"), 주최: v("lnHost"), 품목: items, updatedAt: now}; // 아래 drawLine 이 폼을 다시 그리기 전에 읽는다
-  lbusy = true; lsay(""); drawLine(true);
+  lbusy = true; lsay(""); if ($("lnSave")) { $("lnSave").disabled = true; $("lnSave").textContent = "저장 중…"; } // 양식은 다시 그리지 않는다 — 실패해도 입력이 남게
   try {
     if (id) { if (!briefs.some(b => b.id === id)) await lFromTask(id, now); bf.종류 = [...new Set([...(latest(id).종류 || []), ...kinds])]; if (!(await put(id, bf))) throw 0; }
     else { id = "L" + Date.now().toString(36); const r = {제목: bf.제목, 마감: bf.마감 || "", 상태: "접수", 프로젝트: bf.프로젝트 || "", 설명: bf.설명 || "", 톤: bf.톤 || "", 종류: [...new Set(kinds)], 출처: "디자인 라인", at: now, updatedAt: now};
@@ -627,7 +627,7 @@ async function lSave() {
     if (lines.some(c => c.id === id)) await db.doc(`line/${id}`).update(ln); else await db.doc(`line/${id}`).set({...ln, at: now});
     const i = lines.findIndex(c => c.id === id); i < 0 ? lines.push({id, ...ln}) : Object.assign(lines[i], ln);
     lcur = id; lnew = ledit = false; try { localStorage.setItem("prism-lcur", id); } catch {} lsay("저장했습니다.");
-  } catch { lsay("저장하지 못했습니다. 다시 눌러 주세요."); }
+  } catch { lbusy = false; lsay("저장하지 못했습니다. 다시 눌러 주세요."); if ($("lnSave")) { $("lnSave").disabled = false; $("lnSave").textContent = "저장"; } return; }
   lbusy = false; drawLine(true);
 }
 
@@ -667,7 +667,7 @@ async function lSpecSave() {
 
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t || !$("line")?.contains(t)) return;
-  if (t.dataset.lv) { lview = t.dataset.lv; lsedit = null; try { localStorage.setItem("prism-lview", lview); } catch {} lsay(""); drawLine(true); }
+  if (t.dataset.lv) { lview = t.dataset.lv; lsedit = null; lnew = ledit = false; try { localStorage.setItem("prism-lview", lview); } catch {} lsay(""); drawLine(true); }
   if (t.id === "lnNew") { lnew = true; ledit = false; lsay(""); drawLine(true); }
   if (t.id === "lnEdit") { ledit = true; lsay(""); drawLine(true); }
   if (t.id === "lnCancel") { lnew = ledit = false; lsay(""); drawLine(true); }
