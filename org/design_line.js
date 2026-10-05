@@ -50,7 +50,7 @@ const lCards = () => lines.map(c => ({c, b: latest(c.id)})).filter(x => x.b.id).
 
 function drawLine(force) {
   const box = $("line"); if (!box) return;
-  const a = document.activeElement; if (!force && box.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; // 입력 중에는 다시 그리지 않는다
+  const a = document.activeElement; if (!force && (lnew || ledit || lsedit || box.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return; // 양식을 쓰는 중에는 db 변경으로 다시 그리지 않는다
   const specs = lSpecs();
   box.innerHTML = `<div class="row"><h2 style="flex:1;min-width:0">디자인 라인</h2><div class="seg" role="group" aria-label="보기">${[["card", "작업 카드"], ["spec", "품목 규격 사전"]].map(([k, l]) => `<button type="button" data-lv="${k}" aria-pressed="${lview === k}">${l}</button>`).join("")}</div></div>
     <p class="note">레퍼런스 → 키비주얼 → 응용 세트 → 발주 패키지를 작업 카드 하나로 이어 갑니다. 지금은 0~2단계가 작동하고 3·4단계는 차례로 붙입니다. 금액·업체 연락처는 관제실에서 다룹니다.</p>
@@ -97,7 +97,7 @@ function lDetail({c, b}, specs) {
       <p class="note">${esc([c.언어, c.일시장소, c.주최 && `주최·주관 ${c.주최}`, b.톤 && `톤 ${b.톤}`].filter(Boolean).join(" · ") || "언어·일시·주최를 넣어 두면 2단계 글자 레이어에 씁니다.")}</p>
       ${items.length ? lTable(items.map(s => [esc(s.이름), esc(lSize(s)), esc(lWork(s)), esc([s.해상도, s.색].filter(Boolean).join(" · ")), esc(s.비율 || "")]), ["품목", "완성 크기", "작업 크기(재단 포함)", "해상도·색", "생성 비율"]) : '<p class="empty">품목을 골라 주세요.</p>'}</div>
     <div class="card">${head(1, go)}
-      ${picks.length ? `<div class="refs">${picks.map(([r, why]) => refCard(r, why)).join("")}</div>` : `<p class="empty">아직 추천이 없습니다. 시안 작업 ①·②에서 레퍼런스를 모으고 추천 3개를 받으세요.</p>`}
+      ${picks.length ? `<div class="refs">${picks.map(([r, why]) => refCard(r, why || " ")).join("")}</div>` : `<p class="empty">아직 추천이 없습니다. 시안 작업 ①·②에서 레퍼런스를 모으고 추천 3개를 받으세요.</p>`}
       ${b.추천?.방향 ? `<div class="dir">${esc(b.추천.방향)}</div>` : ""}</div>
     <div class="card">${head(2, go)}
       ${kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : `<p class="empty">${g ? "선택한 키비주얼의 미리보기를 아직 받지 못했습니다. 시안 작업 ③에서 [결과 이어 받기]를 눌러 주세요." : "선택한 키비주얼이 없습니다. 시안 작업 ③에서 만들고 [키비주얼로 선택]을 누르세요."}</p>`}
@@ -109,22 +109,29 @@ function lDetail({c, b}, specs) {
       <p class="note">확정 시안으로 사양서(품목·규격·수량·재질·후가공·납기 — 금액 없음)와 인쇄용 PDF를 만들어 구글 드라이브에 저장하고, 관제실 발주서로 넘깁니다. 아래는 지금 품목으로 만든 사양서 미리보기입니다.</p>
       ${items.length ? lTable(items.map(s => [esc(s.이름), esc(s.분류 || ""), esc(lSize(s)), esc(`${+s.재단 || 0}mm`), esc([s.해상도, s.색].filter(Boolean).join(" · ")), esc(s.파일 || "")]), ["품목", "분류", "완성 크기", "재단 여백", "해상도·색", "파일"]) : ""}</div>`;
 }
+// 관제실 배정 업무로 시작하면 briefs/{같은 id} 를 없을 때만 만든다(pick 과 같은 내용, 시안 작업의 선택은 그대로 둔다)
+async function lFromTask(id, now) {
+  const t = tasks.find(x => x.id === id); if (!t) throw 0;
+  const r = {제목: String(t.제목 || ""), 마감: String(t.마감 || ""), 상태: "접수", 프로젝트: String(t.프로젝트 || ""), 설명: String(t.내용 || ""), 출처: "관제실", at: now, updatedAt: now};
+  if (!(await db.doc(`briefs/${id}`).get()).exists) await db.doc(`briefs/${id}`).set(r); if (!briefs.some(b => b.id === id)) briefs.push({id, ...r});
+}
 async function lSave() {
   if (!db || lbusy) return;
-  const v = id => ($(id)?.value || "").trim(), items = [...document.querySelectorAll("[data-lp]:checked")].map(x => x.dataset.lp);
+  const v = id => ($(id)?.value || "").trim(), specs = lSpecs(), old = lnew ? [] : (lines.find(c => c.id === lcur)?.품목 || []).filter(k => !specs.some(s => s.key === k)); // 사전에서 빠진 품목은 체크박스가 없어 그대로 둔다
+  const items = [...document.querySelectorAll("[data-lp]:checked")].map(x => x.dataset.lp).concat(old);
   let id = lnew ? v("lnFrom") : lcur;
   if (!id && !v("lnTitle")) { lsay("제목을 넣어 주세요."); return; }
   if (!items.length) { lsay("품목을 하나 이상 골라 주세요."); return; }
-  const now = new Date().toISOString(), specs = lSpecs(), bf = {};
+  const now = new Date().toISOString(), bf = {};
   [["제목", "lnTitle"], ["프로젝트", "lnProj"], ["마감", "lnDue"], ["톤", "lnTone"], ["설명", "lnDesc"]].forEach(([k, i]) => { if (v(i) || !lnew) bf[k] = v(i); });
   if (!lnew && !bf.제목) delete bf.제목; // 제목은 비울 수 없다
   const kinds = ["키비주얼", ...items.map(k => specs.find(s => s.key === k)?.종류).filter(Boolean)]; // 시안 작업 ④ 목업 종류와 맞춘다
+  const ln = {언어: v("lnLang"), 일시장소: v("lnWhen"), 주최: v("lnHost"), 품목: items, updatedAt: now}; // 아래 drawLine 이 폼을 다시 그리기 전에 읽는다
   lbusy = true; lsay(""); drawLine(true);
   try {
-    if (id) { if (!briefs.some(b => b.id === id)) await pick(id); bf.종류 = [...new Set([...(latest(id).종류 || []), ...kinds])]; await put(id, bf); }
+    if (id) { if (!briefs.some(b => b.id === id)) await lFromTask(id, now); bf.종류 = [...new Set([...(latest(id).종류 || []), ...kinds])]; if (!(await put(id, bf))) throw 0; }
     else { id = "L" + Date.now().toString(36); const r = {제목: bf.제목, 마감: bf.마감 || "", 상태: "접수", 프로젝트: bf.프로젝트 || "", 설명: bf.설명 || "", 톤: bf.톤 || "", 종류: [...new Set(kinds)], 출처: "디자인 라인", at: now, updatedAt: now};
       await db.doc(`briefs/${id}`).set(r); if (!briefs.some(b => b.id === id)) briefs.push({id, ...r}); }
-    const ln = {언어: v("lnLang"), 일시장소: v("lnWhen"), 주최: v("lnHost"), 품목: items, updatedAt: now};
     if (lines.some(c => c.id === id)) await db.doc(`line/${id}`).update(ln); else await db.doc(`line/${id}`).set({...ln, at: now});
     const i = lines.findIndex(c => c.id === id); i < 0 ? lines.push({id, ...ln}) : Object.assign(lines[i], ln);
     lcur = id; lnew = ledit = false; try { localStorage.setItem("prism-lcur", id); } catch {} lsay("저장했습니다.");
