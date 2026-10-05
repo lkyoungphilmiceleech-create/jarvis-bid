@@ -17,9 +17,9 @@ const LCOUNTRY = ["미국", "캐나다", "멕시코", "브라질", "영국", "�
 const LKIND_HINT = {"마켓 공동관": "멀리서 보이는 큰 형태, Korea 정체성, 부스 그래픽으로 이어지는 확장성", "바이어 상담회": "신뢰·연결, 명확한 정보 위계", "IR·투자 피칭": "신뢰감, 여백, 숫자·로고가 잘 읽히는 정돈된 구도", "포럼·컨퍼런스": "주제 문장 중심, 연사·세션 정보가 들어갈 공간", "쇼케이스·시연": "역동적 움직임, 콘텐츠 이미지 중심", "네트워킹 행사": "친근·교류, 따뜻한 분위기"};
 const LINDUS_HINT = {"게임": "픽셀·인터랙션", "웹툰·만화": "컷·선", "애니메이션·캐릭터": "캐릭터·면 분할", "음악·공연": "리듬·파형·조명", "방송·영상": "프레임·스크린", "출판": "종이·활자", "AI·SW": "데이터·빛"};
 // 국가별 색 주의 후보 — 금지가 아니라 확인용. 출처를 함께 보여 주고 최종 판단은 현지 파트너 확인
-const LEA = "흰색은 장례·애도를 떠올릴 수 있습니다(흰 국화·흰 리본 조합 주의). 출처: Wikipedia 'Color symbolism'(2026), Funeral.com(2026.1)";
-const LPURPLE = "보라는 애도를 떠올릴 수 있습니다. 출처: Magnific 블로그(2022.12, 3년이 넘은 자료라 현지 확인 필요)";
-const LCOLOR = {"중국": LEA + " · 빨강은 행운·경사로 긍정적으로 쓰입니다(Wikipedia 2026).", "일본": LEA, "대만": LEA, "홍콩": LEA, "대한민국": LEA, "이란": "파랑은 애도를 떠올릴 수 있습니다. 출처: Wikipedia 'Color symbolism'(2026)", "브라질": LPURPLE, "태국": LPURPLE};
+// 근거가 약한 항목(3년 넘은 자료·통설)은 넣지 않는다 — 없는 나라는 현지 파트너 확인 안내만 보인다
+const LEA = "흰색은 장례·애도를 떠올릴 수 있습니다(흰 국화·흰 리본 조합 주의). 출처: Wikipedia 'Color symbolism'(2026) en.wikipedia.org/wiki/Color_symbolism";
+const LCOLOR = {"중국": LEA + " · 빨강은 행운·경사로 긍정적으로 쓰입니다(Wikipedia 2026).", "일본": LEA, "대만": LEA, "홍콩": LEA, "대한민국": LEA};
 const lColor = c => c ? LCOLOR[c] || "등록된 색 주의 사항이 없습니다. 현지 파트너(NEXUS 글로벌 네트워크)에게 확인해 주세요." : "";
 // [키, 이름, 형식, 선택지/예시] — 형식: t 글, s 고르기, m 여러 개
 const LB_MAIN = [["행사명", "행사명 (국문) *", "t", "2026 K-콘텐츠 마켓 공동관"], ["행사명영", "행사명 (영문)", "t", "Korea Content Pavilion 2026"], ["일시", "행사 일시 *", "t", "2026.11.5~11.7"],
@@ -140,7 +140,7 @@ async function lFill() {
 ${txt.slice(0, 12000)}
 JSON만 답한다: {"행사명":"","행사명영":"","일시":"","국가":"","도시":"","성격":"","산업":"","주최":"","주관":"","후원":"","현지어":"","메시지":"","규모":"","대상":[]}`, {modelTier: "default"}) || {};
     let n = 0;
-    LB_ALL.forEach(([k, , type, o]) => { const v = r[k]; if (!v || (Array.isArray(v) && !v.length)) return;
+    LB_ALL.forEach(([k, , type, o]) => { const v = r[k]; if (!v || (Array.isArray(v) ? !v.length || v.some(x => typeof x !== "string") : typeof v !== "string")) return; // 글·글 목록만 받는다
       if (type === "m") document.querySelectorAll(`[data-lbm="${k}"]`).forEach(x => { if ((Array.isArray(v) ? v : [v]).includes(x.value)) { x.checked = true; n++; } });
       else if (type === "s") { if (o.includes(v) && $("lb_" + k)) { $("lb_" + k).value = v; n++; } }
       else if ($("lb_" + k)) { $("lb_" + k).value = String(v).slice(0, 160); n++; } });
@@ -190,6 +190,7 @@ async function lSave() {
   const now = new Date().toISOString(), name = f.행사명 || f.행사명영;
   const bf = {제목: v("lnTitle") || (lnew && id ? "" : `${name} 홍보물`), 마감: v("lnDue"), 프로젝트: name, 톤: [...f.무드, f.키워드].filter(Boolean).join(", "), 설명: v("lnDesc")}; // 시안 작업 화면도 같은 값을 쓰도록 briefs 에도 적는다
   if (!bf.제목) delete bf.제목; // 기존 요청에서 시작하면 그 제목을 그대로 둔다
+  Object.keys(bf).forEach(k => { if (!bf[k] && (lnew || k === "톤")) delete bf[k]; }); // 빈 칸으로 기존 요청의 마감·설명·톤을 지우지 않는다(고치기에서 마감·설명은 비울 수 있음)
   const kinds = ["키비주얼", ...items.map(k => specs.find(s => s.key === k)?.종류).filter(Boolean)]; // 시안 작업 ④ 목업 종류와 맞춘다
   const ln = {브리프: f, 품목: items, updatedAt: now}; // 아래에서 화면이 바뀌기 전에 읽는다
   lbusy = true; lsay(""); if ($("lnSave")) { $("lnSave").disabled = true; $("lnSave").textContent = "저장 중…"; } // 양식은 다시 그리지 않는다 — 실패해도 입력이 남게
