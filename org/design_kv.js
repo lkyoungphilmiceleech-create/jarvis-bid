@@ -68,12 +68,12 @@ const kvCutNote = () => kvCut.length ? `글자가 길어 3줄까지만 보입니
 const kvLogoUrls = L => (L.킷 || []).map(id => kits.find(k => k.id === id)).filter(Boolean).map(k => kvBlob(k.로고?.[0]?.파일)).filter(Boolean);
 // 디자인 라인 2단계 카드 본문
 function lKvStep(c, b) {
-  const L = kvL(c), g = (b.시안 || []).find(x => x.id === b.kv?.id), orig = g && http(g.url || g.web), conf = c.kv확정, ratios = [...new Set([L.비율, ...kvItems(c).map(s => s.비율).filter(r => KV_SIZE[r]), "16:9"])];
+  const L = kvL(c), g = (b.시안 || []).find(x => x.id === b.kv?.id), orig = (typeof prSel === "function" && prSel(c)) || g && http(g.url || g.web), conf = c.kv확정, ratios = [...new Set([L.비율, ...kvItems(c).map(s => s.비율).filter(r => KV_SIZE[r]), "16:9"])];
   const texts = kvTexts(c);
   return `<p class="note">AI 시안이나 디자이너 작업 이미지를 배경으로 올리고, 브리프 6항 필수 문구와 브랜드킷 로고를 레이어로 얹습니다. 글자는 AI가 그리지 않으므로 표기가 정확하게 들어갑니다.</p>
     <div class="kvbg">${kvBlob(L.배경) ? `<img src="${esc(kvBlob(L.배경))}" alt="배경">` : '<span class="tag amber">배경 없음</span>'}
       ${assets ? `<label class="btn">배경 이미지 올리기<input type="file" id="kvUp" accept="image/png,image/jpeg,image/webp" hidden></label>` : '<span class="note">배경 올리기는 페이지 편집 권한이 있어야 합니다.</span>'}
-      ${orig ? `<a class="btn" href="${esc(orig)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">선택한 AI 시안 원본 열기 ↗</a><span class="note">원본을 내려받아 다듬은 뒤 올려 주세요.</span>` : '<span class="note">시안 작업 ③에서 키비주얼을 만들고 고르면 원본 링크가 여기에 나옵니다.</span>'}</div>
+      ${orig ? `<a class="btn" href="${esc(orig)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">선택한 AI 시안 원본 열기 ↗</a><span class="note">원본을 내려받아 다듬은 뒤 올려 주세요.</span>` : '<span class="note">위 프롬프트 카드의 결과 링크에서 [이 시안으로 진행]을 누르거나 시안 작업 ③에서 고르면 원본 링크가 여기에 나옵니다.</span>'}</div>
     <div class="form">
       <label>비율<select data-kv="비율">${opt(ratios, L.비율)}</select></label>
       <label>배치<select data-kv="배치">${opt(KV_PLACE, L.배치)}</select></label>
