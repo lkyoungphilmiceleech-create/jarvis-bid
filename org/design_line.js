@@ -5,7 +5,7 @@
 // prism.tpl.html 의 공용 도구(db·tab·briefs·refs·tasks·esc·opt·http·imgOf·refCard·put·pick·latest·showTab)를 쓴다.
 // 금액·업체 연락처는 두지 않는다 — 발주 금액·업체는 관제실 발주서에서 다룬다.
 const LSTEP = [["기반", "브리프·품목·규격"], ["레퍼런스", "추천 3개·디자인 방향"], ["키비주얼", "시안 생성·선택"], ["응용 세트", "품목별 시안·확정"], ["발주 패키지", "사양서·인쇄 PDF"]];
-const LREADY = 3; // 이 단계부터는 아직 준비 중
+const LREADY = 4; // 이 단계부터는 아직 준비 중(3단계 응용 세트는 design_set.js)
 const LRATIO = ["1:1", "4:5", "3:4", "2:3", "1:2", "9:16", "4:3", "3:2", "16:9", "2:1", "21:9"];
 // 브리프 항목·요약·착수 확인은 org/design_brief.js (빌드 때 이 파일 앞에 붙는다)
 // 규격 초안 — 인쇄소·매체 사양을 확인해 '품목 규격 사전'에서 고쳐 쓴다(고친 값은 db linespec/{key}). 크기: 인쇄 mm, 디지털 px. h=0 은 길이 가변
@@ -49,7 +49,7 @@ const lSize = s => !(s.w > 0) ? "현장 확인" : s.h > 0 ? `${s.w}×${s.h}${s.�
 const lWork = s => { if (!(s.w > 0)) return "-"; if (s.단위 !== "mm" || !(s.h > 0)) return s.단위 === "px" && /2배/.test(s.해상도 || "") ? `폭 ${s.w * 2}px` : "-";
   const r = +s.재단 || 0, w = s.w + 2 * r, h = s.h + 2 * r, dpi = parseInt(s.해상도);
   return `${w}×${h}mm${dpi > 0 ? ` · 약 ${Math.round(w / 25.4 * dpi)}×${Math.round(h / 25.4 * dpi)}px` : ""}`; };
-const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!c.kv확정?.at, false, false]; // 2단계 완료 = 키비주얼 확정
+const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!c.kv확정?.at, !!c.세트확정?.at, false]; // 2단계 완료 = 키비주얼 확정, 3단계 = 응용 세트 확정
 const lStage = (c, b) => { const i = lDone(c, b).indexOf(false); return i < 0 ? 4 : i; };
 const lCards = () => lines.map(c => ({c, b: latest(c.id)})).filter(x => x.b.id).sort((x, y) => String(x.b.마감 || "9").localeCompare(String(y.b.마감 || "9")));
 
@@ -104,9 +104,8 @@ function lDetail({c, b}, specs) {
       ${b.추천?.방향 ? `<div class="dir">${esc(b.추천.방향)}</div>` : ""}</div>
     <div class="card" data-cmt-area>${head(2, go)}
       ${typeof lKvStep === "function" ? lKvStep(c, b) : (kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : "")}</div>
-    <div class="card wait">${head(3)}
-      <p class="note">고른 품목마다 키비주얼을 규격에 맞게 펼친 시안(리플릿 펼침면, X배너 세로형, 디렉토리북 표지·내지, 카드뉴스 묶음)을 만들고, 팀장 이상이 버전을 확정합니다. 그 전까지는 시안 작업 ④ 홍보물 목업으로 분위기를 볼 수 있습니다.</p>
-      ${items.length ? `<div class="chips">${items.map(s => `<span class="tag">${esc(s.이름)} · ${esc(s.비율 || "-")}</span>`).join("")}</div>` : ""}</div>
+    <div class="card" data-cmt-area>${head(3)}
+      ${typeof lSetStep === "function" ? lSetStep(c, b) : ""}</div>
     <div class="card wait">${head(4)}
       <p class="note">확정 시안으로 사양서(품목·규격·수량·재질·후가공·납기 — 금액 없음)와 인쇄용 PDF를 만들어 구글 드라이브에 저장하고, 관제실 발주서로 넘깁니다. 아래는 지금 품목으로 만든 사양서 미리보기입니다.</p>
       ${items.length ? lTable(items.map(s => [esc(s.이름), esc(s.분류 || ""), esc(lSize(s)), esc(`${+s.재단 || 0}mm`), esc([s.해상도, s.색].filter(Boolean).join(" · ")), esc(s.파일 || "")]), ["품목", "분류", "완성 크기", "재단 여백", "해상도·색", "파일"]) : ""}</div>`;
