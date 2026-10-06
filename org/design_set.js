@@ -18,7 +18,10 @@ function setCanvas(s) {
 const setVariants = ({W, H}) => { const ar = H / W; return ar >= 1.6 ? ["위 왼쪽", "가운데", "아래 띠"] : ar >= 1.15 ? ["아래 왼쪽", "위 왼쪽", "아래 띠"] : ar >= 0.85 ? ["가운데", "아래 왼쪽", "아래 띠"] : ["아래 왼쪽", "가운데", "아래 띠"]; };
 // 가이드 — 확정 키비주얼 레이어에서 초안
 const setGuideFrom = c => { const L = c.kv확정?.레이어 || kvL(c); return {배경: L.배경 || "", 서체: L.서체, PPTX서체: "맑은 고딕", 글자색: L.색, 띠색: L.띠색 || "", 어둡게: L.어둡게, 크기: L.크기, 여백: 6, 초점X: 50, 초점Y: 50, 킷: L.킷 || [], 로고최소: 4, 메모: ""}; };
-const setG = c => ({...setGuideFrom(c), ...(c.가이드 || {})});
+// 저장소 값은 누구나 쓸 수 있으므로 읽을 때 거른다(서체는 목록, 색은 HEX, 숫자는 범위)
+const setClean = g => { const n = (v, a, b, d) => Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : d;
+  return {...g, 서체: KV_FONTS.includes(g.서체) ? g.서체 : "Noto Sans KR", PPTX서체: SET_PFONTS.includes(g.PPTX서체) ? g.PPTX서체 : "맑은 고딕", 글자색: kvHex(g.글자색) || "#FFFFFF", 띠색: kvHex(g.띠색), 어둡게: n(g.어둡게, 0, 70, 30), 크기: n(g.크기, 60, 140, 100), 여백: n(g.여백, 3, 12, 6), 초점X: n(g.초점X, 0, 100, 50), 초점Y: n(g.초점Y, 0, 100, 50), 배경: kvBlob(g.배경) ? g.배경 : "", 킷: Array.isArray(g.킷) ? g.킷.map(String) : [], 메모: String(g.메모 || "").slice(0, 600)}; };
+const setG = c => setClean({...setGuideFrom(c), ...(c.가이드 || {})});
 const setItem = (c, s) => { const v = setVariants(setCanvas(s)); const it = {배치: v[0], 추가: "", 끔: [], ...((c.세트 || {})[s.key] || {})}; if (!KV_PLACE.includes(it.배치)) it.배치 = v[0]; return it; };
 // 배경 이미지 크기 — 초점 맞춰 자르기에 쓴다(저장소 파일이라 같은 주소에서 읽힌다)
 async function setImg(id) { const u = kvBlob(id); if (!u) return null; if (id in setImgs) return setImgs[id]; setImgs[id] = null; // 실패도 기록해 다시 그리기가 반복되지 않게
@@ -81,9 +84,9 @@ function lSetStep(c, b) {
       ${(c.세트이력 || []).filter(x => x.버전 !== conf?.버전).length ? `<p class="note">이전 확정 ${(c.세트이력 || []).filter(x => x.버전 !== conf?.버전).map(x => `v${esc(x.버전)}`).join(", ")} 기록이 남아 있습니다.</p>` : ""}</div>`;
 }
 const setCard = () => lines.find(x => x.id === lcur);
-function setReadG(c) { const g = setG(c);
+function setReadG(c) { let g = setG(c);
   document.querySelectorAll("[data-setg]").forEach(el => { const k = el.dataset.setg, v = el.value.trim(); g[k] = ["여백", "어둡게", "크기", "초점X", "초점Y"].includes(k) ? +v : k === "서체" ? (KV_FONTS.includes(v) ? v : "Noto Sans KR") : k === "PPTX서체" ? (SET_PFONTS.includes(v) ? v : "맑은 고딕") : k === "메모" ? v.slice(0, 600) : v; });
-  return g; }
+  return setClean(g); }
 function setReadItems(c) { const out = {...(c.세트 || {})};
   kvItems(c).forEach(s => { const it = setItem(c, s), v = document.querySelector(`[data-setv="${CSS.escape(s.key)}"]:checked`)?.value, a = document.querySelector(`[data-setadd="${CSS.escape(s.key)}"]`)?.value;
     out[s.key] = {...it, ...(v && KV_PLACE.includes(v) ? {배치: v} : {}), ...(a !== undefined ? {추가: a.trim().slice(0, 120)} : {})}; });
@@ -141,7 +144,7 @@ async function setPptx() { const c = setCard(); if (!c || !kvDl || setBusy) retu
       groups.forEach(({ls}) => { const l = ls[0], last = ls[ls.length - 1], w = (l.anchor === "middle" ? lay.W - 2 * lay.m : l.maxW) * k, x = l.anchor === "middle" ? ax + lay.m * k : ax + l.x * k, top = l.y - l.fs, bottom = last.y + l.fs * 0.25;
         sl.addText(ls.map(z => z.t).join("\n"), {x, y: ay + top * k, w, h: (bottom - top) * k, fontFace: PF, fontSize: Math.max(6, Math.round(l.fs * k * 72 * 10) / 10), lineSpacing: Math.round(l.fs * 1.18 * k * 72 * 10) / 10, bold: l.w >= 700, color: hx(lay.color), align: l.anchor === "middle" ? "center" : "left", valign: "top", margin: 0, fit: "none"}); });
       lay.logos.forEach(o => { if (logoPng[o.u]) sl.addImage({data: logoPng[o.u], x: ax + o.x * k, y: ay + o.y * k, w: o.w * k, h: o.h * k, sizing: {type: "contain", w: o.w * k, h: o.h * k}}); });
-      const ck = setChecks[s.key]; sl.addNotes(`배치 ${it.배치}${it.추가 ? ` · 추가 문구: ${it.추가}` : ""}${ck?.ck != null ? ` · 글자 대비 약 ${ck.ck}:1` : ""}${ck?.cut?.length ? ` · 3줄 넘침: ${ck.cut.join(", ")}` : ""}`); }
+      const ck = {ck: setContrast(g, lay), cut: lay.cut}; sl.addNotes(`배치 ${it.배치}${it.추가 ? ` · 추가 문구: ${it.추가}` : ""}${ck?.ck != null ? ` · 글자 대비 약 ${ck.ck}:1` : ""}${ck?.cut?.length ? ` · 3줄 넘침: ${ck.cut.join(", ")}` : ""}`); }
     const blob = await P.write({outputType: "blob"});
     await kvDl.save({filename: `${name.replace(/[\\/:*?"<>|]/g, "").slice(0, 60)}_응용세트_검토.pptx`, data: blob}); setSay(`PPTX를 내려받았습니다(가이드 1장 + 품목 ${items.length}장). '${PF}' 서체가 없는 컴퓨터에서는 비슷한 서체로 보입니다.`); }
   catch (e) { setSay(e?.code === "declined" ? "내려받기를 취소했습니다." : "PPTX를 만들지 못했습니다. 잠시 뒤 다시 눌러 주세요."); }

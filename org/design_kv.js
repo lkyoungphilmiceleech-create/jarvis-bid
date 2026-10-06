@@ -43,6 +43,7 @@ function kvWrap(t, fs, maxW) {
 let kvLast = null;
 function kvSVG(c, L, src, opt = {}) {
   const [W, H] = opt.size || KV_SIZE[L.비율], band = L.배치 === "아래 띠", m = Math.round(Math.min(W, H) * Math.min(15, Math.max(2, +L.여백 || 6)) / 100 * 1.5), fsBase = [0.075, 0.04, 0.03, 0.024, 0.022].map(x => Math.round(Math.min(W, H * 1.6) * x * (Math.min(140, Math.max(60, +L.크기 || 100)) / 100) * (band ? 0.7 : 1)));
+  const font = KV_FONTS.includes(L.서체) ? L.서체 : "Noto Sans KR"; // 서체는 목록에 있는 것만 — 저장소 값이 속성에 그대로 들어가지 않게
   const kitList = (L.킷 || []).map(id => kits.find(k => k.id === id)).filter(Boolean), color = kvHex(L.색) || "#FFFFFF", bandColor = kvHex(L.띠색) || kvHex(kitList[0]?.색?.[0]) || "#111111";
   const lines = []; kvCut = []; (opt.texts || kvTexts(c)).filter(r => !(L.끔 || []).includes(r.key)).forEach((r, i) => { const fs = fsBase[Math.min(i, 4)], maxW = (L.배치 === "가운데" ? W - 2 * m : W * (band ? 0.62 : 0.72) - (W > H ? 0 : m * 0.5));
     const ws = kvWrap(r.text, fs, maxW); if (ws.cut) kvCut.push(r.key); ws.forEach((t, j) => lines.push({t, fs, w: i === 0 ? 800 : 500, gap: j === 0 && lines.length ? fs * 0.55 : 0, maxW, key: r.key})); });
@@ -56,11 +57,11 @@ function kvSVG(c, L, src, opt = {}) {
   const logo = logos.map(u => { lpos.push({u, x: lx, y: ly, w: lw, h: logoH, align}); const s = `<image href="${esc(u)}" xlink:href="${esc(u)}" x="${Math.round(lx)}" y="${Math.round(ly)}" width="${Math.round(lw)}" height="${logoH}" preserveAspectRatio="${align} meet"/>`; lx += lw + lgap; return s; }).join("");
   const dark = Math.min(80, Math.max(0, +L.어둡게 || 0)) / 100, r = opt.bgRect;
   const bgImg = !src.bg ? "" : r ? `<image href="${esc(src.bg)}" xlink:href="${esc(src.bg)}" x="${Math.round(r.x)}" y="${Math.round(r.y)}" width="${Math.round(r.w)}" height="${Math.round(r.h)}" preserveAspectRatio="none"/>` : `<image href="${esc(src.bg)}" xlink:href="${esc(src.bg)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`;
-  kvLast = {W, H, m, lines: pos, logos: lpos, band: band ? {y: H - bandH, h: bandH, color: bandColor} : null, dark: band ? 0 : dark, color, font: L.서체, box: {x: anchor === "middle" ? m : x, y: y0, w: anchor === "middle" ? W - 2 * m : (lines[0]?.maxW || W * 0.7), h: blockH}, cut: [...kvCut]};
+  kvLast = {W, H, m, lines: pos, logos: lpos, band: band ? {y: H - bandH, h: bandH, color: bandColor} : null, dark: band ? 0 : dark, color, font, box: {x: anchor === "middle" ? m : x, y: y0, w: anchor === "middle" ? W - 2 * m : (lines[0]?.maxW || W * 0.7), h: blockH}, cut: [...kvCut]};
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(opt.label || "키비주얼 레이어 미리보기")}">
 <g id="배경"><rect width="${W}" height="${H}" fill="#1B1B22"/>${bgImg || `<text x="${W / 2}" y="${H / 2}" font-size="${Math.round(Math.min(W, H) * 0.04)}" fill="#8A8A99" text-anchor="middle" font-family="sans-serif">배경 이미지를 올려 주세요</text>`}</g>
 <g id="어둡게">${band ? `<rect x="0" y="${H - bandH}" width="${W}" height="${bandH}" fill="${bandColor}"/>` : dark ? `<rect width="${W}" height="${H}" fill="#000000" opacity="${dark}"/>` : ""}</g>
-<g id="글자" font-family="'${L.서체}', sans-serif" fill="${color}">${text}</g>
+<g id="글자" font-family="'${esc(font)}', sans-serif" fill="${color}">${text}</g>
 <g id="로고">${logo}</g></svg>`;
 }
 const kvCutNote = () => kvCut.length ? `글자가 길어 3줄까지만 보입니다: ${kvCut.join(", ")} — 글자 크기를 줄이거나 브리프 6항 표기를 줄여 주세요.` : "";

@@ -923,6 +923,7 @@ function kvWrap(t, fs, maxW) {
 let kvLast = null;
 function kvSVG(c, L, src, opt = {}) {
   const [W, H] = opt.size || KV_SIZE[L.비율], band = L.배치 === "아래 띠", m = Math.round(Math.min(W, H) * Math.min(15, Math.max(2, +L.여백 || 6)) / 100 * 1.5), fsBase = [0.075, 0.04, 0.03, 0.024, 0.022].map(x => Math.round(Math.min(W, H * 1.6) * x * (Math.min(140, Math.max(60, +L.크기 || 100)) / 100) * (band ? 0.7 : 1)));
+  const font = KV_FONTS.includes(L.서체) ? L.서체 : "Noto Sans KR"; // 서체는 목록에 있는 것만 — 저장소 값이 속성에 그대로 들어가지 않게
   const kitList = (L.킷 || []).map(id => kits.find(k => k.id === id)).filter(Boolean), color = kvHex(L.색) || "#FFFFFF", bandColor = kvHex(L.띠색) || kvHex(kitList[0]?.색?.[0]) || "#111111";
   const lines = []; kvCut = []; (opt.texts || kvTexts(c)).filter(r => !(L.끔 || []).includes(r.key)).forEach((r, i) => { const fs = fsBase[Math.min(i, 4)], maxW = (L.배치 === "가운데" ? W - 2 * m : W * (band ? 0.62 : 0.72) - (W > H ? 0 : m * 0.5));
     const ws = kvWrap(r.text, fs, maxW); if (ws.cut) kvCut.push(r.key); ws.forEach((t, j) => lines.push({t, fs, w: i === 0 ? 800 : 500, gap: j === 0 && lines.length ? fs * 0.55 : 0, maxW, key: r.key})); });
@@ -936,11 +937,11 @@ function kvSVG(c, L, src, opt = {}) {
   const logo = logos.map(u => { lpos.push({u, x: lx, y: ly, w: lw, h: logoH, align}); const s = `<image href="${esc(u)}" xlink:href="${esc(u)}" x="${Math.round(lx)}" y="${Math.round(ly)}" width="${Math.round(lw)}" height="${logoH}" preserveAspectRatio="${align} meet"/>`; lx += lw + lgap; return s; }).join("");
   const dark = Math.min(80, Math.max(0, +L.어둡게 || 0)) / 100, r = opt.bgRect;
   const bgImg = !src.bg ? "" : r ? `<image href="${esc(src.bg)}" xlink:href="${esc(src.bg)}" x="${Math.round(r.x)}" y="${Math.round(r.y)}" width="${Math.round(r.w)}" height="${Math.round(r.h)}" preserveAspectRatio="none"/>` : `<image href="${esc(src.bg)}" xlink:href="${esc(src.bg)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>`;
-  kvLast = {W, H, m, lines: pos, logos: lpos, band: band ? {y: H - bandH, h: bandH, color: bandColor} : null, dark: band ? 0 : dark, color, font: L.서체, box: {x: anchor === "middle" ? m : x, y: y0, w: anchor === "middle" ? W - 2 * m : (lines[0]?.maxW || W * 0.7), h: blockH}, cut: [...kvCut]};
+  kvLast = {W, H, m, lines: pos, logos: lpos, band: band ? {y: H - bandH, h: bandH, color: bandColor} : null, dark: band ? 0 : dark, color, font, box: {x: anchor === "middle" ? m : x, y: y0, w: anchor === "middle" ? W - 2 * m : (lines[0]?.maxW || W * 0.7), h: blockH}, cut: [...kvCut]};
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(opt.label || "키비주얼 레이어 미리보기")}">
 <g id="배경"><rect width="${W}" height="${H}" fill="#1B1B22"/>${bgImg || `<text x="${W / 2}" y="${H / 2}" font-size="${Math.round(Math.min(W, H) * 0.04)}" fill="#8A8A99" text-anchor="middle" font-family="sans-serif">배경 이미지를 올려 주세요</text>`}</g>
 <g id="어둡게">${band ? `<rect x="0" y="${H - bandH}" width="${W}" height="${bandH}" fill="${bandColor}"/>` : dark ? `<rect width="${W}" height="${H}" fill="#000000" opacity="${dark}"/>` : ""}</g>
-<g id="글자" font-family="'${L.서체}', sans-serif" fill="${color}">${text}</g>
+<g id="글자" font-family="'${esc(font)}', sans-serif" fill="${color}">${text}</g>
 <g id="로고">${logo}</g></svg>`;
 }
 const kvCutNote = () => kvCut.length ? `글자가 길어 3줄까지만 보입니다: ${kvCut.join(", ")} — 글자 크기를 줄이거나 브리프 6항 표기를 줄여 주세요.` : "";
@@ -1074,7 +1075,10 @@ function setCanvas(s) {
 const setVariants = ({W, H}) => { const ar = H / W; return ar >= 1.6 ? ["위 왼쪽", "가운데", "아래 띠"] : ar >= 1.15 ? ["아래 왼쪽", "위 왼쪽", "아래 띠"] : ar >= 0.85 ? ["가운데", "아래 왼쪽", "아래 띠"] : ["아래 왼쪽", "가운데", "아래 띠"]; };
 // 가이드 — 확정 키비주얼 레이어에서 초안
 const setGuideFrom = c => { const L = c.kv확정?.레이어 || kvL(c); return {배경: L.배경 || "", 서체: L.서체, PPTX서체: "맑은 고딕", 글자색: L.색, 띠색: L.띠색 || "", 어둡게: L.어둡게, 크기: L.크기, 여백: 6, 초점X: 50, 초점Y: 50, 킷: L.킷 || [], 로고최소: 4, 메모: ""}; };
-const setG = c => ({...setGuideFrom(c), ...(c.가이드 || {})});
+// 저장소 값은 누구나 쓸 수 있으므로 읽을 때 거른다(서체는 목록, 색은 HEX, 숫자는 범위)
+const setClean = g => { const n = (v, a, b, d) => Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : d;
+  return {...g, 서체: KV_FONTS.includes(g.서체) ? g.서체 : "Noto Sans KR", PPTX서체: SET_PFONTS.includes(g.PPTX서체) ? g.PPTX서체 : "맑은 고딕", 글자색: kvHex(g.글자색) || "#FFFFFF", 띠색: kvHex(g.띠색), 어둡게: n(g.어둡게, 0, 70, 30), 크기: n(g.크기, 60, 140, 100), 여백: n(g.여백, 3, 12, 6), 초점X: n(g.초점X, 0, 100, 50), 초점Y: n(g.초점Y, 0, 100, 50), 배경: kvBlob(g.배경) ? g.배경 : "", 킷: Array.isArray(g.킷) ? g.킷.map(String) : [], 메모: String(g.메모 || "").slice(0, 600)}; };
+const setG = c => setClean({...setGuideFrom(c), ...(c.가이드 || {})});
 const setItem = (c, s) => { const v = setVariants(setCanvas(s)); const it = {배치: v[0], 추가: "", 끔: [], ...((c.세트 || {})[s.key] || {})}; if (!KV_PLACE.includes(it.배치)) it.배치 = v[0]; return it; };
 // 배경 이미지 크기 — 초점 맞춰 자르기에 쓴다(저장소 파일이라 같은 주소에서 읽힌다)
 async function setImg(id) { const u = kvBlob(id); if (!u) return null; if (id in setImgs) return setImgs[id]; setImgs[id] = null; // 실패도 기록해 다시 그리기가 반복되지 않게
@@ -1137,9 +1141,9 @@ function lSetStep(c, b) {
       ${(c.세트이력 || []).filter(x => x.버전 !== conf?.버전).length ? `<p class="note">이전 확정 ${(c.세트이력 || []).filter(x => x.버전 !== conf?.버전).map(x => `v${esc(x.버전)}`).join(", ")} 기록이 남아 있습니다.</p>` : ""}</div>`;
 }
 const setCard = () => lines.find(x => x.id === lcur);
-function setReadG(c) { const g = setG(c);
+function setReadG(c) { let g = setG(c);
   document.querySelectorAll("[data-setg]").forEach(el => { const k = el.dataset.setg, v = el.value.trim(); g[k] = ["여백", "어둡게", "크기", "초점X", "초점Y"].includes(k) ? +v : k === "서체" ? (KV_FONTS.includes(v) ? v : "Noto Sans KR") : k === "PPTX서체" ? (SET_PFONTS.includes(v) ? v : "맑은 고딕") : k === "메모" ? v.slice(0, 600) : v; });
-  return g; }
+  return setClean(g); }
 function setReadItems(c) { const out = {...(c.세트 || {})};
   kvItems(c).forEach(s => { const it = setItem(c, s), v = document.querySelector(`[data-setv="${CSS.escape(s.key)}"]:checked`)?.value, a = document.querySelector(`[data-setadd="${CSS.escape(s.key)}"]`)?.value;
     out[s.key] = {...it, ...(v && KV_PLACE.includes(v) ? {배치: v} : {}), ...(a !== undefined ? {추가: a.trim().slice(0, 120)} : {})}; });
@@ -1197,7 +1201,7 @@ async function setPptx() { const c = setCard(); if (!c || !kvDl || setBusy) retu
       groups.forEach(({ls}) => { const l = ls[0], last = ls[ls.length - 1], w = (l.anchor === "middle" ? lay.W - 2 * lay.m : l.maxW) * k, x = l.anchor === "middle" ? ax + lay.m * k : ax + l.x * k, top = l.y - l.fs, bottom = last.y + l.fs * 0.25;
         sl.addText(ls.map(z => z.t).join("\n"), {x, y: ay + top * k, w, h: (bottom - top) * k, fontFace: PF, fontSize: Math.max(6, Math.round(l.fs * k * 72 * 10) / 10), lineSpacing: Math.round(l.fs * 1.18 * k * 72 * 10) / 10, bold: l.w >= 700, color: hx(lay.color), align: l.anchor === "middle" ? "center" : "left", valign: "top", margin: 0, fit: "none"}); });
       lay.logos.forEach(o => { if (logoPng[o.u]) sl.addImage({data: logoPng[o.u], x: ax + o.x * k, y: ay + o.y * k, w: o.w * k, h: o.h * k, sizing: {type: "contain", w: o.w * k, h: o.h * k}}); });
-      const ck = setChecks[s.key]; sl.addNotes(`배치 ${it.배치}${it.추가 ? ` · 추가 문구: ${it.추가}` : ""}${ck?.ck != null ? ` · 글자 대비 약 ${ck.ck}:1` : ""}${ck?.cut?.length ? ` · 3줄 넘침: ${ck.cut.join(", ")}` : ""}`); }
+      const ck = {ck: setContrast(g, lay), cut: lay.cut}; sl.addNotes(`배치 ${it.배치}${it.추가 ? ` · 추가 문구: ${it.추가}` : ""}${ck?.ck != null ? ` · 글자 대비 약 ${ck.ck}:1` : ""}${ck?.cut?.length ? ` · 3줄 넘침: ${ck.cut.join(", ")}` : ""}`); }
     const blob = await P.write({outputType: "blob"});
     await kvDl.save({filename: `${name.replace(/[\\/:*?"<>|]/g, "").slice(0, 60)}_응용세트_검토.pptx`, data: blob}); setSay(`PPTX를 내려받았습니다(가이드 1장 + 품목 ${items.length}장). '${PF}' 서체가 없는 컴퓨터에서는 비슷한 서체로 보입니다.`); }
   catch (e) { setSay(e?.code === "declined" ? "내려받기를 취소했습니다." : "PPTX를 만들지 못했습니다. 잠시 뒤 다시 눌러 주세요."); }
