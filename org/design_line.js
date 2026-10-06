@@ -92,7 +92,7 @@ const lTable = (rows, head) => `<div class="ltbl"><table><thead><tr>${head.map(h
 function lDetail({c, b}, specs) {
   const done = lDone(c, b), now = lStage(c, b), items = (c.품목 || []).map(k => specs.find(s => s.key === k) || {key: k, 이름: `${k} (사전에 없음)`, w: 0, h: 0, 단위: ""});
   const picks = (b.추천?.picks || []).map(p => [refs.find(r => r.id === p.id), p.이유]).filter(([r]) => r), g = (b.시안 || []).find(x => x.id === b.kv?.id), kvSrc = g && http(g.preview || g.url);
-  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3><button class="btn x" type="button" data-cmt="step" title="이 단계에 의견 남기기" aria-label="${i}단계에 의견 남기기">💬</button>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
+  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1 1 130px;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3><button class="btn x" type="button" data-cmt="step" title="이 단계에 의견 남기기" aria-label="${i}단계에 의견 남기기">💬</button>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
   const go = `<button class="btn" type="button" data-lgo="${esc(c.id)}">시안 작업에서 진행 →</button>`;
   return `<div class="card"><div class="row"><h3 style="flex:1;min-width:0">${esc(b.제목 || "(제목 없음)")}</h3><span class="note">${esc([b.프로젝트, b.마감 && `마감 ${b.마감} ${dday(b.마감)}`].filter(Boolean).join(" · "))}</span></div>
       <div class="lsteps">${LSTEP.map(([n], i) => `<span class="${done[i] ? "done" : i === now ? "now" : ""}">${i} ${esc(n)}</span>`).join("")}</div></div>

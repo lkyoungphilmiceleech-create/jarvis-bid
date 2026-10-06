@@ -763,7 +763,7 @@ const lTable = (rows, head) => `<div class="ltbl"><table><thead><tr>${head.map(h
 function lDetail({c, b}, specs) {
   const done = lDone(c, b), now = lStage(c, b), items = (c.품목 || []).map(k => specs.find(s => s.key === k) || {key: k, 이름: `${k} (사전에 없음)`, w: 0, h: 0, 단위: ""});
   const picks = (b.추천?.picks || []).map(p => [refs.find(r => r.id === p.id), p.이유]).filter(([r]) => r), g = (b.시안 || []).find(x => x.id === b.kv?.id), kvSrc = g && http(g.preview || g.url);
-  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3><button class="btn x" type="button" data-cmt="step" title="이 단계에 의견 남기기" aria-label="${i}단계에 의견 남기기">💬</button>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
+  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1 1 130px;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3><button class="btn x" type="button" data-cmt="step" title="이 단계에 의견 남기기" aria-label="${i}단계에 의견 남기기">💬</button>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
   const go = `<button class="btn" type="button" data-lgo="${esc(c.id)}">시안 작업에서 진행 →</button>`;
   return `<div class="card"><div class="row"><h3 style="flex:1;min-width:0">${esc(b.제목 || "(제목 없음)")}</h3><span class="note">${esc([b.프로젝트, b.마감 && `마감 ${b.마감} ${dday(b.마감)}`].filter(Boolean).join(" · "))}</span></div>
       <div class="lsteps">${LSTEP.map(([n], i) => `<span class="${done[i] ? "done" : i === now ? "now" : ""}">${i} ${esc(n)}</span>`).join("")}</div></div>
@@ -896,7 +896,7 @@ const KV_SIZE = {"16:9": [1600, 900], "21:9": [1680, 720], "2:1": [1600, 800], "
 const KV_ROLE = ["디자인팀장", "관리자"];
 const kvHex = s => /^#[0-9a-f]{6}$/i.test(String(s || "").trim()) ? String(s).trim().toUpperCase() : "";
 const kvBlob = id => /^[A-Za-z0-9_-]{16,64}$/.test(id || "") ? "/_blob/" + id : "";
-let kits = [], kvDl = null, kvKitEdit = null, kvTimer = null;
+let kits = [], kvDl = null, kvKitEdit = null, kvTimer = null, kvCut = []; // kvCut = 3줄을 넘어 잘린 글자 레이어
 Promise.resolve(window.claude?.use?.("downloads")).then(x => { kvDl = x ?? null; }).catch(() => {});
 const kvSay = (m, id = "kvMsg") => { if ($(id)) $(id).textContent = m; };
 
@@ -914,16 +914,17 @@ const kvL = c => { const L = {...kvDefault(c), ...(c.레이어 || {})}; if (!KV_
 function kvWrap(t, fs, maxW) {
   const cw = ch => /[ᄀ-ᇿ㄰-㆏가-힯一-鿿]/.test(ch) ? fs * 0.98 : /[A-Z0-9]/.test(ch) ? fs * 0.64 : fs * 0.52, out = [];
   let line = "", w = 0;
-  for (const word of String(t).split(/(\s+)/)) { const ww = [...word].reduce((a, ch) => a + cw(ch), 0);
+  const words = String(t).split(/(\s+)/).flatMap(w => [...w].reduce((a, ch) => a + cw(ch), 0) > maxW ? [...w] : [w]); // 띄어쓰기 없는 긴 단어는 글자 단위로 끊는다
+  for (const word of words) { const ww = [...word].reduce((a, ch) => a + cw(ch), 0);
     if (w + ww > maxW && line.trim()) { out.push(line.trim()); line = word.trimStart(); w = [...line].reduce((a, ch) => a + cw(ch), 0); } else { line += word; w += ww; } }
-  if (line.trim()) out.push(line.trim()); return out.slice(0, 3);
+  if (line.trim()) out.push(line.trim()); out.cut = out.length > 3; return out.length > 3 ? Object.assign(out.slice(0, 3), {cut: true}) : out;
 }
 // 레이어 SVG — 배경 / 어둡게 / 글자 / 로고를 따로 묶는다(일러스트레이터에서 레이어로 열림). src = {bg, logos:[url]} 화면용 /_blob 주소 또는 내려받기용 data: 주소
 function kvSVG(c, L, src) {
   const [W, H] = KV_SIZE[L.비율], band = L.배치 === "아래 띠", m = Math.round(W * 0.06), fsBase = [0.075, 0.04, 0.03, 0.024, 0.022].map(x => Math.round(W * x * (Math.min(140, Math.max(60, +L.크기 || 100)) / 100) * (band ? 0.7 : 1)));
   const kitList = (L.킷 || []).map(id => kits.find(k => k.id === id)).filter(Boolean), color = kvHex(L.색) || "#FFFFFF", bandColor = kvHex(L.띠색) || kvHex(kitList[0]?.색?.[0]) || "#111111";
-  const lines = []; kvTexts(c).filter(r => !(L.끔 || []).includes(r.key)).forEach((r, i) => { const fs = fsBase[Math.min(i, 4)], maxW = (L.배치 === "가운데" ? W - 2 * m : W * (band ? 0.62 : 0.72));
-    kvWrap(r.text, fs, maxW).forEach((t, j) => lines.push({t, fs, w: i === 0 ? 800 : 500, gap: j === 0 && lines.length ? fs * 0.55 : 0})); });
+  const lines = []; kvCut = []; kvTexts(c).filter(r => !(L.끔 || []).includes(r.key)).forEach((r, i) => { const fs = fsBase[Math.min(i, 4)], maxW = (L.배치 === "가운데" ? W - 2 * m : W * (band ? 0.62 : 0.72));
+    const ws = kvWrap(r.text, fs, maxW); if (ws.cut) kvCut.push(r.key); ws.forEach((t, j) => lines.push({t, fs, w: i === 0 ? 800 : 500, gap: j === 0 && lines.length ? fs * 0.55 : 0})); });
   const blockH = lines.reduce((a, l) => a + l.gap + l.fs * 1.18, 0), logoH = Math.round(band ? H * 0.09 : H * 0.075), bandH = band ? Math.max(Math.round(H * 0.24), Math.round(blockH + H * 0.1)) : 0;
   let y = L.배치 === "위 왼쪽" ? H * 0.09 : L.배치 === "가운데" ? (H - blockH) / 2 : band ? H - bandH + (bandH - blockH) / 2 : H - H * 0.09 - blockH - logoH - H * 0.04;
   const x = L.배치 === "가운데" ? W / 2 : m, anchor = L.배치 === "가운데" ? "middle" : "start";
@@ -931,21 +932,22 @@ function kvSVG(c, L, src) {
   const logos = (src.logos || []).filter(Boolean), lw = logoH * 3, lgap = logoH * 0.5, ly = band ? H - bandH / 2 - logoH / 2 : L.배치 === "위 왼쪽" ? H - H * 0.07 - logoH : L.배치 === "가운데" ? H - H * 0.07 - logoH : H - H * 0.07 - logoH;
   let lx = L.배치 === "가운데" ? (W - (logos.length * lw + (logos.length - 1) * lgap)) / 2 : L.배치 === "위 왼쪽" ? m : W - m - (logos.length * lw + (logos.length - 1) * lgap);
   if (L.배치 === "아래 왼쪽") lx = m; // 글자 아래 같은 쪽에 로고 줄
-  const logo = logos.map(u => { const s = `<image href="${esc(u)}" x="${Math.round(lx)}" y="${Math.round(ly)}" width="${Math.round(lw)}" height="${logoH}" preserveAspectRatio="${L.배치 === "가운데" ? "xMidYMid" : L.배치 === "아래 띠" ? "xMaxYMid" : "xMinYMid"} meet"/>`; lx += lw + lgap; return s; }).join("");
+  const logo = logos.map(u => { const s = `<image href="${esc(u)}" xlink:href="${esc(u)}" x="${Math.round(lx)}" y="${Math.round(ly)}" width="${Math.round(lw)}" height="${logoH}" preserveAspectRatio="${L.배치 === "가운데" ? "xMidYMid" : L.배치 === "아래 띠" ? "xMaxYMid" : "xMinYMid"} meet"/>`; lx += lw + lgap; return s; }).join("");
   const dark = Math.min(80, Math.max(0, +L.어둡게 || 0)) / 100;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="키비주얼 레이어 미리보기">
-<g id="배경"><rect width="${W}" height="${H}" fill="#1B1B22"/>${src.bg ? `<image href="${esc(src.bg)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<text x="${W / 2}" y="${H / 2}" font-size="${Math.round(W * 0.025)}" fill="#8A8A99" text-anchor="middle" font-family="sans-serif">배경 이미지를 올려 주세요</text>`}</g>
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="키비주얼 레이어 미리보기">
+<g id="배경"><rect width="${W}" height="${H}" fill="#1B1B22"/>${src.bg ? `<image href="${esc(src.bg)}" xlink:href="${esc(src.bg)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<text x="${W / 2}" y="${H / 2}" font-size="${Math.round(W * 0.025)}" fill="#8A8A99" text-anchor="middle" font-family="sans-serif">배경 이미지를 올려 주세요</text>`}</g>
 <g id="어둡게">${band ? `<rect x="0" y="${H - bandH}" width="${W}" height="${bandH}" fill="${bandColor}"/>` : dark ? `<rect width="${W}" height="${H}" fill="#000000" opacity="${dark}"/>` : ""}</g>
 <g id="글자" font-family="'${L.서체}', sans-serif" fill="${color}">${text}</g>
 <g id="로고">${logo}</g></svg>`;
 }
+const kvCutNote = () => kvCut.length ? `글자가 길어 3줄까지만 보입니다: ${kvCut.join(", ")} — 글자 크기를 줄이거나 브리프 6항 표기를 줄여 주세요.` : "";
 const kvLogoUrls = L => (L.킷 || []).map(id => kits.find(k => k.id === id)).filter(Boolean).map(k => kvBlob(k.로고?.[0]?.파일)).filter(Boolean);
 // 디자인 라인 2단계 카드 본문
 function lKvStep(c, b) {
   const L = kvL(c), g = (b.시안 || []).find(x => x.id === b.kv?.id), orig = g && http(g.url || g.web), conf = c.kv확정, ratios = [...new Set([L.비율, ...kvItems(c).map(s => s.비율).filter(r => KV_SIZE[r]), "16:9"])];
   const texts = kvTexts(c);
   return `<p class="note">AI 시안이나 디자이너 작업 이미지를 배경으로 올리고, 브리프 6항 필수 문구와 브랜드킷 로고를 레이어로 얹습니다. 글자는 AI가 그리지 않으므로 표기가 정확하게 들어갑니다.</p>
-    <div class="kvbg">${L.배경 ? `<img src="${esc(kvBlob(L.배경))}" alt="배경">` : '<span class="tag amber">배경 없음</span>'}
+    <div class="kvbg">${kvBlob(L.배경) ? `<img src="${esc(kvBlob(L.배경))}" alt="배경">` : '<span class="tag amber">배경 없음</span>'}
       ${assets ? `<label class="btn">배경 이미지 올리기<input type="file" id="kvUp" accept="image/png,image/jpeg,image/webp" hidden></label>` : '<span class="note">배경 올리기는 페이지 편집 권한이 있어야 합니다.</span>'}
       ${orig ? `<a class="btn" href="${esc(orig)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">선택한 AI 시안 원본 열기 ↗</a><span class="note">원본을 내려받아 다듬은 뒤 올려 주세요.</span>` : '<span class="note">시안 작업 ③에서 키비주얼을 만들고 고르면 원본 링크가 여기에 나옵니다.</span>'}</div>
     <div class="form">
@@ -961,12 +963,13 @@ function lKvStep(c, b) {
     <div class="hudlabel">로고 (브랜드킷 — 고른 순서대로 놓입니다)</div>
     <div class="chips">${kits.length ? kits.map(k => `<label><input type="checkbox" data-kvkit="${esc(k.id)}" ${(L.킷 || []).includes(k.id) ? "checked" : ""}>${esc(k.이름)}</label>`).join("") : '<span class="note">아직 브랜드킷이 없습니다. 위 \'브랜드킷\' 보기에서 기관 색·로고를 등록하세요.</span>'}</div>
     <div class="kvprev" id="kvPrev">${kvSVG(c, L, {bg: kvBlob(L.배경), logos: kvLogoUrls(L)})}</div>
+    <p class="note warn" id="kvCutMsg">${kvCutNote()}</p>
     <div class="row">${kvDl ? '<button class="btn primary" type="button" id="kvSvg">레이어 SVG 내려받기 (글자 편집 가능)</button>' : ""}<button class="btn" type="button" id="kvPrompt">브랜드 조건을 키비주얼 프롬프트에 넣기</button><span class="note" id="kvMsg"></span></div>
     <div class="card"><b>키비주얼 확정</b><p class="note">확정하면 지금 배경·레이어 설정이 버전으로 남고, 3단계 응용 세트의 기준이 됩니다. 확정은 디자인팀장 이상이 합니다(화면 표시이며 실제 권한은 페이지 공유 등급).</p>
       ${conf ? `<p><span class="tag go">확정 v${esc(conf.버전)}</span> <span class="note">${esc(conf.역할)} · ${esc(String(conf.at || "").slice(0, 16).replace("T", " "))}${conf.메모 ? ` · ${esc(conf.메모)}` : ""}</span></p>` : ""}
       <div class="row"><select id="kvRole" aria-label="확정 역할">${opt(KV_ROLE, conf?.역할 || "디자인팀장")}</select><input id="kvMemo" maxlength="120" placeholder="확정 메모 (선택)" style="flex:1;min-width:140px">
-        <button class="btn primary" type="button" id="kvConfirm" ${L.배경 ? "" : "disabled"}>${conf ? "새 버전으로 다시 확정" : "확정"}</button>${conf ? '<button class="btn x" type="button" id="kvUnconf">확정 풀기</button>' : ""}</div>
-      ${(c.kv이력 || []).length > 1 ? `<p class="note">이전 확정 ${c.kv이력.length - (conf ? 1 : 0)}건 기록이 남아 있습니다.</p>` : ""}</div>`;
+        <button class="btn primary" type="button" id="kvConfirm" ${kvBlob(L.배경) ? "" : "disabled"}>${conf ? "새 버전으로 다시 확정" : "확정"}</button>${conf ? '<button class="btn x" type="button" id="kvUnconf">확정 풀기</button>' : ""}</div>
+      ${(c.kv이력 || []).filter(x => x.버전 !== conf?.버전).length ? `<p class="note">이전 확정 ${(c.kv이력 || []).filter(x => x.버전 !== conf?.버전).map(x => `v${esc(x.버전)}`).join(", ")} 기록이 남아 있습니다.</p>` : ""}</div>`;
 }
 const kvCard = () => lines.find(x => x.id === lcur);
 function kvRead(c) { const L = kvL(c);
@@ -976,7 +979,7 @@ function kvRead(c) { const L = kvL(c);
   return L; }
 // 조절할 때는 미리보기만 다시 그리고, 저장은 잠시 뒤 한 번
 function kvChange() { const c = kvCard(); if (!c || !db) return; const L = kvRead(c); c.레이어 = L;
-  if ($("kvPrev")) $("kvPrev").innerHTML = kvSVG(c, L, {bg: kvBlob(L.배경), logos: kvLogoUrls(L)});
+  if ($("kvPrev")) $("kvPrev").innerHTML = kvSVG(c, L, {bg: kvBlob(L.배경), logos: kvLogoUrls(L)}); if ($("kvCutMsg")) $("kvCutMsg").textContent = kvCutNote();
   document.querySelectorAll('input[type="range"][data-kv]').forEach(el => { const t = el.closest("label")?.firstChild; if (t) t.textContent = `${el.dataset.kv === "어둡게" ? "배경 어둡게" : "글자 크기"} ${el.value}% `; });
   clearTimeout(kvTimer); kvTimer = setTimeout(() => db.doc(`line/${c.id}`).update({레이어: L, updatedAt: new Date().toISOString()}).catch(() => kvSay("레이어 설정을 저장하지 못했습니다.")), 700); }
 async function kvUpload(file) { const c = kvCard(); if (!c || !assets || !db) return;
