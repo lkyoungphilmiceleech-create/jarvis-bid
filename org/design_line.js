@@ -49,7 +49,7 @@ const lSize = s => !(s.w > 0) ? "현장 확인" : s.h > 0 ? `${s.w}×${s.h}${s.�
 const lWork = s => { if (!(s.w > 0)) return "-"; if (s.단위 !== "mm" || !(s.h > 0)) return s.단위 === "px" && /2배/.test(s.해상도 || "") ? `폭 ${s.w * 2}px` : "-";
   const r = +s.재단 || 0, w = s.w + 2 * r, h = s.h + 2 * r, dpi = parseInt(s.해상도);
   return `${w}×${h}mm${dpi > 0 ? ` · 약 ${Math.round(w / 25.4 * dpi)}×${Math.round(h / 25.4 * dpi)}px` : ""}`; };
-const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!b.kv?.id, false, false];
+const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!c.kv확정?.at, false, false]; // 2단계 완료 = 키비주얼 확정
 const lStage = (c, b) => { const i = lDone(c, b).indexOf(false); return i < 0 ? 4 : i; };
 const lCards = () => lines.map(c => ({c, b: latest(c.id)})).filter(x => x.b.id).sort((x, y) => String(x.b.마감 || "9").localeCompare(String(y.b.마감 || "9")));
 
@@ -57,10 +57,10 @@ function drawLine(force) {
   const box = $("line"); if (!box) return;
   const a = document.activeElement; if (!force && (lnew || ledit || lsedit || box.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return; // 양식을 쓰는 중에는 db 변경으로 다시 그리지 않는다
   const specs = lSpecs();
-  box.innerHTML = `<div class="row"><h2 style="flex:1;min-width:0">디자인 라인</h2><div class="seg" role="group" aria-label="보기">${[["card", "작업 카드"], ["spec", "품목 규격 사전"]].map(([k, l]) => `<button type="button" data-lv="${k}" aria-pressed="${lview === k}">${l}</button>`).join("")}</div></div>
+  box.innerHTML = `<div class="row"><h2 style="flex:1;min-width:0">디자인 라인</h2><div class="seg" role="group" aria-label="보기">${[["card", "작업 카드"], ["kit", "브랜드킷"], ["spec", "품목 규격 사전"]].map(([k, l]) => `<button type="button" data-lv="${k}" aria-pressed="${lview === k}">${l}</button>`).join("")}</div></div>
     <p class="note">레퍼런스 → 키비주얼 → 응용 세트 → 발주 패키지를 작업 카드 하나로 이어 갑니다. 지금은 0~2단계가 작동하고 3·4단계는 차례로 붙입니다. 금액·업체 연락처는 관제실에서 다룹니다.</p>
     <p class="note warn" id="lnMsg">${esc(lmsg)}</p>
-    ${lview === "spec" ? lSpecView(specs) : lCardView(specs)}`;
+    ${lview === "spec" ? lSpecView(specs) : lview === "kit" && typeof lKitView === "function" ? lKitView() : lCardView(specs)}`;
 }
 
 // ── 작업 카드
@@ -92,7 +92,7 @@ const lTable = (rows, head) => `<div class="ltbl"><table><thead><tr>${head.map(h
 function lDetail({c, b}, specs) {
   const done = lDone(c, b), now = lStage(c, b), items = (c.품목 || []).map(k => specs.find(s => s.key === k) || {key: k, 이름: `${k} (사전에 없음)`, w: 0, h: 0, 단위: ""});
   const picks = (b.추천?.picks || []).map(p => [refs.find(r => r.id === p.id), p.이유]).filter(([r]) => r), g = (b.시안 || []).find(x => x.id === b.kv?.id), kvSrc = g && http(g.preview || g.url);
-  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
+  const head = (i, extra = "") => `<div class="row"><h3 style="flex:1 1 130px;min-width:0">${i} · ${esc(LSTEP[i][0])}</h3><button class="btn x" type="button" data-cmt="step" title="이 단계에 의견 남기기" aria-label="${i}단계에 의견 남기기">💬</button>${i >= LREADY ? '<span class="tag amber">준비 중</span>' : `<span class="tag${done[i] ? " go" : ""}">${done[i] ? "완료" : i === now ? "진행 중" : "대기"}</span>`}${extra}</div>`;
   const go = `<button class="btn" type="button" data-lgo="${esc(c.id)}">시안 작업에서 진행 →</button>`;
   return `<div class="card"><div class="row"><h3 style="flex:1;min-width:0">${esc(b.제목 || "(제목 없음)")}</h3><span class="note">${esc([b.프로젝트, b.마감 && `마감 ${b.마감} ${dday(b.마감)}`].filter(Boolean).join(" · "))}</span></div>
       <div class="lsteps">${LSTEP.map(([n], i) => `<span class="${done[i] ? "done" : i === now ? "now" : ""}">${i} ${esc(n)}</span>`).join("")}</div></div>
@@ -102,9 +102,8 @@ function lDetail({c, b}, specs) {
     <div class="card">${head(1, `${lineGate(c.id, "pick") ? '<span class="tag amber">착수 확인 전</span>' : ""}<button class="btn" type="button" data-lfind="${esc(c.id)}">이 카드로 레퍼런스 찾기</button>${go}`)}
       ${picks.length ? `<div class="refs">${picks.map(([r, why]) => refCard(r, why || " ")).join("")}</div>` : `<p class="empty">아직 추천이 없습니다. 시안 작업 ①·②에서 레퍼런스를 모으고 추천 3개를 받으세요.</p>`}
       ${b.추천?.방향 ? `<div class="dir">${esc(b.추천.방향)}</div>` : ""}</div>
-    <div class="card">${head(2, go)}
-      ${kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : `<p class="empty">${g ? "선택한 키비주얼의 미리보기를 아직 받지 못했습니다. 시안 작업 ③에서 [결과 이어 받기]를 눌러 주세요." : "선택한 키비주얼이 없습니다. 시안 작업 ③에서 만들고 [키비주얼로 선택]을 누르세요."}</p>`}
-      <p class="note">다음 업그레이드: 배경 그래픽과 글자·로고 레이어 분리, 기관 브랜드킷 적용.</p></div>
+    <div class="card" data-cmt-area>${head(2, go)}
+      ${typeof lKvStep === "function" ? lKvStep(c, b) : (kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : "")}</div>
     <div class="card wait">${head(3)}
       <p class="note">고른 품목마다 키비주얼을 규격에 맞게 펼친 시안(리플릿 펼침면, X배너 세로형, 디렉토리북 표지·내지, 카드뉴스 묶음)을 만들고, 팀장 이상이 버전을 확정합니다. 그 전까지는 시안 작업 ④ 홍보물 목업으로 분위기를 볼 수 있습니다.</p>
       ${items.length ? `<div class="chips">${items.map(s => `<span class="tag">${esc(s.이름)} · ${esc(s.비율 || "-")}</span>`).join("")}</div>` : ""}</div>
@@ -194,15 +193,17 @@ document.addEventListener("click", async e => {
   if (t.dataset.lse) { lsedit = t.dataset.lse; drawLine(true); }
   if (t.id === "lnSpecCancel") { lsedit = null; drawLine(true); }
   if (t.id === "lnSpecSave") lSpecSave();
-  if (t.dataset.lsr && confirm(SPEC0.some(s => s.key === t.dataset.lsr) ? "이 품목을 기본 규격으로 되돌릴까요?" : "이 품목을 지울까요? 이미 고른 작업 카드에는 '사전에 없음'으로 남습니다.")) {
+  if (t.dataset.lsr && await askYes(SPEC0.some(s => s.key === t.dataset.lsr) ? "이 품목을 기본 규격으로 되돌릴까요?" : "이 품목을 지울까요? 이미 고른 작업 카드에는 '사전에 없음'으로 남습니다.")) {
     const k = t.dataset.lsr; try { await db.doc(`linespec/${k}`).delete(); delete lspec[k]; } catch { lsay("지우지 못했습니다."); } drawLine(true); }
 });
 document.addEventListener("change", e => { if (e.target.id === "lb_국가" && $("lnColor")) $("lnColor").textContent = lColor(e.target.value);
   if (e.target.dataset?.lp && $("line")?.contains(e.target)) lbRedrawItems(lSpecs());
   if (e.target.id === "lnSel") { lcur = e.target.value; lnew = ledit = false; try { localStorage.setItem("prism-lcur", lcur); } catch {} lsay(""); drawLine(true); } });
 function lineInit() {
+  if (lineInit.done) return; lineInit.done = true; // 한 번만
+  if (typeof kvInit === "function") kvInit(); // 브랜드킷(design_kv.js)
   db.collection("line").onSnapshot(s => { lines = s.docs.map(d => ({id: d.id, ...structuredClone(d.data())})); if (tab === "line") drawLine(); if (tab === "find") drawFind(); }); // 레퍼런스 찾기의 작업 카드 목록도 갱신
   db.collection("linespec").onSnapshot(s => { lspec = Object.fromEntries(s.docs.map(d => [d.id, structuredClone(d.data())])); if (tab === "line") drawLine(); });
 }
-if (db) lineInit(); // PRISM 시작이 먼저 끝났으면 여기서 시작(아니면 PRISM이 부른다)
-if (tab === "line") drawLine();
+// design_brief·design_line·design_kv 가 한 스크립트로 붙으므로, 모두 읽힌 뒤에 시작한다. PRISM 시작이 먼저 끝났으면 여기서, 아니면 PRISM이 lineInit 을 부른다
+setTimeout(() => { if (db) lineInit(); if (tab === "line") drawLine(); });
