@@ -5,7 +5,7 @@
 // prism.tpl.html 의 공용 도구(db·tab·briefs·refs·tasks·esc·opt·http·imgOf·refCard·put·pick·latest·showTab)를 쓴다.
 // 금액·업체 연락처는 두지 않는다 — 발주 금액·업체는 관제실 발주서에서 다룬다.
 const LSTEP = [["기반", "브리프·품목·규격"], ["레퍼런스", "추천 3개·디자인 방향"], ["키비주얼", "시안 생성·선택"], ["응용 세트", "품목별 시안·확정"], ["발주 패키지", "사양서·인쇄 PDF"]];
-const LREADY = 4; // 이 단계부터는 아직 준비 중(3단계 응용 세트는 design_set.js)
+const LREADY = 5; // 이 단계부터는 아직 준비 중 — 지금은 0~4단계 모두 작동(3단계 design_set.js, 4단계 design_order.js)
 const LRATIO = ["1:1", "4:5", "3:4", "2:3", "1:2", "9:16", "4:3", "3:2", "16:9", "2:1", "21:9"];
 // 브리프 항목·요약·착수 확인은 org/design_brief.js (빌드 때 이 파일 앞에 붙는다)
 // 규격 초안 — 인쇄소·매체 사양을 확인해 '품목 규격 사전'에서 고쳐 쓴다(고친 값은 db linespec/{key}). 크기: 인쇄 mm, 디지털 px. h=0 은 길이 가변
@@ -49,7 +49,7 @@ const lSize = s => !(s.w > 0) ? "현장 확인" : s.h > 0 ? `${s.w}×${s.h}${s.�
 const lWork = s => { if (!(s.w > 0)) return "-"; if (s.단위 !== "mm" || !(s.h > 0)) return s.단위 === "px" && /2배/.test(s.해상도 || "") ? `폭 ${s.w * 2}px` : "-";
   const r = +s.재단 || 0, w = s.w + 2 * r, h = s.h + 2 * r, dpi = parseInt(s.해상도);
   return `${w}×${h}mm${dpi > 0 ? ` · 약 ${Math.round(w / 25.4 * dpi)}×${Math.round(h / 25.4 * dpi)}px` : ""}`; };
-const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!c.kv확정?.at, !!c.세트확정?.at, false]; // 2단계 완료 = 키비주얼 확정, 3단계 = 응용 세트 확정
+const lDone = (c, b) => [!!(c.품목 || []).length && LB_GO.includes(c.브리프?.협의결과), !!(b.추천?.picks || []).length, !!c.kv확정?.at, !!c.세트확정?.at, !!c.발주확정?.at]; // 2단계 완료 = 키비주얼 확정, 3단계 = 응용 세트 확정, 4단계 = 발주 확정
 const lStage = (c, b) => { const i = lDone(c, b).indexOf(false); return i < 0 ? 4 : i; };
 const lCards = () => lines.map(c => ({c, b: latest(c.id)})).filter(x => x.b.id).sort((x, y) => String(x.b.마감 || "9").localeCompare(String(y.b.마감 || "9")));
 
@@ -58,7 +58,7 @@ function drawLine(force) {
   const a = document.activeElement; if (!force && (lnew || ledit || lsedit || box.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return; // 양식을 쓰는 중에는 db 변경으로 다시 그리지 않는다
   const specs = lSpecs();
   box.innerHTML = `<div class="row"><h2 style="flex:1;min-width:0">디자인 라인</h2><div class="seg" role="group" aria-label="보기">${[["card", "작업 카드"], ["kit", "브랜드킷"], ["spec", "품목 규격 사전"]].map(([k, l]) => `<button type="button" data-lv="${k}" aria-pressed="${lview === k}">${l}</button>`).join("")}</div></div>
-    <p class="note">레퍼런스 → 키비주얼 → 응용 세트 → 발주 패키지를 작업 카드 하나로 이어 갑니다. 지금은 0~2단계가 작동하고 3·4단계는 차례로 붙입니다. 금액·업체 연락처는 관제실에서 다룹니다.</p>
+    <p class="note">레퍼런스 → 키비주얼 → 응용 세트 → 발주 패키지를 작업 카드 하나로 이어 갑니다. 배경 시안은 AI별 프롬프트 카드로 각자 쓰는 AI에서 만들고, 글자·로고는 규칙대로 조립합니다. 금액·업체 연락처는 관제실에서 다룹니다.</p>
     <p class="note warn" id="lnMsg">${esc(lmsg)}</p>
     ${lview === "spec" ? lSpecView(specs) : lview === "kit" && typeof lKitView === "function" ? lKitView() : lCardView(specs)}`;
 }
@@ -103,12 +103,12 @@ function lDetail({c, b}, specs) {
       ${picks.length ? `<div class="refs">${picks.map(([r, why]) => refCard(r, why || " ")).join("")}</div>` : `<p class="empty">아직 추천이 없습니다. 시안 작업 ①·②에서 레퍼런스를 모으고 추천 3개를 받으세요.</p>`}
       ${b.추천?.방향 ? `<div class="dir">${esc(b.추천.방향)}</div>` : ""}</div>
     <div class="card" data-cmt-area>${head(2, go)}
-      ${typeof lKvStep === "function" ? lKvStep(c, b) : (kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : "")}</div>
+      ${typeof lPromptStep === "function" ? lPromptStep(c, b) : ""}${typeof lKvStep === "function" ? lKvStep(c, b) : (kvSrc ? `<div class="lkv"><img src="${esc(kvSrc)}" alt="선택한 키비주얼" loading="lazy"></div>` : "")}</div>
     <div class="card" data-cmt-area>${head(3)}
       ${typeof lSetStep === "function" ? lSetStep(c, b) : ""}</div>
-    <div class="card wait">${head(4)}
-      <p class="note">확정 시안으로 사양서(품목·규격·수량·재질·후가공·납기 — 금액 없음)와 인쇄용 PDF를 만들어 구글 드라이브에 저장하고, 관제실 발주서로 넘깁니다. 아래는 지금 품목으로 만든 사양서 미리보기입니다.</p>
-      ${items.length ? lTable(items.map(s => [esc(s.이름), esc(s.분류 || ""), esc(lSize(s)), esc(`${+s.재단 || 0}mm`), esc([s.해상도, s.색].filter(Boolean).join(" · ")), esc(s.파일 || "")]), ["품목", "분류", "완성 크기", "재단 여백", "해상도·색", "파일"]) : ""}</div>`;
+    <div class="card" data-cmt-area>${head(4)}
+      ${typeof lOrderStep === "function" ? lOrderStep(c, b) : `<p class="note">확정 시안으로 사양서(품목·규격·수량·재질·후가공·납기 — 금액 없음)와 인쇄용 PDF를 만들어 구글 드라이브에 저장하고, 관제실 발주서로 넘깁니다. 아래는 지금 품목으로 만든 사양서 미리보기입니다.</p>
+      ${items.length ? lTable(items.map(s => [esc(s.이름), esc(s.분류 || ""), esc(lSize(s)), esc(`${+s.재단 || 0}mm`), esc([s.해상도, s.색].filter(Boolean).join(" · ")), esc(s.파일 || "")]), ["품목", "분류", "완성 크기", "재단 여백", "해상도·색", "파일"]) : ""}`}</div>`;
 }
 // 관제실 배정 업무로 시작하면 briefs/{같은 id} 를 없을 때만 만든다(pick 과 같은 내용, 시안 작업의 선택은 그대로 둔다)
 async function lFromTask(id, now) {
