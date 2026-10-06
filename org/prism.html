@@ -1229,6 +1229,8 @@ document.addEventListener("change", e => { if (e.target.matches?.("[data-setv]")
 //   OpenAI 이미지 프롬프트 가이드 요약(장면 / 주제 / 세부 / 쓰임새 / 제약 순서, 제약 칸에 글자·로고·워터마크 금지)
 const PR_AI = ["Gemini", "ChatGPT", "기타"];
 const PR_ROLE = ["PM", "디자이너", "디자인팀장"];
+// 메모·발주 칸에 적지 않을 것: 이메일·전화번호·금액(대략 — 사람이 적을 때 걸러 주는 정도이며 완전하지 않다). 4단계(design_order.js)도 같이 쓴다
+const PR_BAD = /[\w.+-]+@[\w-]+\.[\w.]+|\(at\)|\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}|01[016789]\d{7,8}|\+82|₩\s*\d|\d[\d,.]*\s*(원|천원|만원|만|억)(?![가-힣])|(KRW|USD|EUR|JPY)\s*\d|\$\s*\d/i;
 const PR_AREA = {"아래 왼쪽": ["lower-left third", "아래 왼쪽"], "위 왼쪽": ["upper-left third", "위 왼쪽"], "가운데": ["center band", "가운데"], "아래 띠": ["bottom quarter", "아래쪽 1/4"]};
 let prOpen = null, prMsgTxt = "", prRatio = "", prTimer = null, prDraft = {ai: "Gemini", 역할: "PM", url: "", 메모: ""}; // 링크 입력은 다시 그려도 남게
 const prSay = m => { prMsgTxt = m; if ($("prMsg")) $("prMsg").textContent = m; };
@@ -1308,7 +1310,7 @@ async function prCopy(text, btn) {
 async function prSave(c, list, m) { try { await db.doc(`line/${c.id}`).update({시안링크: list.slice(-40), updatedAt: new Date().toISOString()}); c.시안링크 = list.slice(-40); prSay(m); } catch { prSay("저장하지 못했습니다. 다시 눌러 주세요."); } drawLine(true); }
 async function prAdd() { const c = prCard(); if (!c || !db) return; const url = ($("prUrl")?.value || "").trim();
   if (!/^https:\/\/[^\s<>"']+$/i.test(url) || url.length > 500) { prSay("https:// 로 시작하는 링크를 넣어 주세요."); return; }
-  const memo = ($("prMemo")?.value || "").trim().slice(0, 120); if (/@[\w-]+\.|\d{2,4}-\d{3,4}-\d{4}/.test(memo)) { prSay("메모에 이메일·전화번호는 적지 않습니다."); return; }
+  const memo = ($("prMemo")?.value || "").trim().slice(0, 120); if (PR_BAD.test(memo)) { prSay("메모에 이메일·전화번호·금액은 적지 않습니다."); return; }
   const x = {id: "s" + Date.now().toString(36), ai: PR_AI.includes($("prAi")?.value) ? $("prAi").value : "기타", url, 역할: PR_ROLE.includes($("prRole")?.value) ? $("prRole").value : "PM", 메모: memo, at: new Date().toISOString(), 선택: false};
   prDraft = {...prDraft, url: "", 메모: ""}; await prSave(c, [...prLinks(c), x], `링크를 추가했습니다${/drive\.google\.com|docs\.google\.com/.test(url) ? "" : " (구글 드라이브 링크가 아닙니다 — 회사 공유 위치인지 확인해 주세요)"}.`); }
 async function prPick(id) { const c = prCard(); if (!c || !db) return; await prSave(c, prLinks(c).map(x => ({...x, 선택: x.id === id})), "이 시안으로 진행합니다. 2단계 배경으로 올려 주세요."); }
@@ -1337,8 +1339,12 @@ const OD_SIDE = ["단면", "양면", "해당 없음"];
 const OD_ROLE = ["디자인팀장", "담당 PM", "관리자"];
 const OD_F = [["수량", "수량", 20], ["소재", "소재·용지", 60], ["후가공", "후가공", 60], ["납품일", "납품일", 10], ["비고", "비고", 120]];
 const OD_MAXPX = 7200; // 캔버스 긴 변 상한(브라우저 메모리) — 넘으면 해상도를 낮추고 표시한다
-const OD_BAD = /[\w.+-]+@[\w-]+\.[\w.]+|\d{2,4}-\d{3,4}-\d{4}|₩\s*\d|\d[\d,]*\s*(원|만원|억)|\$\s*\d/; // 이메일·전화·금액은 적지 않는다
-let odBusy = false, odMsgTxt = "", odTimer = null;
+const OD_BAD = PR_BAD; // 이메일·전화·금액은 적지 않는다(design_prompt.js)
+let odBusy = false, odMsgTxt = "", odTimer = null, odCM = "";
+// 발주 파일은 확정한 응용 세트(가이드·품목·배치) 기준 — 확정 뒤 3단계를 고쳐도 다시 확정하기 전에는 확정본으로 만든다
+const odG = c => c.세트확정?.가이드 ? setClean({...setGuideFrom(c), ...c.세트확정.가이드}) : setG(c);
+const odItems = c => { const k = c.세트확정?.품목; return Array.isArray(k) && k.length ? k.map(x => lSpecs().find(s => s.key === x)).filter(Boolean) : kvItems(c); };
+const odSet = (c, s) => (c.세트확정?.세트 || c.세트 || {})[s.key] || setItem(c, s);
 const odSay = m => { odMsgTxt = m; if ($("odMsg")) $("odMsg").textContent = m; };
 const odCard = () => lines.find(x => x.id === lcur);
 const odName = c => String(latest(c.id).제목 || "발주").replace(/[\\/:*?"<>|]/g, "").slice(0, 60);
@@ -1379,13 +1385,14 @@ const odUrl = b => new Promise((ok, no) => { const r = new FileReader(); r.onloa
 // ── 4단계 카드 본문
 function lOrderStep(c, b) {
   if (!c.세트확정?.at) return '<p class="empty">3단계 응용 세트를 먼저 확정해 주세요. 확정한 가이드·배치로 사양서와 발주 파일을 만듭니다.</p>';
-  const g = setG(c), items = kvItems(c), conf = c.발주확정, o = c.발주 || {};
+  const g = odG(c), items = odItems(c), conf = c.발주확정, o = c.발주 || {}, drift = JSON.stringify(setG(c)) !== JSON.stringify(g) || items.map(s => s.key).join() !== kvItems(c).map(s => s.key).join();
   if (g.배경 && !(g.배경 in setImgs)) setImg(g.배경).then(im => { if (im && tab === "line") drawLine(); });
   const rows = items.map(s => { const r = odRow(c, s), out = odOut(s), res = odRes(g, s, out), inp = (k, n) => `<input data-od="${esc(s.key)}" data-odf="${k}" maxlength="${n}" value="${esc(r[k])}" ${k === "납품일" ? 'type="date"' : ""} aria-label="${esc(s.이름)} ${k}">`;
     return [`<b>${esc(s.이름)}</b><div class="note">${esc(lSize(s))}${out.면 ? ` · ${esc(out.면)}` : ""}</div>`, inp("수량", 20), inp("소재", 60), inp("후가공", 60),
       `<select data-od="${esc(s.key)}" data-odf="면" aria-label="${esc(s.이름)} 인쇄 면">${opt(OD_SIDE, r.면)}</select>`, inp("납품일", 10), inp("비고", 120),
       out.kind && kvDl ? `<button class="btn" type="button" data-odfile="${esc(s.key)}">${esc(out.label)}</button>${res ? `<div><span class="tag ${res.ok ? "go" : "amber"}">${esc(res.txt)}</span></div>` : ""}` : `<span class="note">${esc(out.kind ? "claude.ai에서 열면 내려받을 수 있습니다" : out.label)}</span>`]; });
   return `<p class="note">확정한 응용 세트(v${esc(c.세트확정.버전)})로 사양서와 품목별 파일을 만듭니다. 인쇄물은 재단 여백을 포함한 작업 크기 PDF, 디지털은 규격 픽셀 PNG입니다. 파일은 발주 확인·교정용이며 색은 RGB입니다 — CMYK 변환·교정 인쇄는 인쇄소와 확인하고, 글자를 고칠 원본은 3단계 SVG를 씁니다. 금액·업체·연락처는 적지 않습니다(관제실 발주서).</p>
+    ${drift ? '<p class="note warn">응용 세트를 확정한 뒤 3단계 가이드나 품목이 바뀌었습니다. 발주 파일은 확정본 기준으로 만듭니다 — 바뀐 내용을 쓰려면 3단계에서 다시 확정해 주세요.</p>' : ""}
     ${items.length ? lTable(rows, ["품목", "수량", "소재·용지", "후가공", "인쇄 면", "납품일", "비고", "파일"]) : '<p class="empty">품목이 없습니다.</p>'}
     <div class="form"><label class="wide">납품 장소·받는 역할 (이름·연락처 대신 역할)<input id="odTo" maxlength="120" value="${esc(o.납품 || "")}" placeholder="예) 행사장 부스 설치팀 · 담당 PM"></label>
       <label class="wide">발주 메모<textarea id="odMemo" maxlength="600">${esc(o.메모 || "")}</textarea></label></div>
@@ -1393,12 +1400,12 @@ function lOrderStep(c, b) {
     <div class="row">${kvDl ? '<button class="btn primary" type="button" id="odSpec">사양서 PDF 내려받기</button>' : '<span class="note">내려받기는 claude.ai에서 열어야 합니다.</span>'}<span class="note" id="odMsg">${esc(odMsgTxt)}</span></div>
     <div class="card"><b>발주 확정</b><p class="note">확정하면 사양서 내용이 버전으로 남고 디자인 라인이 끝납니다. 사양서 PDF와 품목 파일은 구글 드라이브 프로젝트 폴더에 올리고, 관제실 발주서(금액·업체)에 연결해 주세요.</p>
       ${conf ? `<p><span class="tag go">발주 확정 v${esc(conf.버전)}</span> <span class="note">${esc(conf.역할)} · ${esc(String(conf.at || "").slice(0, 16).replace("T", " "))}${conf.메모 ? ` · ${esc(conf.메모)}` : ""}</span></p>` : ""}
-      <div class="row"><select id="odRole" aria-label="확정 역할">${opt(OD_ROLE, conf?.역할 || "디자인팀장")}</select><input id="odCMemo" maxlength="120" placeholder="확정 메모 (선택)" style="flex:1;min-width:140px">
+      <div class="row"><select id="odRole" aria-label="확정 역할">${opt(OD_ROLE, conf?.역할 || "디자인팀장")}</select><input id="odCMemo" maxlength="120" value="${esc(odCM)}" placeholder="확정 메모 (선택)" style="flex:1;min-width:140px">
         <button class="btn primary" type="button" id="odConfirm" ${items.length ? "" : "disabled"}>${conf ? "새 버전으로 다시 확정" : "발주 확정"}</button>${conf ? '<button class="btn x" type="button" id="odUnconf">확정 풀기</button>' : ""}</div>
       ${(c.발주이력 || []).filter(x => x.버전 !== conf?.버전).length ? `<p class="note">이전 확정 ${(c.발주이력 || []).filter(x => x.버전 !== conf?.버전).map(x => `v${esc(x.버전)}`).join(", ")} 기록이 남아 있습니다.</p>` : ""}</div>`;
 }
 function odRead(c) { const 품목 = {};
-  kvItems(c).forEach(s => { 품목[s.key] = odRow(c, s); }); // 화면에 없는 값은 저장된 값 그대로
+  odItems(c).forEach(s => { 품목[s.key] = odRow(c, s); }); // 화면에 없는 값은 저장된 값 그대로
   document.querySelectorAll("[data-od]").forEach(el => { const r = 품목[el.dataset.od]; if (!r) return; const k = el.dataset.odf, n = OD_F.find(f => f[0] === k)?.[2] || 20;
     r[k] = k === "면" ? (OD_SIDE.includes(el.value) ? el.value : OD_SIDE[0]) : el.value.trim().slice(0, n); });
   return {품목, 납품: ($("odTo")?.value ?? c.발주?.납품 ?? "").trim().slice(0, 120), 메모: ($("odMemo")?.value ?? c.발주?.메모 ?? "").trim().slice(0, 600)}; }
@@ -1406,8 +1413,8 @@ const odBadIn = o => [o.납품, o.메모, ...Object.values(o.품목).flatMap(r =
 function odChange() { const c = odCard(); if (!c || !db) return; const o = odRead(c);
   if (odBadIn(o)) { clearTimeout(odTimer); odSay("이메일·전화번호·금액은 적지 않습니다. 지우면 저장됩니다(금액·업체는 관제실 발주서)."); return; }
   c.발주 = o; clearTimeout(odTimer); odTimer = setTimeout(async () => { try { await db.doc(`line/${c.id}`).update({발주: o, updatedAt: new Date().toISOString()}); odSay("저장했습니다."); } catch { odSay("저장하지 못했습니다."); } }, 800); }
-async function odFile(key) { const c = odCard(); if (!c || !kvDl || odBusy) return; const s = kvItems(c).find(x => x.key === key); if (!s) return; const o = odOut(s); if (!o.kind) return;
-  const g = setG(c), it = (c.세트확정?.세트 || c.세트 || {})[key] || setItem(c, s), name = `${odName(c)}_${s.이름.replace(/[\\/:*?"<>|]/g, "")}`;
+async function odFile(key) { const c = odCard(); if (!c || !kvDl || odBusy) return; const s = odItems(c).find(x => x.key === key); if (!s) return; const o = odOut(s); if (!o.kind) return;
+  const g = odG(c), it = odSet(c, s), name = `${odName(c)}_${s.이름.replace(/[\\/:*?"<>|]/g, "")}`;
   odBusy = true; odSay(`${s.이름} 파일을 만드는 중…`);
   try {
     if (o.kind === "png") { const cv = setCanvas(s), outH = o.h || Math.round(o.w * cv.H / cv.W), cnv = await odDraw(c, g, s, it, o.w, 0, 0);
@@ -1424,7 +1431,7 @@ async function odFile(key) { const c = odCard(); if (!c || !kvDl || odBusy) retu
 // 사양서 PDF — A4 세로, 글자는 페이지 서체로 그린 그림(한글 서체를 PDF 에 넣지 않아도 되게). 품목마다 작은 미리보기
 async function odSpec() { const c = odCard(); if (!c || !kvDl || odBusy) return; const o = odRead(c); if (odBadIn(o)) { odSay("이메일·전화번호·금액을 지운 뒤 다시 눌러 주세요."); return; }
   odBusy = true; odSay("사양서를 만드는 중…");
-  try { await odLoad(); const g = setG(c), items = kvItems(c), b = latest(c.id), W = 1240, H = 1754, M = 90, pages = []; let cv, x, y;
+  try { await odLoad(); const g = odG(c), items = odItems(c), b = latest(c.id), W = 1240, H = 1754, M = 90, pages = []; let cv, x, y;
     const font = "'Noto Sans KR', sans-serif"; try { await Promise.all([400, 700].map(w => document.fonts.load(`${w} 20px 'Noto Sans KR'`, "가A"))); } catch {}
     const page = () => { cv = document.createElement("canvas"); cv.width = W; cv.height = H; x = cv.getContext("2d"); x.fillStyle = "#FFFFFF"; x.fillRect(0, 0, W, H); x.fillStyle = "#222222"; y = M; pages.push(cv);
       x.font = `400 16px ${font}`; x.fillStyle = "#888888"; x.fillText(`PRISM 디자인 라인 · 발주 사양서 · ${pages.length}쪽`, M, H - 50); x.fillStyle = "#222222"; };
@@ -1434,14 +1441,14 @@ async function odSpec() { const c = odCard(); if (!c || !kvDl || odBusy) return;
     text([b.프로젝트, c.브리프?.일시, c.브리프?.도시].filter(Boolean).join(" · "), 20, 400, "#555555");
     text(`응용 세트 v${c.세트확정?.버전 || "-"} · 키비주얼 v${c.kv확정?.버전 || "-"} · 작성 ${new Date().toISOString().slice(0, 10)}${c.발주확정 ? ` · 발주 확정 v${c.발주확정.버전}` : " · 발주 확정 전"}`, 18, 400, "#555555");
     if (o.납품) text(`납품 장소·받는 역할: ${o.납품}`, 20); if (o.메모) text(`메모: ${o.메모}`, 20); y += 16;
-    for (const s of items) { const r = o.품목[s.key] || odRow(c, s), out = odOut(s), it = (c.세트확정?.세트 || c.세트 || {})[s.key] || setItem(c, s), res = odRes(g, s, out);
+    for (const s of items) { const r = o.품목[s.key] || odRow(c, s), out = odOut(s), it = odSet(c, s), res = odRes(g, s, out);
       const th = await odDraw(c, g, s, it, 200, 0, 0), tw = 200 * Math.min(1, 260 / th.height), tH = th.height * tw / th.width;
       if (y + Math.max(tH, 220) > H - 100) page();
       x.strokeStyle = "#DDDDDD"; x.beginPath(); x.moveTo(M, y + 8); x.lineTo(W - M, y + 8); x.stroke(); y += 20; const top = y; x.drawImage(th, W - M - tw, top + 10, tw, tH);
       const L0 = [`${s.이름}${out.면 ? ` (${out.면})` : ""}`, `완성 ${lSize(s)} · 작업 ${lWork(s)} · 재단 ${+s.재단 || 0}mm`, `${[s.해상도, s.색].filter(Boolean).join(" · ")} · 파일 ${s.파일 || "-"} · 이번 파일 ${out.kind ? out.label : "규격 확인 필요"}${res ? ` · ${res.txt}` : ""}`,
         `수량 ${r.수량 || "-"} · 소재·용지 ${r.소재 || "-"} · 후가공 ${r.후가공 || "-"} · 인쇄 면 ${r.면 || "-"} · 납품일 ${r.납품일 || "-"}`, r.비고 ? `비고: ${r.비고}` : "", s.메모 ? `규격 메모: ${s.메모}` : ""].filter(Boolean);
       const right = tw + 30;
-      L0.forEach((t, i) => { x.font = `${i ? 400 : 700} ${i ? 18 : 24}px ${font}`; x.fillStyle = i ? "#333333" : "#111111"; wrap(t, W - 2 * M - right).forEach(l => { y += (i ? 18 : 24) * 1.45; x.fillText(l, M, y); }); });
+      L0.forEach((t, i) => { x.font = `${i ? 400 : 700} ${i ? 18 : 24}px ${font}`; x.fillStyle = i ? "#333333" : "#111111"; wrap(t, W - 2 * M - right).forEach(l => { if (y + 40 > H - 100) { page(); x.font = `${i ? 400 : 700} ${i ? 18 : 24}px ${font}`; x.fillStyle = i ? "#333333" : "#111111"; } y += (i ? 18 : 24) * 1.45; x.fillText(l, M, y); }); }); // 긴 품목은 줄마다 쪽을 넘긴다
       y = Math.max(y, top + tH + 20) + 10; }
     y += 10; text("• 색은 RGB 파일입니다. CMYK 변환·교정 인쇄는 인쇄소와 확인합니다. • 금액·업체는 관제실 발주서에서 다룹니다. • 글자 수정 원본은 3단계 SVG·PPTX입니다.", 16, 400, "#666666");
     const P = new window.jspdf.jsPDF({orientation: "p", unit: "mm", format: "a4", compress: true}); P.setProperties({title: `${b.제목 || ""} 발주 사양서`, creator: "PRISM 디자인 라인"});
@@ -1452,7 +1459,7 @@ async function odSpec() { const c = odCard(); if (!c || !kvDl || odBusy) return;
 async function odConfirm(undo) { const c = odCard(); if (!c || !db) return; const now = new Date().toISOString();
   if (undo) { if (!(await askYes("발주 확정을 풀까요? 기록은 남습니다."))) return; try { await db.doc(`line/${c.id}`).update({발주확정: null, updatedAt: now}); c.발주확정 = null; } catch { odSay("확정을 풀지 못했습니다."); } drawLine(true); return; }
   const o = odRead(c); if (odBadIn(o)) { odSay("이메일·전화번호·금액을 지운 뒤 확정해 주세요."); return; }
-  const empty = kvItems(c).filter(s => !String(o.품목[s.key]?.수량 || "").trim()).map(s => s.이름);
+  const empty = odItems(c).filter(s => !String(o.품목[s.key]?.수량 || "").trim()).map(s => s.이름);
   if (empty.length && !(await askYes(`수량이 비어 있는 품목이 있습니다: ${empty.join(", ")}. 그래도 확정할까요?`))) return;
   const v = {버전: Math.max(0, ...(c.발주이력 || []).map(x => +x.버전 || 0)) + 1, 발주: o, 세트버전: c.세트확정?.버전 || 0, 역할: OD_ROLE.includes($("odRole")?.value) ? $("odRole").value : "디자인팀장", 메모: ($("odCMemo")?.value || "").trim().slice(0, 120), at: now};
   try { await db.doc(`line/${c.id}`).update({발주확정: v, 발주이력: [...(c.발주이력 || []), v].slice(-20), 발주: o, updatedAt: now}); c.발주확정 = v; c.발주이력 = [...(c.발주이력 || []), v]; c.발주 = o; odSay(`v${v.버전}으로 발주를 확정했습니다. 사양서 PDF를 내려받아 드라이브·관제실 발주서에 붙여 주세요.`); }
@@ -1460,8 +1467,9 @@ async function odConfirm(undo) { const c = odCard(); if (!c || !db) return; cons
 
 document.head.insertAdjacentHTML("beforeend", "<style>.ltbl input[data-od],.ltbl select[data-od]{width:100%;min-width:70px}</style>");
 document.addEventListener("click", e => { const t = e.target.closest("button"); if (!t || !$("line")?.contains(t)) return;
+  if (t.id === "odConfirm" || t.id === "odUnconf") odCM = "";
   if (t.dataset.odfile) odFile(t.dataset.odfile); if (t.id === "odSpec") odSpec(); if (t.id === "odConfirm") odConfirm(); if (t.id === "odUnconf") odConfirm(true); });
-document.addEventListener("input", e => { if (e.target.matches?.("[data-od],#odTo,#odMemo") && $("line")?.contains(e.target)) odChange(); });
+document.addEventListener("input", e => { if (!$("line")?.contains(e.target)) return; if (e.target.matches?.("[data-od],#odTo,#odMemo")) odChange(); if (e.target.id === "odCMemo") odCM = e.target.value; });
 document.addEventListener("change", e => { if (e.target.matches?.("select[data-od]") && $("line")?.contains(e.target)) odChange(); });
 
 </script>

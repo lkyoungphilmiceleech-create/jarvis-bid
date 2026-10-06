@@ -6,6 +6,8 @@
 //   OpenAI 이미지 프롬프트 가이드 요약(장면 / 주제 / 세부 / 쓰임새 / 제약 순서, 제약 칸에 글자·로고·워터마크 금지)
 const PR_AI = ["Gemini", "ChatGPT", "기타"];
 const PR_ROLE = ["PM", "디자이너", "디자인팀장"];
+// 메모·발주 칸에 적지 않을 것: 이메일·전화번호·금액(대략 — 사람이 적을 때 걸러 주는 정도이며 완전하지 않다). 4단계(design_order.js)도 같이 쓴다
+const PR_BAD = /[\w.+-]+@[\w-]+\.[\w.]+|\(at\)|\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}|01[016789]\d{7,8}|\+82|₩\s*\d|\d[\d,.]*\s*(원|천원|만원|만|억)(?![가-힣])|(KRW|USD|EUR|JPY)\s*\d|\$\s*\d/i;
 const PR_AREA = {"아래 왼쪽": ["lower-left third", "아래 왼쪽"], "위 왼쪽": ["upper-left third", "위 왼쪽"], "가운데": ["center band", "가운데"], "아래 띠": ["bottom quarter", "아래쪽 1/4"]};
 let prOpen = null, prMsgTxt = "", prRatio = "", prTimer = null, prDraft = {ai: "Gemini", 역할: "PM", url: "", 메모: ""}; // 링크 입력은 다시 그려도 남게
 const prSay = m => { prMsgTxt = m; if ($("prMsg")) $("prMsg").textContent = m; };
@@ -85,7 +87,7 @@ async function prCopy(text, btn) {
 async function prSave(c, list, m) { try { await db.doc(`line/${c.id}`).update({시안링크: list.slice(-40), updatedAt: new Date().toISOString()}); c.시안링크 = list.slice(-40); prSay(m); } catch { prSay("저장하지 못했습니다. 다시 눌러 주세요."); } drawLine(true); }
 async function prAdd() { const c = prCard(); if (!c || !db) return; const url = ($("prUrl")?.value || "").trim();
   if (!/^https:\/\/[^\s<>"']+$/i.test(url) || url.length > 500) { prSay("https:// 로 시작하는 링크를 넣어 주세요."); return; }
-  const memo = ($("prMemo")?.value || "").trim().slice(0, 120); if (/@[\w-]+\.|\d{2,4}-\d{3,4}-\d{4}/.test(memo)) { prSay("메모에 이메일·전화번호는 적지 않습니다."); return; }
+  const memo = ($("prMemo")?.value || "").trim().slice(0, 120); if (PR_BAD.test(memo)) { prSay("메모에 이메일·전화번호·금액은 적지 않습니다."); return; }
   const x = {id: "s" + Date.now().toString(36), ai: PR_AI.includes($("prAi")?.value) ? $("prAi").value : "기타", url, 역할: PR_ROLE.includes($("prRole")?.value) ? $("prRole").value : "PM", 메모: memo, at: new Date().toISOString(), 선택: false};
   prDraft = {...prDraft, url: "", 메모: ""}; await prSave(c, [...prLinks(c), x], `링크를 추가했습니다${/drive\.google\.com|docs\.google\.com/.test(url) ? "" : " (구글 드라이브 링크가 아닙니다 — 회사 공유 위치인지 확인해 주세요)"}.`); }
 async function prPick(id) { const c = prCard(); if (!c || !db) return; await prSave(c, prLinks(c).map(x => ({...x, 선택: x.id === id})), "이 시안으로 진행합니다. 2단계 배경으로 올려 주세요."); }
