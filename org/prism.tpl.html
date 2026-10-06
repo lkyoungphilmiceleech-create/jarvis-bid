@@ -91,7 +91,7 @@ a{color:var(--holo)}
 <div class="wrap">
   <header class="glass bar">
     <div class="where"><span class="live" aria-hidden="true"></span><a class="btn" href="https://claude.ai/artifact/SjbUn8evVwWawSDft2cySC" target="_blank" rel="noopener noreferrer" style="text-decoration:none" title="가상 사무실(홈)로 가기">🏢 사무실</a><span class="hudlabel">JARVIS OPS</span><span>사업 수행 본부 · PRISM 디자인 스튜디오</span></div>
-    <div class="seg" role="group" aria-label="화면 모드"><button type="button" data-theme-m="system">시스템</button><button type="button" data-theme-m="light">라이트</button><button type="button" data-theme-m="dark">다크</button></div>
+    <button class="btn" type="button" data-cmt="body" title="이 화면에 의견 남기기 — 디자인팀·PM 의견은 JARVIS가 모아 반영합니다">💬 의견</button><div class="seg" role="group" aria-label="화면 모드"><button type="button" data-theme-m="system">시스템</button><button type="button" data-theme-m="light">라이트</button><button type="button" data-theme-m="dark">다크</button></div>
   </header>
 
   <section class="glass hero">
@@ -170,11 +170,17 @@ const applyTheme = m => { if (m === "system") delete document.documentElement.da
   document.querySelectorAll("[data-theme-m]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeM === m)); try { localStorage.setItem("prism-theme", m); } catch {} };
 let th = "system"; try { th = localStorage.getItem("prism-theme") || "system"; } catch {} applyTheme(th);
 
+let cmts = null; Promise.resolve(window.claude?.use?.("comments")).then(x => { cmts = x ?? null; }).catch(() => {}); // 의견 남기기(댓글 창)
 let db = null, sample = null, mcp = null, assets = null, tab = "find", cur = null, rf = "진행", cfg = {}, fcard = ""; // fcard = 레퍼런스 찾기에 불러온 디자인 라인 작업 카드
 let briefs = [], tasks = [], refs = [], rjobs = [], finds = [], fcur = null, busy = {}, msg = {};
 try { tab = localStorage.getItem("prism-tab") || "find"; cur = localStorage.getItem("prism-cur"); } catch {}
 const B = () => briefs.find(b => b.id === cur);
 const say = (id, m) => { msg[id] = m; if ($(id)) $(id).textContent = m; };
+// 확인 팝업 — confirm()은 아티팩트에서 보이지 않으므로 페이지 안에서 묻는다
+const askYes = msg => new Promise(ok => { const d = document.createElement("div");
+  d.setAttribute("role", "dialog"); d.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px";
+  d.innerHTML = `<div class="glass panel" style="max-width:360px"><p style="margin:0">${esc(msg)}</p><div class="row"><button class="btn primary" type="button" data-yes="1">예</button><button class="btn" type="button" data-yes="">아니오</button></div></div>`;
+  d.addEventListener("click", e => { const b = e.target.closest("[data-yes]"); if (b || e.target === d) { d.remove(); ok(!!b?.dataset.yes); } }); document.body.appendChild(d); d.querySelector("[data-yes]")?.focus(); });
 const askErr = e => ({no: "이 화면에서는 PRISM(Claude)에게 일을 맡길 수 없습니다. claude.ai에서 열어 주세요.", not_granted: "Claude 사용이 허용되지 않았습니다.", rate_limited: "요청이 많습니다. 잠시 후 다시 눌러 주세요."}[e?.code] || "PRISM이 답을 만들지 못했습니다. 다시 눌러 주세요.");
 const mcpErr = e => ({needs_reauth: "연결이 만료되었습니다. claude.ai 설정 → 커넥터에서 다시 연결해 주세요.", server_not_connected: "커넥터가 연결돼 있지 않습니다. claude.ai 설정 → 커넥터에서 추가해 주세요.", not_in_manifest: "이 페이지에 허용되지 않은 도구입니다.", tool_error: "도구가 요청을 거절했습니다.", server_unavailable: "잠시 응답하지 않습니다. 잠시 후 다시 눌러 주세요."}[e?.code] || "작업에 실패했습니다" + (e?.message ? `: ${e.message}` : "."));
 // 요청 문서는 바뀐 칸만 쓴다 — 생성이 몇 분 걸리는 동안 다른 사람이 고친 칸을 덮지 않게
@@ -362,7 +368,7 @@ async function startWeb(job, note) {
 }
 async function runFind() {
   const b = B(); if (busy.find) return; if (gateOf(b.id, "pick")) { say("fNote", gateOf(b.id, "pick")); return; }
-  if (!confirm(`'${b.제목}' 레퍼런스를 웹에서 찾을까요? 10~20분 걸리고 본부장님 Claude 사용량이 쓰입니다.`)) return;
+  if (!(await askYes(`'${b.제목}' 레퍼런스를 웹에서 찾을까요? 10~20분 걸리고 본부장님 Claude 사용량이 쓰입니다.`))) return;
   if (busy.find) return; busy.find = true; setTimeout(() => { busy.find = false; }, 60e3); drawWork(); // 스냅샷이 오기 전 두 번 눌러 세션이 두 번 도는 것을 막는다
   await startWeb({kind: "brief", bid: b.id, 제목: b.제목}, "fNote");
 }
@@ -450,12 +456,14 @@ JSON만 답한다: {"제목":"짧은 한국어 제목","설명":"무엇을 위�
 // ── 이벤트
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.cmt) { const el = t.dataset.cmt === "body" ? document.querySelector(".wrap") : t.closest("[data-cmt-area]") || t.closest(".card,.panel"); // 누른 곳의 카드에 댓글 창을 연다
+    if (!cmts) { $("say").textContent = "이 화면에서는 의견 창을 열 수 없습니다. claude.ai에서 열어 주세요."; return; } try { await cmts.openComposer({element: el}); } catch {} return; }
   if (t.dataset.themeM) applyTheme(t.dataset.themeM);
   if (t.dataset.tab) showTab(t.dataset.tab);
   if (t.dataset.rf !== undefined) { rf = t.dataset.rf; drawReq(); }
   if (t.dataset.go) { await pick(t.dataset.go); showTab("work"); return; }
   if (t.id === "rfAdd") addRef();
-  if (t.dataset.rdel && confirm("이 자료를 지울까요?")) { const r = refs.find(x => x.id === t.dataset.rdel); db?.doc(`refs/${t.dataset.rdel}`).delete().catch(() => {}); if (r?.파일 && assets) assets.delete(r.파일).catch(() => {}); }
+  if (t.dataset.rdel && await askYes("이 자료를 지울까요?")) { const r = refs.find(x => x.id === t.dataset.rdel); db?.doc(`refs/${t.dataset.rdel}`).delete().catch(() => {}); if (r?.파일 && assets) assets.delete(r.파일).catch(() => {}); }
   if (t.id === "fGo") recommend();
   if (t.id === "fWeb") webMore();
   if (t.dataset.fh) { fcur = t.dataset.fh; drawFind(); }
