@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-10-12 10:40:24 KST",
+  "status": "ok",
+  "window": {
+    "begin": "202610090000",
+    "end": "202610112359",
+    "how": "auto(월요일 3일 소급)"
+  },
+  "query_stats": {
+    "total": 70,
+    "ok": 70,
+    "failed": [],
+    "error_samples": []
+  },
+  "counts": {
+    "수집": 0,
+    "집중기관": 0,
+    "키워드": 0,
+    "참고": 0,
+    "오탐제외": 0
+  },
+  "items": [],
+  "excluded": []
+}
